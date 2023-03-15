@@ -208,6 +208,13 @@ int main(int argc, char *argv[]) {
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
 
+            if(step % 20 == 0) {
+                cout << "step = " << step << endl;
+            }
+            // if(step >= 60) {
+            //     exit(0);
+            // }
+
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;
             // if(print_frequency != 0 && print_count % print_frequency == 0) {
@@ -275,5 +282,7 @@ int main(int argc, char *argv[]) {
     estimate.print();
 
     tictoc_print2_();
+
+
 
 }

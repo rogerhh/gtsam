@@ -22,31 +22,47 @@ inline void gemm(const Eigen::Matrix<double, R, C>& m,
     }
 }
 
-template<typename Xpr>
-void func(Eigen::MatrixBase<Xpr>& b) {
-    cout << b(2, 1) << endl << endl;
-}
-
 int main() {
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> m;
-    Eigen::Matrix<double, C, R> n;
-    // m.conservativeResize(R, C);
-    m = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>(R, C);
-    for(int i = 1; i <= R; i++) {
-        for(int j = 1; j <= C; j++) {
-            m(i-1, j-1) = i * 10 + j;
-        }
-    }
-    // Eigen::Block<Matrix> b = m.block(0, 0, 4, 3);
-    Eigen::Block<Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>, -1, -1, false> b = m.block(0, 0, 4, 3);
-    // auto b1 = m.block(0, 0, 4, 3);
-    // b.test();
+    // Eigen::Matrix<double, C, R> m;
+    // Eigen::Matrix<double, C, R> n;
+    // // for(int i = 0; i < 3; i++) {
+    // //     for(int j = 0; j < 3; j++) {
+    // //         m(i, j) = i * j;
+    // //     }
+    // // }
 
-    // b(1, 2) = 0;
+    // // for(int i = 0; i < 3; i++) {
+    // //     for(int j = 0; j < 3; j++) {
+    // //         n(i, j) = i - j;
+    // //     }
+    // // }
+    // 
+    // long long int sum = 0;
+    // m = Eigen::Matrix<double, R, C>::Random();
+    // n = Eigen::Matrix<double, C, R>::Random();
 
-    // func(b);
-    // func(b1);
+    // Eigen::Matrix<double, R, R> k;
+    // for(long long int j = 0; j < 10000000; j++) {
 
-    cout << m << endl << endl << b << endl;
+    //         m(2, 2) = 0.5;
+    //         
+    //         // k.noalias() = m.transpose() * n;
+    //         k.selfadjointView<Eigen::Upper>().rankUpdate(m.transpose());
+    //         // k.selfadjointView<Eigen::Upper>().rankUpdate(m);
+    //         // k += m * m.transpose();
 
+    //         // gemm(m.transpose(), m, k);
+    // }
+
+    // cout << m << endl << endl << n << endl << endl << k << endl;
+    // 
+    // // m(1, 2) = 5;
+
+    // // auto m2 = m.selfadjointView<Eigen::Upper>();
+    // // // auto m2 = m.triangularView<Eigen::Upper>();
+    // // auto m3 = m2 * m;
+    // // m = m.selfadjointView<Eigen::Upper>().rankUpdate(d);
+    // // auto m4 = m + d;
+    // // // m2(2, 1) = 6;
+    // // cout << m << endl << endl << d << endl << endl << m4 << endl;
 }

@@ -33,7 +33,7 @@ double chi2_red(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& c
     // the factor graph already includes a factor for the prior/equality constraint.
     //  double dof = graph.size() - config.size();
     int graph_dim = 0;
-    for(const std::shared_ptr<gtsam::NonlinearFactor>& nlf: graph) {
+    for(const shared_ptr<gtsam::NonlinearFactor>& nlf: graph) {
         graph_dim += nlf->dim();
     }
     double dof = graph_dim - config.dim(); // kaess: changed to dim
@@ -128,7 +128,6 @@ int main(int argc, char *argv[]) {
     NonlinearFactorGraph newFactors;
     for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
 
-
         // Collect measurements and new variables for the current step
         if(step == 1) {
             newVariables.insert(0, Pose());
@@ -206,6 +205,12 @@ int main(int argc, char *argv[]) {
             auto calc_end = chrono::high_resolution_clock::now();
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
+            if(step % 20 == 0) {
+                cout << "step = " << step << endl;
+            }
+            // if(step >= 65) {
+            //     exit(0);
+            // }
 
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;

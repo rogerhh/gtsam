@@ -27,6 +27,7 @@
 #include <gtsam/inference/Factor.h>
 #include <gtsam/base/OptionalJacobian.h>
 #include <gtsam/base/utilities.h>
+#include <iostream>
 
 #ifdef GTSAM_ENABLE_BOOST_SERIALIZATION
 #include <boost/serialization/base_object.hpp>
@@ -75,6 +76,7 @@ protected:
 
 public:
 
+  typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;
   typedef std::shared_ptr<This> shared_ptr;
 
   /// @name Standard Constructors
@@ -146,6 +148,10 @@ public:
   /** linearize to a GaussianFactor */
   virtual std::shared_ptr<GaussianFactor>
   linearize(const Values& c) const = 0;
+
+  virtual void linearizeToMatrix(const Values& theta, 
+                         std::vector<Matrix>* A, 
+                         Vector* b) const {}
 
   /**
    * Creates a shared_ptr clone of the factor - needs to be specialized to allow
@@ -297,6 +303,10 @@ public:
    * Hence \f$ b = z - h(x) = - \mathtt{error\_vector}(x) \f$
    */
   std::shared_ptr<GaussianFactor> linearize(const Values& x) const override;
+
+  void linearizeToMatrix(const Values& theta, 
+                         std::vector<Matrix>* A, 
+                         Vector* b) const override;
 
   /**
    * Creates a shared_ptr clone of the

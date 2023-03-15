@@ -19,6 +19,7 @@
 
 #include <gtsam/base/cholesky.h>
 #include <gtsam/base/timing.h>
+#include <iostream>
 
 #include <cmath>
 

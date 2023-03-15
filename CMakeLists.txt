@@ -29,6 +29,9 @@ set (CMAKE_PROJECT_VERSION_MAJOR ${GTSAM_VERSION_MAJOR})
 set (CMAKE_PROJECT_VERSION_MINOR ${GTSAM_VERSION_MINOR})
 set (CMAKE_PROJECT_VERSION_PATCH ${GTSAM_VERSION_PATCH})
 
+# Roger: Fix new version issue
+link_libraries(stdc++fs)
+
 ###############################################################################
 # Gather information, perform checks, set defaults
 

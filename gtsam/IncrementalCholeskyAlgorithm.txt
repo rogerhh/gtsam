@@ -1,0 +1,61 @@
+3/1
+1. Should run symbolic elim in variable order
+2. Add relinearization changed blocks (assuming storing jacobian)
+3. Support full reordering
+
+We can just set all the changed nodes to reconstruct and support partial reordering that way
+Actually, we cannot support partial reordering if we want to keep columns blocks of R in order, because then we'd need to change the column ordering of all previous columns
+For now, we shouldn't assume R columns are in order. This is because the dest contribution blocks may not be contiguous in memory
+Might as well do full ordering
+For now, assume cannot remove factors. Later, when we need to remove factors, we'll just set the node as reconstruct
+
+Do not disconnect child from parent as we can assume all new factors are connected to the latest node, which is the root. If any child has a new column ordering due to new factors (not reordering), then we should explicitly reorder the column if edit, do nothing if reconstruct
+
+We are also going to only set reconstruct or edit for each column, so we don't have to do n^2 checks
+
+Mark nodes:
+Mark all relinKeys (and keys they're connected to) and observedKeys, and their ancestors
+
+Symbolic factorization (update)
+For each marked node, 
+    1) Update column structure and changed column structure. For the base case, we should check all new factors and add them to our column structure. Then, since the node is necessarily marked, add all the column structure to the changed column structure
+    First mark own blocks that are changed
+
+Symbolic factorization
+For each marked node, keep a multiset of number of contribution blocks that changed
+    (This multiset is essentially the opposite of the multiset of column structure)
+    1) For each node, compute the column structure of the Hessian as a multiset
+    2) Look at its children's multisets, and add to our own set
+    3) Not computed here, but the number of contribution blocks to our own set is min(map[i], map[j])
+    4) Set parent to be lowest ordered connected block
+    5) Similarly, compute the column structure of all the blocks that changed (due to relinearizatio or adding factors)
+    6) Add children multisets to our multiset
+    7) Number of contribution blocks changed is max(min(changed[i], map[j]), min(map[i], changed[j]))
+    8) If node in ordering, mark as force-reconstruct and don't check changed columns
+
+Restore Pass
+This can be performed during the cholesky elimination tree expansion
+    0) There should be a fast way to determining if a node should be all-reconstruct, maybe just count the number of contributions changed versus total number of contributions
+    Note: There should be 2 types for all-reconstruct: batch-reconstruct and force-reconstruct. Batch reconstruct is used when we don't want to check the rest of the subtree and each node for reconstruct vs edit. With batch reconstruct we cannot guarantee that any ancestors will not have any edits, so we still need to check edit blocks. Force reconstruct is when we want to reorder the tree. With force-reconstruct we can assume all ancestors are recontructs, and not have to check edits. If a fixed node receives a force-reconstruct or a batch-reconstruct, it should do a batch contribution block gemm, then only propagate individual contributions to nonfixed nodes.
+    0.5) All nodes should be grouped into fixed (marked) nodes and nonfixed (unmarked) nodes.
+    1) Each node should pass down 2 maps: A reconstruct map and an restore map. Each map maps from a key to a vector of keys. The keys in the vector must be larger in ordering than the map key. 
+    1.1) For each key-key pair (i, j) in the reconstruct map, any fixed node that owns the pair must compute the block and SUBTRACT from chol(i, j). And pass down (i, j)
+    1.2) Assume, that for each nonfixed node, the diagonal block changes so the entire column in the cholesky matrix must change. For each key-key pair (i, j) in the restore map, any nonfixed nodes that owns the pair must compute the block and ADD to chol(i, j), and pass down (i, j) This step needs to be done before any subnodes runs cholesky elim because the old values need to be preserved.
+    2) Starting from the root, for each node, if marked, check parent restore map. If owns the key-key pair, restore values, and add pair to our own restore map.
+    3) For each marked node, check for all-reconstruct. If more than k% of children nodes are marked, then mark node as all-reconstruct. If parent is marked as all reconstruct, mark self as all reconstruct regardless of marked or not. (Basically a batch update)
+    4) If not all-reconstruct compare changed multiset and column multiset. For a block, if more than half changed, then add to reconstruct map. If not, add to update map. (How to delete block from cholesky? Can we just not care about extra blocks? Will free memory when all-reconstruct)
+    5) Multiply by diagonal block for all update blocks. Add self key and all keys to update blocks in a vector to pass down. This needs to be done before initialize reconstruct blocks because the diagonal block is needed
+    6) Restore all Hessian related values, this needs to be done now because the Hessian may be relinearized later
+    7) Initialize memory for reconstruct blocks.
+    8) For any unmarked nodes, check parent all-reconstruct first. 
+    9) If not all-reconstruct, check for parent reconstruct map. If own any pairs, pass them down until we don't own any pairs.
+
+Cholesky elimination
+    0) Cholesky elimination should immediately follow Restore Pass, so we should be at the leave nodes going back up.
+    0.5) Unmark blocks
+    // 1) If any update blocks change the Hessian, we should restore the Hessian here (Since we are updating the Hessian in the next step anyways, doing this preserves some locality). (Update: we cannot do this because lower blocks might relinearize higher blocks)
+    2) Relinearize all factors that need relinearization and update Hessian
+    3) Add updated Hessian to Cholesky blocks.
+    4) Take cholesky of diagonal block
+    5) Multiply inverse of diagonal block by all blocks
+    6) Take AAt of all column blocks and add to dest blocks

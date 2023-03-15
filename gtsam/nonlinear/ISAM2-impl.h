@@ -167,7 +167,41 @@ struct GTSAM_EXPORT UpdateImpl {
                           updateParams_.removeFactorIndices.end(),
                           removedFactors);
     *keysWithRemovedFactors = removedFactors.keys();
+
   }
+
+  // // Add any new factors \Factors:=\Factors\cup\Factors'.
+  // void pushBackFactorsOld(const NonlinearFactorGraph& newFactors,
+  //                      NonlinearFactorGraph* nonlinearFactors,
+  //                      GaussianFactorGraph* linearFactors,
+  //                      VariableIndex* variableIndex,
+  //                      FactorIndices* newFactorsIndices,
+  //                      KeySet* keysWithRemovedFactors) const {
+  //   gttic(pushBackFactors);
+
+  //   // Perform the first part of the bookkeeping updates for adding new factors.
+  //   // Adds them to the complete list of nonlinear factors, and populates the
+  //   // list of new factor indices, both optionally finding and reusing empty
+  //   // factor slots.
+  //   *newFactorsIndices = nonlinearFactors->add_factors(
+  //       newFactors, params_.findUnusedFactorSlots);
+
+  //   // Remove the removed factors
+  //   NonlinearFactorGraph removedFactors;
+  //   removedFactors.reserve(updateParams_.removeFactorIndices.size());
+  //   for (const auto index : updateParams_.removeFactorIndices) {
+  //     removedFactors.push_back(nonlinearFactors->at(index));
+  //     nonlinearFactors->remove(index);
+  //     if (params_.cacheLinearizedFactors) linearFactors->remove(index);
+  //   }
+
+  //   // Remove removed factors from the variable index so we do not attempt to
+  //   // relinearize them
+  //   variableIndex->remove(updateParams_.removeFactorIndices.begin(),
+  //                         updateParams_.removeFactorIndices.end(),
+  //                         removedFactors);
+  //   *keysWithRemovedFactors = removedFactors.keys();
+  // }
 
   // Get keys from removed factors and new factors, and compute unused keys,
   // i.e., keys that are empty now and do not appear in the new factors.
@@ -345,7 +379,9 @@ struct GTSAM_EXPORT UpdateImpl {
     if (const double* threshold = std::get_if<double>(&relinearizeThreshold)) {
       for (const VectorValues::KeyValuePair& key_delta : delta) {
         double maxDelta = key_delta.second.lpNorm<Eigen::Infinity>();
-        if (maxDelta >= *threshold) relinKeys.insert(key_delta.first);
+        if (maxDelta >= *threshold) { 
+            relinKeys.insert(key_delta.first); 
+        }
       }
     } else if (const FastMap<char, Vector>* thresholds =
                    std::get_if<FastMap<char, Vector> >(&relinearizeThreshold)) {
@@ -504,6 +540,7 @@ struct GTSAM_EXPORT UpdateImpl {
     for (const auto& orphan : orphans) {
       // retrieve the cached factor and add to boundary
       cachedBoundary.push_back(orphan->cachedFactor());
+      // orphan->cachedFactor()->print();
     }
 
     return cachedBoundary;

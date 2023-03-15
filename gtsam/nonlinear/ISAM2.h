@@ -21,6 +21,7 @@
 #pragma once
 
 #include <gtsam/linear/GaussianBayesTree.h>
+#include <gtsam/linear/CholeskyEliminationTree.h>
 #include <gtsam/nonlinear/ISAM2Clique.h>
 #include <gtsam/nonlinear/ISAM2Params.h>
 #include <gtsam/nonlinear/ISAM2Result.h>
@@ -50,6 +51,8 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
   /** VariableIndex lets us look up factors by involved variable and keeps track
    * of dimensions */
   VariableIndex variableIndex_;
+  // std::vector<std::unordered_set<std::shared_ptr<NonlinearFactor>>> variableIndex_;
+  CholeskyEliminationTree eTree_;
 
   /** The linear delta from the last linear solution, an update to the estimate
    * in theta
@@ -95,6 +98,11 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
 
   int update_count_;  ///< Counter incremented every update(), used to determine
                       ///< periodic relinearization
+
+  // using sharedETreeNode = std::shared_ptr<CholeskyEliminationTree::Node>;
+  // std::vector<sharedETreeNode> etreeNodes_;
+  // SparseSymmetricBlockMatrix hessian_;
+  // SparseUpperTriangularBlockMatrix cholesky_;
 
  public:
   using This = ISAM2;                       ///< This class
@@ -295,7 +303,9 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
  protected:
   /// Remove marked top and either recalculate in batch or incrementally.
   void recalculate(const ISAM2UpdateParams& updateParams,
-                   const KeySet& relinKeys, ISAM2Result* result);
+                   const KeySet& relinKeys, 
+                   const KeyVector& orphanKeys,
+                   ISAM2Result* result);
 
   // Do a batch step - reorder and relinearize all variables
   void recalculateBatch(const ISAM2UpdateParams& updateParams,
@@ -321,6 +331,7 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
   void recalculateIncremental(const ISAM2UpdateParams& updateParams,
                               const KeySet& relinKeys,
                               const FastList<Key>& affectedKeys,
+                              const KeyVector& orphanKeys,
                               KeySet* affectedKeysSet, Cliques* orphans,
                               ISAM2Result* result);
 
