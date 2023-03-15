@@ -380,15 +380,8 @@ void ISAM2::recalculateIncremental(const ISAM2UpdateParams& updateParams,
 
   // Generate ordering
   gttic(Ordering);
-  // const Ordering ordering =
-  //     Ordering::ColamdConstrained(affectedFactorsVarIndex, constraintGroups);
-  // cout << "ordering = " << endl;
-  // ordering.print();
-  // cout << endl;
-  const Ordering ordering(*affectedKeysSet);
-  // cout << "ordering = " << endl;
-  // ordering.print();
-  // cout << endl;
+  const Ordering ordering =
+      Ordering::ColamdConstrained(affectedFactorsVarIndex, constraintGroups);
   gttoc(Ordering);
 
   // Do elimination
