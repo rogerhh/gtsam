@@ -87,6 +87,11 @@ Ordering Ordering::ColamdConstrained(const VariableIndex& variableIndex,
     ++index;
   }
 
+  cout << "A = ";
+  for(int i : A) {
+      cout << i << " ";
+  }
+  cout << endl;
   assert((size_t)count == variableIndex.nEntries());
 
   //double* knobs = nullptr; /* colamd arg 6: parameters (uses defaults if nullptr) */

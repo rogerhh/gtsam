@@ -30,8 +30,10 @@ private:
     typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;
 
 public:
-    typedef Eigen::Block<RowMajorMatrix> Block;
-    typedef Eigen::Block<const RowMajorMatrix> constBlock;
+    typedef SparseColumnBlockMatrix::Block Block;
+    typedef SparseColumnBlockMatrix::constBlock constBlock;
+
+    JacobianMatrix();
 
     void addColumn(const Key key, const size_t width);
 

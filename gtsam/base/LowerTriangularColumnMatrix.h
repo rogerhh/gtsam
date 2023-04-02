@@ -1,8 +1,8 @@
 /**
-* @file    SparseColumnBlockMatrix
-* @brief   Represents a column matrix of fixed width and predefined block heights. No predefined diagonal block
+* @file    LowerTriangularColumnMatrix.h
+* @brief   Represents a column for a lower triangular matrix, contains a diagonal block and a row at the end for Atb. Column blocks need to support insertion in the middle. We don't support it for now
 * @author  Roger Hsiao (rogerhh)
-* @date    Feb. 8, 2023
+* @date    Mar. 15, 2023
 */
 #pragma once
 
@@ -18,12 +18,7 @@
 
 namespace gtsam {
 
-  /**
-   * This class stores a vertical block matrix
-   *
-   * @ingroup base */
-
-class GTSAM_EXPORT SparseColumnBlockMatrix {
+class GTSAM_EXPORT LowerTriangularColumnMatrix {
 public:
     typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;
     typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor> ColMajorMatrix;
@@ -33,14 +28,17 @@ public:
     // Each key maps to {blockStartRow, blockHeight}
     typedef std::pair<size_t, size_t> RowHeightPair;
 
-private:
+    typedef size_t RowKey; // -1 indicates the Atb row
 
-    typedef size_t RowKey;
+    static const RowKey LAST_ROW = -1;
+
+private:
 
     Key key_;
     size_t width_ = 0;   // Use 0 to indicate invalid
     size_t maxHeight_ = 0;
-    size_t newMaxHeight_ = 0;
+    size_t newMaxHeight_ = 0;   // Height not including last row
+    // newMaxHeight_ is always height of the matrix - 1
     // vector for fast sequential access. This is mostly used in the Cholesky block
     // where the ordering is fixed and there should be no empty blocks
     std::vector<std::pair<RowKey, RowHeightPair>> blockStartVec_;
@@ -62,13 +60,13 @@ public:
 
     const Key key() const;
     
-    // In the Hessian matrix, we don't care about the ordering of blocks
-    SparseColumnBlockMatrix(const Key key_in, const size_t width_in);
+    // Diagonal block and Atb column will always be populated
+    LowerTriangularColumnMatrix(const RowKey key_in, const size_t width_in);
 
     // Check if block exists. If not, set appropriate indices to be allocated/initialized later
     // returns true of allocated
     // We don't want to allocate now because we might need to move data around
-    bool preallocateBlock(const Key otherKey,
+    bool preallocateBlock(const RowKey otherKey,
                           const size_t height,
                           const bool initialize);
 
@@ -79,26 +77,38 @@ public:
     void setZero();
 
     // Set a single block to 0
-    void setZero(const Key i);
+    void setZero(const RowKey i);
 
-    // reset blockStart* assignments 
+    // reset blockStart* assignments except for the diagonal block, 
     // but don't touch the underlying matrix in case we need that
     // memory later. Excess memory will be freed by resize
     void resetBlocks();
 
-    bool blockExists(const Key i) const;
+    bool blockExists(const RowKey i) const;
 
     // Access functions
-    Block block(const Key i);
-    const constBlock block(const Key i) const;
+    Block block(const RowKey i);
+    const constBlock block(const RowKey i) const;
 
     // Access the underlying matrix with variable height
     // This is used for when we want to compute the contribution blocks
     Block blockRange(const size_t startRow, const size_t height);
     const constBlock blockRange(const size_t startRow, const size_t height) const;
 
-    const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec() const; 
-    const std::unordered_map<Key, RowHeightPair>& blockStartMap() const; 
+    // // Access underlying matrix directly // We shouldn't need this
+    // Block submatrix(const size_t startRow, const size_t startCol,
+    //                 const size_t height, const size_t width);
+
+    Block diagonalBlock();
+    const constBlock diagonalBlock() const;
+
+    bool hasBelowDiagonalBlocks() const;
+
+    Block belowDiagonalBlocks();
+    const constBlock belowDiagonalBlocks() const;
+
+    const std::vector<std::pair<RowKey, RowHeightPair>>& blockStartVec() const; 
+    const std::unordered_map<RowKey, RowHeightPair>& blockStartMap() const; 
 
     void print(std::ostream& os) const;
 
@@ -113,14 +123,14 @@ public:
     // Reorder blocks according to reorderedKeys. reorderedKeys should
     // only contain keys that need to be reordered
     // oldLowestKeyIndex is the position of the lowest key
-    void reorderBlocks(const std::vector<RowKey>& reorderedKeys, 
-                       size_t oldLowestKeyIndex);
+    void reorderBlocks(const std::vector<Key>& reorderedKeys, size_t oldLowestKeyIndex);
 
 
 private:
     // Returns true if block did not exist
     // bool tryAllocateBlock(const Key otherKey, const size_t height);
 
+    void preallocateLastRow();
 }; 
 
 } // namespace gtsam

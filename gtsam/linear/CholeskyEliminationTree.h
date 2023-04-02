@@ -18,6 +18,7 @@
 #include <unordered_set>
 #include <utility>
 #include <iostream>
+#include <gtsam/base/LowerTriangularColumnMatrix.h>
 #include <gtsam/base/SparseLowerTriangularBlockMatrix.h>
 #include <gtsam/base/SparseSymmetricBlockMatrix.h>
 #include <gtsam/linear/JacobianMatrix.h>
@@ -27,31 +28,40 @@ namespace gtsam {
 class GTSAM_EXPORT CholeskyEliminationTree {
 private:
     class Node;
-    class ColumnStructure;
+    class Clique;
+
+public:
     typedef SparseColumnBlockMatrix::RowMajorMatrix RowMajorMatrix;
+    typedef SparseColumnBlockMatrix::ColMajorMatrix ColMajorMatrix;
     typedef SparseColumnBlockMatrix::Block Block;
     typedef SparseColumnBlockMatrix::constBlock constBlock;
     typedef std::pair<size_t, size_t> RowHeightPair;
     typedef std::shared_ptr<Node> sharedNode;
+    typedef std::shared_ptr<Clique> sharedClique;
     typedef std::shared_ptr<NonlinearFactor> sharedFactor;
 
+private:
+
     std::vector<sharedNode> nodes_;
-    sharedNode root_;
+    // sharedNode root_;
+    sharedClique root_;
     // SparseSymmetricBlockMatrix hessian_;
     SparseLowerTriangularBlockMatrix cholesky_;
-    SparseColumnBlockMatrix b_;   
-    SparseColumnBlockMatrix y_;   // L^-1 Atb
+    // SparseColumnBlockMatrix b_;  // This is incorporated in the Jacobian
+    // SparseColumnBlockMatrix y_;   // L^-1 Atb // This is incorporated in choleksy
     SparseColumnBlockMatrix delta_;   // \Delta // We're solving AtA Delta = Atb
     JacobianMatrix jacobian_;
     std::vector<size_t> ordering_; // Key to index
+    std::vector<Key> orderingToKey; // index to Key
     std::vector<sharedFactor> factors_;
     // How many nonzero entries in the A matrix
     size_t nEntries_ = 0;
 
-
-    enum LinearizeStatus {UNLINEARIZED, RELINEARIZED, LINEARIZED};
+    enum LinearizeStatus {UNLINEARIZED, NEWLINEARIZED, RELINEARIZED, LINEARIZED};
     
     std::vector<LinearizeStatus> factorLinearizeStatus_;
+
+    static const size_t LAST_ROW = LowerTriangularColumnMatrix::LAST_ROW;
 
 public:
     CholeskyEliminationTree();
@@ -78,9 +88,11 @@ public:
 
     void symbolicElimination(const KeySet& markedKeys);
 
-    void choleskyElimination(Values& theta);
+    void choleskyElimination(const Values& theta);
 
-    void updateOrdering(KeySet* affectedKeys);
+
+    // void updateOrdering(KeySet* affectedKeys);
+    void updateOrdering(const KeySet& markedKeys);
     
     // Go from top of tree and solve for delta. Lt x = y
     // Forward solve is already incorporated in Cholesky
@@ -99,13 +111,22 @@ private:
         CholeskyEliminationTree* eTreePtr = nullptr;
         OrderingLess() : eTreePtr(nullptr) {}
         OrderingLess(CholeskyEliminationTree* eTreePtr_in) : eTreePtr(eTreePtr_in) {}
-        bool operator()(const Key lhs, const Key rhs) {
+        bool operator()(const Key lhs, const Key rhs) const {
             assert(eTreePtr);
             return eTreePtr->ordering_.at(lhs) < eTreePtr->ordering_.at(rhs);
+        }
+
+        bool operator()(const std::pair<Key, RowHeightPair>& lhs, 
+                        const std::pair<Key, RowHeightPair>& rhs) const {
+            assert(eTreePtr);
+            return eTreePtr->ordering_.at(lhs.first) < eTreePtr->ordering_.at(rhs.first);
         }
     };
 
     OrderingLess orderingLess;
+    size_t ordering_version_ = 0;     // When the ordering updates, only nodes that are touched
+                                      // need to reorder blocks. nodes that are not touched
+                                      // can delay the update
 
     void mergeColStructure(const Key key,
                            const Key ignoreChildKey,
@@ -117,174 +138,124 @@ private:
                               const std::unordered_map<Key, size_t>& src,
                               std::unordered_map<Key, size_t>* dest);
 
+    void constructCSCMatrix(const std::vector<Key>& reorderKeys,
+                            int* nEntries,
+                            int* nVars,
+                            int* nFactors,
+                            std::vector<int>* A,
+                            std::vector<int>* p,
+                            std::vector<int>* cmember,
+                            std::unordered_set<Key>* is_reordered);
+
     // set the new variable ordering. TODO: Add an option for metis
     void getTotalReordering();
+
+    // Get partial ordering of a subset of variables, this subset will be placed
+    // At the end of the total ordering regardless of the tree structure
+    // cmember is the constraint group.
+    void getPartialReordering(const std::vector<Key>& reorderKeys, 
+                              std::vector<Key>* partialOrdering);
+
+    // After reordering, all child cliques of reordered nodes
+    // need to be detached and reordered, then attached to appropriate parents
+    // This needs to be done before symbolic elimination
+    void reparentOrphanClique(sharedClique clique);
+
+    std::vector<sharedClique> orphanCliques;
 
     void linearFactor(sharedFactor factor, const Values& theta, 
                       std::vector<RowMajorMatrix>* A,
                       Vector* b);
 
     // Eliminate the column. The column matrix should already be set up
-    void eliminateColumn(SparseColumnBlockMatrix* column_ptr, 
-                         Eigen::VectorXd* diagonalY);
+    // void eliminateColumn(SparseColumnBlockMatrix* column_ptr, 
+    //                      Eigen::VectorXd* diagonalY);
 
+    // Only gather columns that are allocated
+    // If nothing to gather (e.g., column might be new) then return false
+    bool gatherColumns(sharedClique clique, 
+                       ColMajorMatrix* m,
+                       size_t* totalWidth,
+                       size_t* totalHeight,
+                       std::vector<Key>* keys,
+                       std::vector<size_t>* widths,
+                       std::vector<size_t>* heights,
+                       std::vector<std::pair<Key, RowHeightPair>>* blockStartVec,
+                       std::vector<LowerTriangularColumnMatrix*>* columns);
+
+    void scatterColumns(const ColMajorMatrix& m, 
+                        const std::vector<size_t>& widths,
+                        const std::vector<size_t>& heights,
+                        const std::vector<LowerTriangularColumnMatrix*>& columns);
+
+    // Only handle edit coming from this clique, if clique is edit, also restore 
+    // clique columns, but don't subtract AtA block yet
+    void editFromClique(sharedClique clique);
+    void reconstructFromClique(sharedClique clique);
+    void eliminateClique(sharedClique clique);
+
+    // Handle all edits from this clumn
+    // Additional, if this clique is reconstruct, restore column to linear state
+    void editAndRestoreFromClique(sharedClique clique);
+
+    void restoreColumn(ColMajorMatrix& m, size_t totalWidth, size_t totalHeight);
+
+    // Given some source columns (children columns) handle edits for keys in editCols
+    // Edit keys may not be in the diagonal block
+    // m will be changed for the edited columns
+    // editCols should only contain keys that the column owns
+    void editFromColumn(const ColMajorMatrix& m, 
+            const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec,
+            const std::vector<Key>& editCols);
     void handleEdits(sharedNode node);
+
+    // Given some source columns, handle reconstructs for keys in reconstructCols
+    // m will not be changed as this supercolumn must be unmarked
+    void reconstructFromColumn(const ColMajorMatrix& m, 
+            const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec,
+            const std::vector<Key>& reconstructKeys);
+
+    void eliminateColumn(ColMajorMatrix& m,
+            const size_t totalWidth,
+            const size_t totalHeight,
+            const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec);
+
+    // Return a destBlockStart that constains all the rows and heights of the destination
+    // blocks in the destination column, merging blocks when contiguous
+    template<typename Iterator>
+    void findDestBlocks(Iterator start, Iterator end, 
+                        const std::unordered_map<Key, RowHeightPair>& destBlockStartMap,
+                        std::vector<RowHeightPair>* destBlockStart);
+
+    void setEditOrReconstruct(sharedClique clique);
 
     void handleReconstructs(sharedNode node);
 
-    // Prepares the column for edit. Multiply cholesky of diagonal block to the whole column
-    // Then SUBTRACT AtA of factors that need t obe relinearized
+    // Prepares the column for edit.
+    // SUBTRACT AtA of factors that need to be relinearized
+    void prepareEditClique(sharedClique clique);
     void prepareEditColumn(sharedNode node);
 
+    // ADD AtA of factors
+    void prepareEliminateClique(sharedClique clique, const Values& theta);
+    void prepareEliminateColumn(sharedNode node, bool is_reconstruct, const Values& theta);
 
+    // Reorder cliques that were not reset during the reordering
+    // Each node needs to have its data structures reordered
+    void reorderClique(sharedClique clique);
+
+    void prepareReconstructColumn(sharedNode node);
+
+    void backwardSolveColumn(ColMajorMatrix& m,
+            const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec);
+
+    void backwardSolveClique(sharedClique clique);
     void backwardSolveNode(sharedNode node);
+    
+    // Merge clique2 into clique1
+    void mergeCliques(sharedClique clique1, sharedClique clique2);
 
 };
 
 } // namespace gtsam
 
-
-// #pragma once
-// 
-// #include <gtsam/base/Matrix.h>
-// #include <gtsam/base/MatrixSerialization.h>
-// #include <gtsam/base/FastVector.h>
-// #include <gtsam/nonlinear/NonlinearFactorGraph.h>
-// #include <Eigen/Core>
-// #include <vector>
-// #include <unordered_map>
-// #include <unordered_set>
-// #include <utility>
-// #include <iostream>
-// #include <gtsam/base/SparseUpperTriangularBlockMatrix.h>
-// #include <gtsam/base/SparseSymmetricBlockMatrix.h>
-// 
-// namespace gtsam {
-// 
-//     class GTSAM_EXPORT CholeskyEliminationTree
-//     {
-// 
-//     private:
-//         // Each node represents a variable (TODO: figure out how to make supernodes)
-//         struct Node {
-//             typedef std::shared_ptr<Node> sharedNode;
-//             typedef std::shared_ptr<NonlinearFactor> sharedFactor;
-//             Key key;
-//             sharedNode parent = nullptr;
-//             std::unordered_set<sharedNode> children;
-//             std::unordered_set<Key> fillInKeys;         // All keys we interact with that has a higher order than us
-//             std::unordered_set<Key> conditionalKeys;    // All keys we interact with that has a lower order than us
-//             std::unordered_map<Key, size_t> keyFactorCount;     // Number of times this Key interacts with another Key
-//             FactorIndexSet factorIndexSet;
-//             bool relinearized = false;
-//             bool marked = false;    
-// 
-//             Node(const Key key_in) 
-//             : key(key_in) {}
-//             // There are two cases in which we need to recompute the AtA of all factors in a column
-//             // 1. A column is relinearized. In this case, all Hessian blocks (i,j) needs to be set to zero where A_ki, A_kj != 0, and the column is set to 0
-//             // 2. A factor between (i, j) is removed. In this case, the column block i and j needs to be recomputed. We only need to compute H(i, j), H(i, j), and H(j, j). Actually, we might as well mark the two columns as being relinearized, and bank on this operation not happening a lot. We could also cache the jacobian, but it seems like too much memory requirement for an operation that doesn't happen very often. 
-// 
-//             // compute the jacobian of a factor given the values v
-//             // TODO: Do we need to cache the Jacobian? Should we just cache the Hessian?
-//             // The hessian should just be a sum of all AtA matrices from Jacobian blocks
-//             // If there is a block deletion or a relinearization
-//             void linearizefactor(sharedFactor factor, Values v);
-// 
-//             // Do AtA for a Jacobian blocks in this factor to variables that have a equal or larger keyIndex than ours
-//             // factors to variables that have a smaller keyIndex are processed already
-//             // And live in contribution matrices
-//             void constructHessian();
-// 
-//             // do cholesky on self
-//             // AtA = RtR
-//             // S = R^-1B
-//             // C -= StS
-//             void CholeskyPartial();
-// 
-// 
-//             // Eliminate this node. All information should be propagated up to parent
-//             void eliminate() const {
-//                 // linearize all factors in eliminateFactors
-//                 // construct hessian in eliminate Factors
-//                 // Do Cholesky on self
-//                 //
-//             }
-// 
-//             void print(const std::string& str, const KeyFormatter& keyFormatter) const;
-//         };
-// 
-//         typedef std::shared_ptr<Node> sharedNode;
-//         typedef std::shared_ptr<NonlinearFactor> sharedFactor;
-// 
-//     public:
-//         void addVariables(const Values& newTheta); 
-// 
-//         void updateFactorsAndMarkAffectedKeys(const NonlinearFactorGraph& nonlinearFactors,
-//                                               const FactorIndices& newFactorIndices, 
-//                                               const FactorIndices& removeFactorIndices,
-//                                               const std::optional<FastList<Key>>& extraKeys,
-//                                               KeySet& affectedKeys);
-// 
-// 
-//         // For any observed keys and relin key, traverse up the tree and find all their ancestors
-//         // Mark all such nodes, and detach them from their parents
-//         // Then take all the children of the marked keys, and detach them
-//         void markAllAffectedKeys(const KeySet& observedKeys, 
-//                                  const KeySet& relinKeys,
-//                                  KeySet* markedKeys,
-//                                  KeyVector* orphanKeys);
-// 
-//         // Given some ordering, reintegrate all the nodes back into the tree
-//         // While doing that, collect the size each column of the R matrix needs to allocate 
-//         // and allocate it at the end
-//         // We can resize all the column blocks at relinearization
-//         void symbolicElimination(const Ordering& ordering, const KeyVector& orphanKeys);
-// 
-//         void choleskyElimination();
-// 
-//         void printTreeStructure(std::ostream& os);
-// 
-// 
-//     private:
-//         // Mark this node for re-elimination
-//         void markNode(sharedNode node, KeySet* markedKeys);
-// 
-//         // Add all children of this node to a set of orphan keys
-//         // And disconnect them from the parent
-//         void orphanChildren(sharedNode node, KeyVector* orphanKeys);
-// 
-//         // 0. Assume all contribution blocks are set
-//         // 1. Assume all factors are relinearized. Note: There should be a more cache friendly way to relinearize factors while keeping track of old contribution blocks
-//         // 2. Take dense Cholesky of diagonal block
-//         // 3. Solve all blocks under the diagonal
-//         // 4. Compute fill-in blocks
-//         void choleskyEliminateNode(sharedNode node);
-// 
-//         void reParentOrphan(sharedNode node, const std::unordered_map<Key, size_t>& keyToOrdering);
-//         void resolveAllocate();
-// 
-//         void addFillInKey(sharedNode node, const Key otherKey);
-// 
-//         void symbolicEliminateNode(sharedNode node,
-//                                    size_t myOrder,
-//                                    const std::unordered_map<Key, size_t>& keyToOrdering);
-//         
-//         // Mark a single relinKey
-//         // And then we need to mark the ancestors of those keys
-//         void markRelinKey(const Key relinKey);
-// 
-//         void validateTree();
-// 
-//         std::vector<sharedNode> nodes_; 
-//         sharedNode root_;
-//         std::unordered_map<FactorIndex, bool> factorLinearizeStatus_;
-// 
-//         SparseUpperTriangularBlockMatrix cholesky_;
-//         SparseSymmetricBlockMatrix hessian_;
-// 
-//         // When reparenting, we need to add orphan fillins to parent
-//         // Actually need to reparent first
-// 
-//     };
-// }

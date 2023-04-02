@@ -465,6 +465,11 @@ std::shared_ptr<GaussianConditional> HessianFactor::eliminateCholesky(const Orde
     // Do dense elimination
     size_t nFrontals = keys.size();
     assert(nFrontals <= size());
+    cout << "Keys: ";
+    for(Key k : keys) {
+        cout << k << " ";
+    }
+    cout << endl << endl;
     info_.choleskyPartial(nFrontals);
 
     // TODO(frank): pre-allocate GaussianConditional and write into it

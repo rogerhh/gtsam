@@ -208,9 +208,9 @@ int main(int argc, char *argv[]) {
             if(step % 20 == 0) {
                 cout << "step = " << step << endl;
             }
-            // if(step >= 65) {
-            //     exit(0);
-            // }
+            if(step >= 3000) {
+                exit(0);
+            }
 
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;

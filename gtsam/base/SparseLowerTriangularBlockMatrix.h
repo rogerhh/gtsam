@@ -14,7 +14,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
-#include <gtsam/base/SparseColumnBlockMatrix.h>
+#include <gtsam/base/LowerTriangularColumnMatrix.h>
 
 namespace gtsam {
 
@@ -26,13 +26,14 @@ namespace gtsam {
 
 class GTSAM_EXPORT SparseLowerTriangularBlockMatrix {
 public:
-    typedef SparseColumnBlockMatrix::Block Block;
-    typedef SparseColumnBlockMatrix::constBlock constBlock;
-    typedef SparseColumnBlockMatrix::RowHeightPair RowHeightPair;
+    typedef LowerTriangularColumnMatrix::Block Block;
+    typedef LowerTriangularColumnMatrix::constBlock constBlock;
+    typedef LowerTriangularColumnMatrix::RowHeightPair RowHeightPair;
+    static const size_t LAST_ROW = LowerTriangularColumnMatrix::LAST_ROW;
 
 private:
     typedef SparseLowerTriangularBlockMatrix This;
-    std::vector<SparseColumnBlockMatrix> columns_;
+    std::vector<LowerTriangularColumnMatrix> columns_;
     std::unordered_set<size_t> needAlloc_;
 
 public:
@@ -66,7 +67,7 @@ public:
     Block colBelowDiagonalBlocks(const Key key);
     const constBlock colBelowDiagonalBlocks(const Key key) const;
 
-    SparseColumnBlockMatrix& column(const Key key);
+    LowerTriangularColumnMatrix& column(const Key key);
 
     void print(std::ostream& os) const;
 
@@ -110,65 +111,5 @@ public:
     // }
 
 };
-
-// class GTSAM_EXPORT SparseLowerTriangularBlockMatrix {
-// public:
-//     typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> RowMajorMatrix;
-//     typedef Eigen::Block<RowMajorMatrix> Block;
-//     typedef Eigen::Block<const RowMajorMatrix> constBlock;
-// 
-// private:
-// 
-//     struct ColumnMatrix {
-// 
-//         Key key;
-//         size_t width = 0;   // Use 0 to indicate invalid
-//         size_t maxHeight = 0;
-//         size_t newMaxHeight = 0;
-//         std::unordered_map<Key, std::pair<size_t, size_t>> blockStart;  // Each key maps to {blockStartRow, height}
-//         RowMajorMatrix matrix;  // Row major to support growing
-// 
-//         // TODO: Initialize a column matrix with a diagonal block
-//         ColumnMatrix(const Key key_in, const size_t width_in);
-// 
-//         // Check if block exists. If not, set appropriate indices to be allocated later
-//         // returns true if allocated
-//         bool preallocateOrInitialize(const Key otherKey, 
-//                                      const size_t height,
-//                                      const bool initialize);
-// 
-//         // Actually allocate and initialize the amount we need
-//         // In case of relinearization, maxHeight = 0. We might free up memory by resizing
-//         void resolveAllocate();
-// 
-//         // reset block start assignments, but don't touch the underlying matrix
-//         // in case we need that memory later. Excess memory will be freed by
-//         // conservativeResize
-//         void resetBlocks();
-// 
-//         Block block(const Key i);
-// 
-//         const constBlock block(const Key i) const;
-//     };
-// 
-// public:
-//     void addColumn(const Key key, const size_t width);
-// 
-//     void preallocateOrInitialize(const Key i, const Key j, const bool initialize);
-// 
-//     void resolveAllocate();
-// 
-//     void resetColumn(const Key key);
-// 
-//     Block block(const Key i, const Key j);
-// 
-//     const constBlock block(const Key i, const Key j) const;
-// 
-// private:
-//     // Each column is represented by a Matrix object. Use RowMajor Storage to support growing the matrix
-//     std::vector<ColumnMatrix> columnMatrices_; 
-//     std::unordered_set<size_t> needAlloc;
-// 
-// };
 
 } // namespace gtsam

@@ -38,18 +38,9 @@ bool SparseColumnBlockMatrix::allocated() const {
     return maxHeight_ == newMaxHeight_;
 }
 
-// Diagonal flag to indicate if diagonal block should be initialized
-// All column matrices should have a diagonal block corresponding to the column index
-// In the Cholesky matrix, we want the diagonal block to be on top
-// In the Hessian matrix, we don't care about the ordering of blocks
-// So we should always keep diagonal block on top
 SparseColumnBlockMatrix::SparseColumnBlockMatrix(
-        const Key key_in, const size_t width_in, bool diagonal) 
-        : key_(key_in), width_(width_in) {
-    if(diagonal) {
-        preallocateBlock(key_, width_, true);
-    }
-}
+        const Key key_in, const size_t width_in) 
+        : key_(key_in), width_(width_in) {}
 
 // bool SparseColumnBlockMatrix::tryAllocateBlock(const Key otherKey,
 //                                                const size_t height) {
@@ -87,7 +78,7 @@ void SparseColumnBlockMatrix::resolveAllocate() {
         return;
     }
     if(maxHeight_ == 0) {
-        matrix_ = RowMajorMatrix(newMaxHeight_, width_);
+        matrix_ = ColMajorMatrix(newMaxHeight_, width_);
     }
     else {
         matrix_.conservativeResize(newMaxHeight_, Eigen::NoChange_t());
@@ -104,17 +95,14 @@ void SparseColumnBlockMatrix::setZero(const Key i) {
     block(i).setZero();
 }
 
-// reset blockStart* assignments except for the diagonal block, 
+// reset blockStart* assignments 
 // but don't touch the underlying matrix in case we need that
 // memory later. Excess memory will be freed by resize
-void SparseColumnBlockMatrix::resetBlocks(bool diagonal) {
+void SparseColumnBlockMatrix::resetBlocks() {
     maxHeight_ = 0;
     newMaxHeight_ = 0;
     blockStartVec_.clear();
     blockStartMap_.clear();
-    if(diagonal) {
-        preallocateBlock(key_, width_, true);
-    }
 }
 
 bool SparseColumnBlockMatrix::blockExists(const Key i) const {
@@ -144,31 +132,6 @@ const constBlock SparseColumnBlockMatrix::blockRange(
     return matrix_.block(startRow, 0, height, width_);
 }
 
-Block SparseColumnBlockMatrix::submatrix(const size_t startRow, const size_t startCol,
-                                         const size_t height, const size_t width) {
-    return matrix_.block(startRow, startCol, height, width);
-}
-
-Block SparseColumnBlockMatrix::diagonalBlock() {
-    assert(maxHeight_ >= width_);
-    return matrix_.block(0, 0, width_, width_);
-}
-const constBlock SparseColumnBlockMatrix::diagonalBlock() const {
-    assert(maxHeight_ >= width_);
-    return matrix_.block(0, 0, width_, width_);
-}
-
-bool SparseColumnBlockMatrix::hasBelowDiagonalBlocks() const {
-    return newMaxHeight_ > width_; // if matrix doesn't just have the diagonal blocks
-}
-
-Block SparseColumnBlockMatrix::belowDiagonalBlocks() {
-    return matrix_.block(width_, 0, maxHeight_ - width_, width_);
-}
-const constBlock SparseColumnBlockMatrix::belowDiagonalBlocks() const {
-    return matrix_.block(width_, 0, maxHeight_ - width_, width_);
-}
-
 const vector<pair<Key, RowHeightPair>>& SparseColumnBlockMatrix::blockStartVec() const {
     return blockStartVec_;
 }
@@ -176,13 +139,68 @@ const unordered_map<Key, RowHeightPair>& SparseColumnBlockMatrix::blockStartMap(
     return blockStartMap_;
 }
 
+void SparseColumnBlockMatrix::reorderBlocks(const std::vector<RowKey>& reorderedKeys, 
+                                            size_t oldLowestKeyIndex) {
+    
+    // We can guarantee that the last row will not be changed
+    const RowKey oldLowestKey = blockStartVec_[oldLowestKeyIndex].first;
+    size_t firstRow = blockStartMap_[oldLowestKey].first;
+
+    if(2 * firstRow <= newMaxHeight_) {
+        // Just replace underlying matrix
+        ColMajorMatrix newMatrix(newMaxHeight_, width_);
+        newMatrix.block(0, 0, firstRow, width_) = matrix_.block(0, 0, firstRow, width_);
+
+        size_t curRow = firstRow;
+        for(const Key key : reorderedKeys) {
+            auto& p = blockStartMap_[key];
+            const size_t oldRow = p.first;
+            const size_t height = p.second;
+
+            newMatrix.block(curRow, 0, height, width_) = matrix_.block(oldRow, 0, height, width_); 
+
+            p.first = curRow;
+            blockStartVec_[oldLowestKeyIndex] = {key, p};
+            oldLowestKeyIndex++;
+
+            curRow += height;
+        }
+
+        matrix_ = std::move(newMatrix);
+    }
+    else {
+        // Directly change underlying matrix
+        ColMajorMatrix newMatrix(newMaxHeight_ - firstRow, width_);
+
+        size_t curRow = 0;
+        for(const Key key : reorderedKeys) {
+            auto& p = blockStartMap_[key];
+            const size_t oldRow = p.first;
+            const size_t height = p.second;
+
+            newMatrix.block(curRow, 0, height, width_) = matrix_.block(oldRow, 0, height, width_); 
+            p.first = firstRow + curRow;
+            blockStartVec_[oldLowestKeyIndex] = {key, p};
+            oldLowestKeyIndex++;
+
+            curRow += height;
+        }
+
+        matrix_.block(firstRow, 0, newMaxHeight_ - firstRow, width_) = newMatrix;
+    }
+
+}
+
 void SparseColumnBlockMatrix::print(ostream& os) const {
+    int intkey = key_ == -1? -1 : key_;
+    os << "Column " << intkey << endl << blockStartVec_.size() << endl;
     for(const auto p : blockStartVec_) {
-        Key k = p.first;
+        RowKey rowkey = p.first;
         size_t row = p.second.first;
         size_t height = p.second.second;
-        os << "Key: " << k << "\n";
-        os << blockRange(row, height) << "\n\n";
+        os << rowkey << ": " << blockRange(row, height).transpose() << endl;
+        // os << rowkey << " " << row << " " << height << endl;
+        // os << blockRange(row, height) << "\n\n";
     }
 }
 
