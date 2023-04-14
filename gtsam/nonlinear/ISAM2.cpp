@@ -219,9 +219,18 @@ void ISAM2::recalculateBatch(const ISAM2UpdateParams& updateParams,
   gttoc(linearize);
 
   gttic(eliminate);
-  ISAM2BayesTree::shared_ptr bayesTree =
+  auto junctionTree = 
       ISAM2JunctionTree(
-          GaussianEliminationTree(*linearized, affectedFactorsVarIndex, order))
+          GaussianEliminationTree(*linearized, affectedFactorsVarIndex, order));
+  printf("\nJunctionTree print: ROOTS\n\n");
+  for (auto& cluster : junctionTree.roots()) {
+    cluster->print();
+  };
+  printf("\nJunctionTree print: BEGIN\n\n");
+  junctionTree.print();
+  printf("\nJunctionTree print: END\n\n");
+  ISAM2BayesTree::shared_ptr bayesTree =
+      junctionTree
           .eliminate(params_.getEliminationFunction())
           .first;
   gttoc(eliminate);
@@ -346,7 +355,15 @@ void ISAM2::recalculateIncremental(const ISAM2UpdateParams& updateParams,
 
   // Do elimination
   GaussianEliminationTree etree(factors, affectedFactorsVarIndex, ordering);
-  auto bayesTree = ISAM2JunctionTree(etree)
+  auto junctionTree = ISAM2JunctionTree(etree);
+  printf("\nJunctionTree print: ROOTS\n\n");
+  for (auto& cluster : junctionTree.roots()) {
+    cluster->print();
+  };
+  printf("\nJunctionTree print: BEGIN\n\n");
+  junctionTree.print();
+  printf("\nJunctionTree print: END\n\n");
+  auto bayesTree = junctionTree
                        .eliminate(params_.getEliminationFunction())
                        .first;
   gttoc(reorder_and_eliminate);

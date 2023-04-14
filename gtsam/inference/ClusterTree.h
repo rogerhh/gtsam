@@ -43,8 +43,12 @@ class ClusterTree {
     FactorGraphType factors;  ///< Factors associated with this node
 
     int problemSize_;
+    int depth_;
+    // Cluster* parent_;
+    // int offset;
 
-    Cluster() : problemSize_(0) {}
+    // Cluster() : problemSize_(0), depth_(0), parent_(NULL), offset(0) {}
+    Cluster() : problemSize_(0), depth_(0) {}
 
     virtual ~Cluster() {}
 
@@ -55,7 +59,8 @@ class ClusterTree {
     /// Construct from factors associated with a single key
     template <class CONTAINER>
     Cluster(Key key, const CONTAINER& factorsToAdd)
-        : problemSize_(0) {
+        : problemSize_(0), depth_(0) {
+    //     : problemSize_(0), depth_(0), parent_(NULL), offset(0) {
       addFactors(key, factorsToAdd);
     }
 
@@ -71,6 +76,23 @@ class ClusterTree {
     void addChild(const std::shared_ptr<Cluster>& cluster) {
       children.push_back(cluster);
       problemSize_ = std::max(problemSize_, cluster->problemSize_);
+      int child_depth = cluster->computeDepth();
+      depth_ = std::max(depth_, child_depth + 1);
+      // cluster->parent_ = this;
+      // cluster->offset = nrFrontals();
+    }
+
+    int computeDepth() const {
+      int max_depth = 0;
+      for (auto& child : children) {
+        int child_depth = child->computeDepth();
+        max_depth = std::max(max_depth, child_depth + 1);
+      }
+      return max_depth;
+    }
+
+    int depth() const {
+      return depth_;
     }
 
     size_t nrChildren() const {

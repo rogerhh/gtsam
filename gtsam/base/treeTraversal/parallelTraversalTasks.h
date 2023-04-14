@@ -23,6 +23,8 @@
 #ifdef GTSAM_USE_TBB
 #include <tbb/task_group.h>         // tbb::task_group
 #include <tbb/scalable_allocator.h> // tbb::scalable_allocator
+// #include <tbb/tbb_thread.h>
+#include <iostream>
 
 namespace gtsam {
 
@@ -76,6 +78,14 @@ namespace gtsam {
 
                 // If we have child tasks, start subtasks and wait for them to complete
                 tbb::task_group ctg;
+                // printf("Thread: %d, Child task group START %p, size %zu\n", tbb::this_tbb_thread::get_id(), &ctg, treeNode->children.size());
+                fflush(stdout);
+                std::cout << "thread " << std::this_thread::get_id()
+                    << ", Child task group START " << &ctg
+                    << ", size" << treeNode->children.size()
+                    << "\n";
+                fflush(stdout);
+                // printf("Thread: %d, Child task group START %p, size %zu\n", std::this_thread::get_id(), &ctg, treeNode->children.size());
                 for(const std::shared_ptr<NODE>& child: treeNode->children)
                 {
                   // Process child in a subtask.  Important:  Run visitorPre before calling
@@ -87,14 +97,17 @@ namespace gtsam {
                       problemSizeThreshold, ctg, overThreshold));
                 }
                 ctg.wait();
+                printf("Child task group END %p, size %zu\n", &ctg, treeNode->children.size());
 
                 // Allocate post-order task as a continuation
                 isPostOrderPhase = true;
+                printf("Child task group OWNED %p, root in task group %p\n", &ctg, &tg);
                 tg.run(*this);
               }
               else
               {
                 // Run the post-order visitor in this task if we have no children
+                printf("Thread: %d, LEAF in tg: %p\n", std::this_thread::get_id(), &tg);
                 (void) visitorPost(treeNode, *myData);
               }
             }
@@ -152,7 +165,9 @@ namespace gtsam {
       {
           typedef RootTask<ROOTS, NODE, DATA, VISITOR_PRE, VISITOR_POST> RootTask;
           tbb::task_group tg;
+          printf("Root Task created with %zu roots\n", roots.size());
           tg.run_and_wait(RootTask(roots, rootData, visitorPre, visitorPost, problemSizeThreshold, tg));
+          printf("Root Task finished with %zu roots\n\n\n", roots.size());
       }
 
     }

@@ -25,7 +25,38 @@ namespace gtsam {
 template<class GRAPH>
 void ClusterTree<GRAPH>::Cluster::print(const std::string& s,
     const KeyFormatter& keyFormatter) const {
-  std::cout << s << " (" << problemSize_ << ")";
+
+  /*
+  int max_depth = 0;
+  std::vector<Cluster::Children> queue_children;
+  std::vector<int> queue_depth;
+  for (auto& child : children) {
+    queue_children.push_back(child);
+    queue_depth.push_back(1);
+  }
+
+  while (queue_children.size() > 0) {
+    auto& cluster = queue_children.back();
+    auto& depth = queue_depth.back();
+    queue_children.pop_back();
+    queue_depth.pop_back();
+
+    for (auto& child : cluster) {
+      queue_children.push_back(child);
+      queue_depth.push_back(depth + 1);
+    }
+
+    max_depth = std::max(max_depth, depth);
+  }
+  */
+
+  std::cout << s
+    << " CLUSTER: ( "
+    // << "Depth: " << max_depth << ", "
+    << "Depth: " << depth() << ", "
+    << "Problem size: " << problemSize() << ", "
+    << "NumFrontalKeys: " << nrFrontals() << ", "
+    << "NumChildren: " << nrChildren() << ")";
   PrintKeyVector(orderedFrontalKeys);
 }
 
