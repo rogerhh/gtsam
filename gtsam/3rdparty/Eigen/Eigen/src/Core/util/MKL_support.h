@@ -30,6 +30,8 @@
  ********************************************************************************
 */
 
+#undef EIGEN_USE_MKL_ALL
+
 #ifndef EIGEN_MKL_SUPPORT_H
 #define EIGEN_MKL_SUPPORT_H
 

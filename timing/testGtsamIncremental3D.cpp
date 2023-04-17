@@ -17,6 +17,11 @@
 #include <unistd.h>
 #include <getopt.h>
 
+#ifdef GTSAM_USE_TBB
+#include <tbb/task_arena.h>
+#include <tbb/global_control.h>
+#endif
+
 using namespace std;
 using namespace gtsam;
 using namespace gtsam::symbol_shorthand;
@@ -42,6 +47,10 @@ double chi2_red(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& c
 }
 
 int main(int argc, char *argv[]) {
+    #ifdef GTSAM_USE_TBB
+    // tbb::task_arena arena(16);        // No more than 2 threads in this arena.
+    tbb::global_control global_limit(tbb::global_control::max_allowed_parallelism, 128);
+    #endif
 
     string dataset_name;
     int K = 1;
@@ -94,11 +103,11 @@ int main(int argc, char *argv[]) {
 
     cout << "Incremental optimization" << endl
          << "Loading " << dataset_name << endl
-         << "Parameters: K = " << K << ", epsilon = " << epsilon 
-         << ", max_optimization_iter = " << max_iter 
-         << ", opt_stop_cond = " << d_error 
-         << ", relinearize_skip = " << relinearize_skip 
-         << ", print_frequency = " << print_frequency 
+         << "Parameters: K = " << K << ", epsilon = " << epsilon
+         << ", max_optimization_iter = " << max_iter
+         << ", opt_stop_cond = " << d_error
+         << ", relinearize_skip = " << relinearize_skip
+         << ", print_frequency = " << print_frequency
          << endl;
 
     string datasetFile = findExampleDataFile(dataset_name);
@@ -205,13 +214,13 @@ int main(int argc, char *argv[]) {
             auto update_end = chrono::high_resolution_clock::now();
             // estimate = isam2.calculateEstimate();
             auto calc_end = chrono::high_resolution_clock::now();
-            d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
-            d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
+            d1 += chrono::duration_cast<chrono::nanoseconds>(update_end - start).count();
+            d2 += chrono::duration_cast<chrono::nanoseconds>(calc_end - update_end).count();
 
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;
             // if(print_frequency != 0 && print_count % print_frequency == 0) {
-            //     cout << "step = " << step << ", Chi2 = " << last_chi2 
+            //     cout << "step = " << step << ", Chi2 = " << last_chi2
             //          << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
             // }
 
@@ -228,9 +237,9 @@ int main(int argc, char *argv[]) {
                     auto update_end = chrono::high_resolution_clock::now();
                     estimate = isam2.calculateEstimate();
                     auto calc_end = chrono::high_resolution_clock::now();
-                    d1 += chrono::duration_cast<chrono::microseconds>
+                    d1 += chrono::duration_cast<chrono::nanoseconds>
                                 (update_end - start).count();
-                    d2 += chrono::duration_cast<chrono::microseconds>
+                    d2 += chrono::duration_cast<chrono::nanoseconds>
                                 (calc_end - update_end).count();
 
                     double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
@@ -247,7 +256,7 @@ int main(int argc, char *argv[]) {
                     last_chi2 = chi2;
                     iter++;
                     if(iter >= max_iter) {
-                        cout << "Nonlinear optimization exceed max iterations: " 
+                        cout << "Nonlinear optimization exceed max iterations: "
                              << iter << " >= " << max_iter << ", chi2 = " << chi2 << endl;
                         break;
                     }
@@ -264,16 +273,30 @@ int main(int argc, char *argv[]) {
 
     Values estimate(isam2.calculateEstimate());
     double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
-    cout << "final_chi2 = " << chi2 
+    cout << "final_chi2 = " << chi2
          << ", final_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
 
+    long total_update_time = 0;
+    long total_calc_time = 0;
     for(int i = 0; i < update_times.size(); i++) {
-        cout << "step = " << i << ", update_time = " << update_times[i] << " us"
-             << ", calc_time = " << calc_times[i] << " us" << endl;
+        cout << "step = " << i << ", update_time = " << update_times[i] << " ns"
+             << ", calc_time = " << calc_times[i] << " ns" << endl;
+        total_update_time += update_times[i];
+        total_calc_time += calc_times[i];
     }
 
-    estimate.print();
+    printf("\n");
 
+    estimate.print();
     tictoc_print2_();
 
+    printf("\n");
+
+    cout << "Total update time: " << total_update_time << " ns" << ", "
+         << "Total calc time: " << total_calc_time << " ns" << endl;
+
+    cout << "Total update time: " << total_update_time / 1000 << " us" << ", "
+         << "Total calc time: " << total_calc_time / 1000 << " us" << endl;
+
+    printf("\n");
 }
