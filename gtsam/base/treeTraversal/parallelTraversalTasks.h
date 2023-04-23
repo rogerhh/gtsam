@@ -24,6 +24,7 @@
 #include <tbb/task_group.h>         // tbb::task_group
 #include <tbb/scalable_allocator.h> // tbb::scalable_allocator
 // #include <tbb/tbb_thread.h>
+#include <tbb/task_arena.h>
 #include <iostream>
 
 namespace gtsam {
@@ -78,14 +79,23 @@ namespace gtsam {
 
                 // If we have child tasks, start subtasks and wait for them to complete
                 tbb::task_group ctg;
-                // printf("Thread: %d, Child task group START %p, size %zu\n", tbb::this_tbb_thread::get_id(), &ctg, treeNode->children.size());
                 fflush(stdout);
-                std::cout << "thread " << std::this_thread::get_id()
-                    << ", Child task group START " << &ctg
-                    << ", size" << treeNode->children.size()
-                    << "\n";
+                printf("ARENA: %d; thread: %p, Parent task group INNER: %p, Child task group START: %p, size: %zu\n",
+                    tbb::this_task_arena::current_thread_index(),
+                    std::this_thread::get_id(),
+                    &tg,
+                    &ctg,
+                    treeNode->children.size());
+                // std::cout 
+                //     << "ARENA: " << tbb::this_task_arena::current_thread_index()
+                //     << ": "
+                //     << "thread " << std::this_thread::get_id()
+                //     << ", Child task group START " << &ctg
+                //     << ", size " << (int)treeNode->children.size()
+                //     << "\n"
+                //     << std::endl;
                 fflush(stdout);
-                // printf("Thread: %d, Child task group START %p, size %zu\n", std::this_thread::get_id(), &ctg, treeNode->children.size());
+
                 for(const std::shared_ptr<NODE>& child: treeNode->children)
                 {
                   // Process child in a subtask.  Important:  Run visitorPre before calling
@@ -97,17 +107,45 @@ namespace gtsam {
                       problemSizeThreshold, ctg, overThreshold));
                 }
                 ctg.wait();
-                printf("Child task group END %p, size %zu\n", &ctg, treeNode->children.size());
+
+                fflush(stdout);
+                printf("ARENA: %d; thread: %p, Parent task group INNER: %p, Child task group END: %p, size: %zu\n",
+                    tbb::this_task_arena::current_thread_index(),
+                    std::this_thread::get_id(),
+                    &tg,
+                    &ctg,
+                    treeNode->children.size());
+                // std::cout 
+                //     << "ARENA: " << tbb::this_task_arena::current_thread_index()
+                //     << ": "
+                //     << "thread " << std::this_thread::get_id()
+                //     << ", Child task group END " << &ctg
+                //     << ", size " << (int)treeNode->children.size()
+                //     << "\n"
+                //     << std::endl;
+                fflush(stdout);
 
                 // Allocate post-order task as a continuation
                 isPostOrderPhase = true;
-                printf("Child task group OWNED %p, root in task group %p\n", &ctg, &tg);
                 tg.run(*this);
               }
               else
               {
+
                 // Run the post-order visitor in this task if we have no children
-                printf("Thread: %d, LEAF in tg: %p\n", std::this_thread::get_id(), &tg);
+                fflush(stdout);
+                printf("ARENA: %d; thread: %p, Parent task group LEAF: %p\n",
+                    tbb::this_task_arena::current_thread_index(),
+                    std::this_thread::get_id(),
+                    &tg);
+                // std::cout 
+                //     << "ARENA: " << tbb::this_task_arena::current_thread_index()
+                //     << ": "
+                //     << "thread " << std::this_thread::get_id()
+                //     << ", Parent task group LEAF " << &tg
+                //     << "\n"
+                //     << std::endl;
+                fflush(stdout);
                 (void) visitorPost(treeNode, *myData);
               }
             }
