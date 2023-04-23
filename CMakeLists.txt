@@ -162,3 +162,6 @@ include(cmake/HandleFinalChecks.cmake)
 
 # Include CPack *after* all flags
 include(CPack)
+
+# copy over the perlmutter job script
+configure_file(job-perlmutter job-perlmutter COPYONLY)

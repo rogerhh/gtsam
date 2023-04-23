@@ -1,0 +1,14 @@
+#!/bin/bash
+#SBATCH -N 1
+#SBATCH -C cpu
+#SBATCH --qos=debug
+#SBATCH -J cs267-gtsam
+#SBATCH -t 00:10:00
+
+#OpenMP settings:
+#export OMP_NUM_THREADS=1
+#export OMP_PLACES=threads
+#export OMP_PROC_BIND=spread
+
+#run the application:
+srun ./timing/testGtsamIncremental3D -f reordered_sphere_bignoise_vertex3 -k 1
