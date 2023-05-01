@@ -144,18 +144,19 @@ void SparseColumnBlockMatrix::reorderBlocks(const std::vector<RowKey>& reordered
     
     // We can guarantee that the last row will not be changed
     const RowKey oldLowestKey = blockStartVec_[oldLowestKeyIndex].first;
-    size_t firstRow = blockStartMap_[oldLowestKey].first;
+    size_t firstRow = blockStartMap_.at(oldLowestKey).first;
 
     if(2 * firstRow <= newMaxHeight_) {
+    // if(false) {
         // Just replace underlying matrix
         ColMajorMatrix newMatrix(newMaxHeight_, width_);
         newMatrix.block(0, 0, firstRow, width_) = matrix_.block(0, 0, firstRow, width_);
 
         size_t curRow = firstRow;
         for(const Key key : reorderedKeys) {
-            auto& p = blockStartMap_[key];
-            const size_t oldRow = p.first;
-            const size_t height = p.second;
+            RowHeightPair& p = blockStartMap_.at(key);
+            const size_t& oldRow = p.first;
+            const size_t& height = p.second;
 
             newMatrix.block(curRow, 0, height, width_) = matrix_.block(oldRow, 0, height, width_); 
 
@@ -166,15 +167,16 @@ void SparseColumnBlockMatrix::reorderBlocks(const std::vector<RowKey>& reordered
             curRow += height;
         }
 
-        matrix_ = std::move(newMatrix);
+        matrix_ = newMatrix;
     }
     else {
         // Directly change underlying matrix
-        ColMajorMatrix newMatrix(newMaxHeight_ - firstRow, width_);
+        const size_t remainingHeight = newMaxHeight_ - firstRow;
+        ColMajorMatrix newMatrix(remainingHeight, width_);
 
         size_t curRow = 0;
         for(const Key key : reorderedKeys) {
-            auto& p = blockStartMap_[key];
+            auto& p = blockStartMap_.at(key);
             const size_t oldRow = p.first;
             const size_t height = p.second;
 
@@ -184,11 +186,20 @@ void SparseColumnBlockMatrix::reorderBlocks(const std::vector<RowKey>& reordered
             oldLowestKeyIndex++;
 
             curRow += height;
+
         }
 
-        matrix_.block(firstRow, 0, newMaxHeight_ - firstRow, width_) = newMatrix;
+        matrix_.block(firstRow, 0, remainingHeight, width_) = newMatrix;
     }
 
+    // // DEBUG checks
+    // for(auto p : blockStartVec_) {
+    //     Key k = p.first;
+    //     if(blockStartMap_[k].first != p.second.first) {
+    //         cout << "After reorder, key " << k << " first rows don't match: " << blockStartMap_[k].first << " " << p.second.first << endl;
+    //         exit(1);
+    //     }
+    // }
 }
 
 void SparseColumnBlockMatrix::print(ostream& os) const {

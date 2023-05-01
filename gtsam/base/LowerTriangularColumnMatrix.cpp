@@ -6,6 +6,7 @@
 */
 
 #include <cassert>
+#include <unordered_map>
 #include <gtsam/base/LowerTriangularColumnMatrix.h>
 
 using namespace std;
@@ -16,27 +17,33 @@ using Block = LowerTriangularColumnMatrix::Block;
 using constBlock = LowerTriangularColumnMatrix::constBlock;
 using RowHeightPair = LowerTriangularColumnMatrix::RowHeightPair;
 using RowKey = LowerTriangularColumnMatrix::RowKey;
+using BlockIndexVector = LowerTriangularColumnMatrix::BlockIndexVector;
+
+const size_t LowerTriangularColumnMatrix::LAST_ROW = -1;
 
 const size_t LowerTriangularColumnMatrix::width() const {
     return width_; 
 }
 
 const size_t LowerTriangularColumnMatrix::height() const {
-    assert(newMaxHeight_ == maxHeight_);
     return newMaxHeight_ + 1;   // This height should include last row
+}
+
+size_t LowerTriangularColumnMatrix::matrixHeight() const {
+    // if(maxHeight_ + 1 != matrix_.rows()) {
+    //     cout << "Max height wrong! " << maxHeight_ << " " << matrix_.rows() << endl;
+    // }
+    assert(maxHeight_ + 1 == matrix_.rows());
+    return maxHeight_ + 1;      // This height should include last row
 }
 
 const Key LowerTriangularColumnMatrix::key() const {
    return key_;
 }
 
-size_t LowerTriangularColumnMatrix::matrixHeight() const {
-    return maxHeight_ + 1;      // This height should include last row
-}
-
 // if underlying matrix height is the same as expected matrix height
 bool LowerTriangularColumnMatrix::allocated() const {
-    return maxHeight_ == newMaxHeight_;
+    return maxHeight_ != 0 && maxHeight_ == newMaxHeight_;
 }
 
 // Diagonal flag to indicate if diagonal block should be initialized
@@ -49,32 +56,42 @@ LowerTriangularColumnMatrix::LowerTriangularColumnMatrix(
         : key_(key_in), width_(width_in) {
     // Set up final row first
     preallocateLastRow();
-
-    // Allocate diagonal block
-    preallocateBlock(key_, width_, true);
 }
 
-bool LowerTriangularColumnMatrix::preallocateBlock(const Key otherKey,
-                                               const size_t height,
-                                               const bool initialize) {
-    auto iterPair = blockStartMap_.insert({otherKey, {newMaxHeight_, height}});
-    if(iterPair.second) {
-        // If inserted, increase max height and set vector 
-        blockStartVec_.back() = {otherKey, {newMaxHeight_, height}};
-        newMaxHeight_ += height;
+void LowerTriangularColumnMatrix::preallocateBlocks(const vector<pair<RowKey, size_t>>& blocks) {
+    int i = 0;
+    if(blockIndices_.size() >= 2) {
+        Key lastOldKey = blockIndices_[blockIndices_.size() - 2].first;
 
-        // Make sure last row is still allocated
-        blockStartVec_.push_back({LAST_ROW, {newMaxHeight_, 1}});
-        blockStartMap_.at(LAST_ROW) = {newMaxHeight_, 1};
-
-    }
-    else if(initialize) {
-        // If did not insert and initialize, set block to 0
-        if(iterPair.first->second.first + iterPair.first->second.second <= maxHeight_) {
-            blockRange(iterPair.first->second.first, iterPair.first->second.second).setZero();
+        // Find the first old block and add new blocks behind that block
+        for(i = blocks.size() - 1; i >= 0; i--) {
+            // if(blocks[i].first == blockIndices_.back().first) {
+            if(blocks[i].first == lastOldKey) {
+                break;
+            }
         }
+        i++;
     }
-    return iterPair.second;
+    size_t index = blockIndices_.size() - 1;    // Add new blocks before the -1 row
+    blockIndices_.resize(blockIndices_.size() + blocks.size() - i);
+    for(; i < blocks.size(); i++) {
+        // cout << index << " " << i << endl;
+        blockIndices_[index] = {blocks[i].first, {newMaxHeight_, blocks[i].second}};
+        newMaxHeight_ += blocks[i].second;
+        index++;
+    }
+    blockIndices_.back() = {LAST_ROW, {newMaxHeight_, 1}};
+    // cout << "newMaxHeight_ = " << newMaxHeight_ << " New block indices: ";
+    // for(auto p : blockIndices_) {
+    //     cout << "[" << p.first << " " << p.second.first << " " << p.second.second << "] ";
+    // }
+    // cout << endl;
+}
+
+void LowerTriangularColumnMatrix::preallocateBlock(const pair<RowKey, size_t>& block) {
+    blockIndices_.push_back({block.first, {newMaxHeight_, block.second}});
+    newMaxHeight_ += block.second;
+    assert(0);
 }
 
 // Actually allocate and initialize the amount we need
@@ -98,14 +115,11 @@ void LowerTriangularColumnMatrix::resolveAllocate() {
         matrix_.block(maxHeight_, 0, newMaxHeight_ - maxHeight_, width_).setZero();
     }
     maxHeight_ = newMaxHeight_;
+    assert(maxHeight_ + 1 == matrix_.rows());
 }
 
 void LowerTriangularColumnMatrix::setZero() {
     matrix_.setZero();
-}
-
-void LowerTriangularColumnMatrix::setZero(const Key i) {
-    block(i).setZero();
 }
 
 // reset blockStart* assignments except for the diagonal block, 
@@ -114,35 +128,20 @@ void LowerTriangularColumnMatrix::setZero(const Key i) {
 void LowerTriangularColumnMatrix::resetBlocks() {
     maxHeight_ = 0;
     newMaxHeight_ = 0;
-    blockStartVec_.clear();
-    blockStartMap_.clear();
+    blockIndices_.clear();
 
     // Set up final row first
     preallocateLastRow();
-
-    // Allocate diagonal block
-    preallocateBlock(key_, width_, true);
 }
 
 void LowerTriangularColumnMatrix::preallocateLastRow() {
     assert(newMaxHeight_ == 0);
-    blockStartMap_.insert({LAST_ROW, {0, 1}});    
-    blockStartVec_.push_back({LAST_ROW, {0, 1}});    
+    blockIndices_.push_back({LAST_ROW, {0, 1}});    
 }
 
-bool LowerTriangularColumnMatrix::blockExists(const RowKey i) const {
-    return blockStartMap_.find(i) != blockStartMap_.end();
-}
-
-// Access functions
-Block LowerTriangularColumnMatrix::block(const RowKey i) {
-    auto pair = blockStartMap_.at(i); 
-    return matrix_.block(pair.first, 0, pair.second, width_);
-}
-
-const constBlock LowerTriangularColumnMatrix::block(const RowKey i) const {
-    auto pair = blockStartMap_.at(i); 
-    return matrix_.block(pair.first, 0, pair.second, width_);
+Block LowerTriangularColumnMatrix::lastRow() {
+    assert(maxHeight_ + 1 == matrix_.rows());
+    return matrix_.block(maxHeight_, 0, 1, width_);
 }
 
 // Access the underlying matrix with variable height but fixed width
@@ -157,99 +156,74 @@ const constBlock LowerTriangularColumnMatrix::blockRange(
     return matrix_.block(startRow, 0, height, width_);
 }
 
-// Block LowerTriangularColumnMatrix::submatrix(const size_t startRow, const size_t startCol,
-//                                          const size_t height, const size_t width) {
-//     return matrix_.block(startRow, startCol, height, width);
-// }
-
-Block LowerTriangularColumnMatrix::diagonalBlock() {
-    assert(maxHeight_ >= width_);
-    return matrix_.block(0, 0, width_, width_);
-}
-const constBlock LowerTriangularColumnMatrix::diagonalBlock() const {
-    assert(maxHeight_ >= width_);
-    return matrix_.block(0, 0, width_, width_);
-}
-
-bool LowerTriangularColumnMatrix::hasBelowDiagonalBlocks() const {
-    return newMaxHeight_ > width_; // if matrix doesn't just have the diagonal blocks
-}
-
-Block LowerTriangularColumnMatrix::belowDiagonalBlocks() {
-    return matrix_.block(width_, 0, maxHeight_ - width_, width_);
-}
-const constBlock LowerTriangularColumnMatrix::belowDiagonalBlocks() const {
-    return matrix_.block(width_, 0, maxHeight_ - width_, width_);
-}
-
-const vector<pair<RowKey, RowHeightPair>>& LowerTriangularColumnMatrix::blockStartVec() const {
-    return blockStartVec_;
-}
-const unordered_map<RowKey, RowHeightPair>& LowerTriangularColumnMatrix::blockStartMap() const {
-    return blockStartMap_;
+const BlockIndexVector& LowerTriangularColumnMatrix::blockIndices() const {
+    return blockIndices_;
 }
 
 void LowerTriangularColumnMatrix::reorderBlocks(const vector<Key>& reorderedKeys,
                                                 size_t oldLowestKeyIndex) {
-    // We can guarantee that the last row will not be changed
-    // also guarantee that the order of diagonal block cannot be changed
-    assert(reorderedKeys.front() != key_);
-    const Key oldLowestKey = blockStartVec_[oldLowestKeyIndex].first;
-    size_t firstRow = blockStartMap_[oldLowestKey].first;
+    unordered_map<Key, RowHeightPair> indexMap;
+    for(size_t i = oldLowestKeyIndex; i < blockIndices_.size(); i++) {
+        indexMap.insert(blockIndices_[i]);
+    }
 
-    if(2 * firstRow <= newMaxHeight_) {
+    size_t firstRow = blockIndices_[oldLowestKeyIndex].second.first;
+    if(firstRow * 2 >= maxHeight_) {
         // Just replace underlying matrix
-        ColMajorMatrix newMatrix(newMaxHeight_ + 1, width_);
+        ColMajorMatrix newMatrix(maxHeight_ + 1, width_);
         newMatrix.block(0, 0, firstRow, width_) = matrix_.block(0, 0, firstRow, width_);
 
         size_t curRow = firstRow;
         for(const Key key : reorderedKeys) {
-            auto& p = blockStartMap_[key];
+            auto& p = indexMap.at(key);
             const size_t oldRow = p.first;
             const size_t height = p.second;
 
             newMatrix.block(curRow, 0, height, width_) = matrix_.block(oldRow, 0, height, width_); 
 
             p.first = curRow;
-            blockStartVec_[oldLowestKeyIndex] = {key, p};
+            blockIndices_[oldLowestKeyIndex] = {key, p};
             oldLowestKeyIndex++;
 
             curRow += height;
         }
 
-        // Assign last row
-        newMatrix.block(newMaxHeight_, 0, 1, width_) 
-            = matrix_.block(newMaxHeight_, 0, 1, width_); 
+        // Copy last row
+        newMatrix.block(maxHeight_, 0, 1, width_) = matrix_.block(maxHeight_, 0, 1, width_);
 
         matrix_ = std::move(newMatrix);
+    
     }
     else {
         // Directly change underlying matrix
-        ColMajorMatrix newMatrix(newMaxHeight_ - firstRow, width_);
+        const size_t remainingHeight = newMaxHeight_ - firstRow;
+        ColMajorMatrix newMatrix(remainingHeight, width_);
 
         size_t curRow = 0;
         for(const Key key : reorderedKeys) {
-            auto& p = blockStartMap_[key];
+            auto& p = indexMap.at(key);
             const size_t oldRow = p.first;
             const size_t height = p.second;
 
             newMatrix.block(curRow, 0, height, width_) = matrix_.block(oldRow, 0, height, width_); 
             p.first = firstRow + curRow;
-            blockStartVec_[oldLowestKeyIndex] = {key, p};
+            blockIndices_[oldLowestKeyIndex] = {key, p};
             oldLowestKeyIndex++;
 
             curRow += height;
+
         }
 
-        matrix_.block(firstRow, 0, newMaxHeight_ - firstRow, width_) = newMatrix;
+        matrix_.block(firstRow, 0, remainingHeight, width_) = newMatrix;
     }
 
+    assert(maxHeight_ + 1 == matrix_.rows());
 }
 
 
 void LowerTriangularColumnMatrix::print(ostream& os) const {
-    os << "Column " << key_ << endl << blockStartVec_.size() << endl;
-    for(const auto p : blockStartVec_) {
+    os << "Column " << key_ << endl << blockIndices_.size() << endl;
+    for(const auto p : blockIndices_) {
         int rowkey = p.first == LAST_ROW? -1 : p.first;
         size_t row = p.second.first;
         size_t height = p.second.second;
@@ -258,12 +232,28 @@ void LowerTriangularColumnMatrix::print(ostream& os) const {
     }
 }
 
+void LowerTriangularColumnMatrix::printBlockIndices(std::ostream& os) const {
+    os << "Column " << key_ << " block indices: ";
+    for(const auto p : blockIndices_) {
+        os << "[" << p.first << " " << p.second.first << " " << p.second.second << "] ";
+    }
+    os << endl;
+}
+
 void LowerTriangularColumnMatrix::checkInvariant() const {
-    assert(blockStartVec_.size() == blockStartMap_.size());
-    for(auto p : blockStartVec_) {
-        RowKey k = p.first;
-        assert(blockStartMap_.find(k) != blockStartMap_.end());
-        assert(blockStartMap_.at(k) == p.second);
+    unordered_set<RowKey> rows;
+    size_t heightSum = 0;
+    for(auto p : blockIndices_) {
+        auto inserted = rows.insert(p.first);
+        assert(inserted.second == true);
+        assert(p.second.first == heightSum);
+        heightSum += p.second.second;
+    }
+    assert(blockIndices_.back().first == LAST_ROW);
+    assert(heightSum == newMaxHeight_ + 1);
+
+    if(allocated()) {
+        assert(newMaxHeight_ == maxHeight_);
     }
 }
 

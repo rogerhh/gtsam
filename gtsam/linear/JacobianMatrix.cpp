@@ -24,7 +24,7 @@ JacobianMatrix::JacobianMatrix() {
 
 void JacobianMatrix::addColumn(const Key key, const size_t width) {
     // Column indexing starts from 1, because we reserve 0 for column -1
-    assert(key + 1 = columns_.size());
+    assert(key + 1 == columns_.size());
     columns_.emplace_back(SparseColumnBlockMatrix(key, width));
 }
 

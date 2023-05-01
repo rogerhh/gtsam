@@ -124,7 +124,7 @@ bool choleskyPartial(Matrix& ABC, size_t nFrontal, size_t topleft) {
   Eigen::VectorXd d = A.diagonal();
   A.triangularView<Eigen::Lower>().setZero();
   A.diagonal() = d;
-  cout << "Before eliminate. col = " << endl << ABC.block(topleft, topleft, nFrontal, n).transpose() << endl << endl;
+  // cout << "Before eliminate. col = " << endl << ABC.block(topleft, topleft, nFrontal, n).transpose() << endl << endl;
 
   // Compute Cholesky factorization A = R'*R, overwrites A.
   gttic(LLT);
@@ -148,7 +148,7 @@ bool choleskyPartial(Matrix& ABC, size_t nFrontal, size_t topleft) {
     C.selfadjointView<Eigen::Upper>().rankUpdate(B.transpose(), -1.0);
   gttoc(compute_L);
 
-  cout << "After eliminate. col = " << endl << ABC.block(topleft, topleft, nFrontal, n).transpose() << endl << endl;
+  // cout << "After eliminate. col = " << endl << ABC.block(topleft, topleft, nFrontal, n).transpose() << endl << endl;
 
   // Check last diagonal element - Eigen does not check it
   if (nFrontal >= 2) {

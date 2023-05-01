@@ -178,13 +178,13 @@ void ISAM2::recalculate(const ISAM2UpdateParams& updateParams,
     KeySet affectedKeysSet;
     static const double kBatchThreshold = 0.65;
     // Roger: Disable batch for dev
-    if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
-        // Do a batch step - reorder and relinearize all variables
-        recalculateBatch(updateParams, &affectedKeysSet, result);
-    } else {
+    // if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
+    //     // Do a batch step - reorder and relinearize all variables
+    //     recalculateBatch(updateParams, &affectedKeysSet, result);
+    // } else {
         recalculateIncremental(updateParams, relinKeys, affectedKeys, orphanKeys,
                 &affectedKeysSet, &orphans, result);
-    }
+    // }
 
     // Root clique variables for detailed results
     if (result->detail && params_.enableDetailedResults) {
@@ -541,12 +541,6 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
     result.variablesRelinearized = result.markedKeys.size();
   }
 
-  // cout << "observed keys: ";
-  // for(Key k : observedKeys) {
-  //   cout << k << " ";
-  // }
-  // cout << endl;
-
   KeyVector orphanKeys;
   // 7. Linearize new factors
   update.linearizeNewFactors(newFactors, theta_, nonlinearFactors_.size(),
@@ -559,7 +553,8 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                           result.newFactorsIndices,
                           relinKeys,
                           updateParams.extraReelimKeys,
-                          &affectedKeys);
+                          &affectedKeys,
+                          &observedKeys);
 
 
   // This step is technically not needed, we can just do this in symbolic update
@@ -567,23 +562,32 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   static int last_variable_count;
   static bool reorder_flag;
-  const int reorder_period = 50;
+  const int reorder_period = 10;
+  // DEBUG
+  // if(/*theta_.size() == 260 || theta_.size() == 280 || */ theta_.size() == 287) {
+  //   reorder_flag = true;
+  // }
+  // if(theta_.size() > 2500 && theta_.size() < 2800) {
+  //   cout << "marked keys size =  " <<  markedKeys.size() << endl;
+  // }
+  if(theta_.size() - last_variable_count >= reorder_period 
+          || (affectedKeys.size() * 10 <= markedKeys.size() 
+              || markedKeys.size() * 2 > theta_.size())) { // && markedKeys.size() >= 10 * affectedKeys.size()) {
+      last_variable_count = theta_.size();
+      reorder_flag = true;
+  }
   if(reorder_flag) {
       // cout << "reordering" << endl;
       reorder_flag = false;
-      eTree_.updateOrdering(markedKeys);
+      eTree_.updateOrdering(markedKeys, observedKeys);
   }
 
   // cout << "marked keys size = " << markedKeys.size() << " affected size = " << affectedKeys.size() << endl;
 
-  if(theta_.size() - last_variable_count >= reorder_period) { // && markedKeys.size() >= 10 * affectedKeys.size()) {
-      last_variable_count = theta_.size();
-      reorder_flag = true;
-  }
 
   eTree_.symbolicElimination(markedKeys);
   eTree_.choleskyElimination(theta_);
-  eTree_.backwardSolve();
+  eTree_.backwardSolve(&delta_, 0.0001);
   
   // string fname = "/root/igo-gtsam/build/matrix.out";
   // ofstream fout;
@@ -593,12 +597,13 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   //     exit(1);
   // }
   // eTree_.print(fout);
-  // eTree_.print(cout);
+  eTree_.print(cout);
 
-  updateDelta();
+  // updateDelta();
 
-  // cout << "Theta = " << endl;
-  // theta_.print();
+  cout << "Theta = " << endl;
+  theta_.print();
+  calculateEstimate().print();
 
   // cout << "eTree done" << endl;
 
@@ -843,7 +848,7 @@ void ISAM2::marginalizeLeaves(
 void ISAM2::updateDelta(bool forceFullSolve) const {
   gttic(updateDelta);
 
-  eTree_.updateDelta(&delta_);
+  // eTree_.updateDelta(&delta_);
   return;
 
   if (std::holds_alternative<ISAM2GaussNewtonParams>(params_.optimizationParams)) {

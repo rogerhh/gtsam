@@ -10,12 +10,12 @@
 #include <gtsam/linear/CholeskyEliminationTree.h>
 #include <utility>
 #include <vector>
-#include <set>
+#include <unordered_set>
 #include <iostream>
 
 namespace gtsam {
 
-struct CholeskyEliminationTree::Clique : 
+class CholeskyEliminationTree::Clique : 
     public std::enable_shared_from_this<CholeskyEliminationTree::Clique> {
 private:
     CholeskyEliminationTree* eTreePtr = nullptr;
@@ -34,13 +34,9 @@ public:
     std::set<sharedClique> children;
 
     bool is_reconstruct = true;
-    bool marked = false;
+    bool marked = false; // true;     // New cliques are always marked
 
-    std::vector<Key> reconstructCols;
-    std::vector<Key> editCols;
-    std::vector<Key> backsolveKeys;
-
-    Clique(CholeskyEliminationTree* eTreePtr_in) : eTreePtr(eTreePtr_in) {}
+    Clique(CholeskyEliminationTree* eTreePtr_in);
 
     // add node to clique
     void addNode(sharedNode node);
@@ -51,34 +47,35 @@ public:
     // The nodes will keep track of the new cliques
     void detachNode(sharedNode node);
 
+    // Mark clique starting from lowest key. Detach all nodes from this clique
+    // and add into their own cliques. Children cliques of this clique
+    // are kept in this clique. Detach parent and return it
+    sharedClique markClique(const Key lowestKey, KeySet* markedKeys);
+
+    // Find new parent clique as the lowest nonzero index in any column of the clique
+    // not including the diagonal
+    void findParent();
+
     // Set parent to nullptr
     void detachParent();
 
     void setParent(sharedClique newParent);
 
-    // Pass down reconstruct columns and edit columns from parent clique
-    // edit columns and are passed if clique is marked
-    // We only want to inherit columns that we own in the already allocated
-    // column. Any new column blocks do not need to edit or reconstruct
-    // This is because cliques can only be broken up, so our clique 
-    // has to have been together last iteration, which means that everything
-    // in this clique has the same column structure
-    // At reordering, all affected columns are reset, so no column structure
-    void inheritCols();
-
-    // Inherit keys that need to be propagated in backsolve
-    void inheritBacksolveKeys();
+    // Merge otherClique into this clique
+    void mergeClique(sharedClique otherClique);
 
     sharedNode front();
     sharedNode back();
+
+    Key frontKey();
+    Key backKey();
 
     size_t orderingVersion();
 
     void printClique(std::ostream& os);
 
+
 };
-
-
 
 } // namespace gtsam
 

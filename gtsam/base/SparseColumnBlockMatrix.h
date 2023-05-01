@@ -65,8 +65,9 @@ public:
     // In the Hessian matrix, we don't care about the ordering of blocks
     SparseColumnBlockMatrix(const Key key_in, const size_t width_in);
 
-    // Check if block exists. If not, set appropriate indices to be allocated/initialized later
+    // Check if blocks exist. If not, set appropriate indices to be allocated/initialized later
     // returns true of allocated
+    // Requires blocks to be sorted
     // We don't want to allocate now because we might need to move data around
     bool preallocateBlock(const Key otherKey,
                           const size_t height,

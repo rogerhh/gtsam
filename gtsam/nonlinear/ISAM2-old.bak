@@ -37,6 +37,9 @@ namespace gtsam {
 // Instantiate base class
 template class BayesTree<ISAM2Clique>;
 
+static vector<int> keyToOrdering;
+static vector<int> orderingToKey;
+
 /* ************************************************************************* */
 ISAM2::ISAM2(const ISAM2Params& params) : params_(params), update_count_(0) {
   if (std::holds_alternative<ISAM2DoglegParams>(params_.optimizationParams)) {
@@ -177,14 +180,14 @@ void ISAM2::recalculate(const ISAM2UpdateParams& updateParams,
 
     KeySet affectedKeysSet;
     static const double kBatchThreshold = 0.65;
-    // // Roger: Disable batch for dev
-    // if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
-    //   // Do a batch step - reorder and relinearize all variables
-    //   recalculateBatch(updateParams, &affectedKeysSet, result);
-    // } else {
+    // Roger: Disable batch for dev
+    if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
+      // Do a batch step - reorder and relinearize all variables
+      recalculateBatch(updateParams, &affectedKeysSet, result);
+    } else {
      recalculateIncremental(updateParams, relinKeys, affectedKeys, orphanKeys,
                              &affectedKeysSet, &orphans, result);
-    // }
+    }
 
     // Root clique variables for detailed results
     if (result->detail && params_.enableDetailedResults) {
@@ -380,22 +383,16 @@ void ISAM2::recalculateIncremental(const ISAM2UpdateParams& updateParams,
 
   // Generate ordering
   gttic(Ordering);
-  // const Ordering ordering =
-  //     Ordering::ColamdConstrained(affectedFactorsVarIndex, constraintGroups);
-  // Custom ordering for testing
-  Ordering ordering(*affectedKeysSet);
-  if(*(affectedKeysSet->rbegin()) == 27) {
-    vector<int> order = {0, 1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 8, 20, 21, 22, 23, 25, 24, 19, 6, 7, 26, 27};
-    vector<Key> custom;
-    for(int i : order) {
-        if(affectedKeysSet->find(i) != affectedKeysSet->end()) {
-            custom.push_back(i);
-        }
-    }
-    ordering = Ordering(custom);
-  }
-  cout << "Ordering: ";
-  ordering.print();
+  const Ordering ordering =
+      Ordering::ColamdConstrained(affectedFactorsVarIndex, constraintGroups);
+  // const Ordering ordering = Ordering(*affectedKeysSet);
+  // if(theta_.size() < 300) {
+  // // if(theta_.size() > 2500 && theta_.size() < 2800) {
+  //   // cout << "marked keys size = " << affectedKeysSet->size() << endl;
+  //   cout << "Ordering: ";
+  //   ordering.print();
+  //   cout << endl;
+  // }
   gttoc(Ordering);
 
   // Do elimination
@@ -534,11 +531,11 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
     // RelinKeys don't include the new keys, but the etree nodes are already marked un-linearized
 
     // Roger DEBUG
-    cout << "[Roger DEBUG] relinKeys: ";
-    for(auto key : relinKeys) {
-        cout << key << " ";
-    }
-    cout << endl;
+    // cout << "RelinKeys: ";
+    // for(auto key : relinKeys) {
+    //     cout << key << " ";
+    // }
+    // cout << endl;
 
     update.recordRelinearizeDetail(relinKeys, result.details());
     if (!relinKeys.empty()) {
@@ -598,12 +595,12 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   if (params_.evaluateNonlinearError)
     update.error(nonlinearFactors_, calculateEstimate(), &result.errorAfter);
 
-  updateDelta(true);
-  cout << "Delta = ";
-  getDelta().print();
+  // updateDelta(true);
+  // cout << "Delta = ";
+  // getDelta().print();
 
-  cout << "Theta = ";
-  theta_.print();
+  // cout << "Theta = ";
+  // theta_.print();
 
   // char t;
   // cin >> t;

@@ -15,3 +15,5 @@ else()
     set(GTSAM_USE_EIGEN_MKL 0)
     set(EIGEN_USE_MKL_ALL 0)
 endif()
+
+message(STATUS "EIGEN_USE_MKL_ALL = ${EIGEN_USE_MKL_ALL}")

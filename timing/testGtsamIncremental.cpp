@@ -205,12 +205,12 @@ int main(int argc, char *argv[]) {
             auto calc_end = chrono::high_resolution_clock::now();
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
-            if(step % 20 == 0) {
+            if(step % 100 == 0) {
                 cout << "step = " << step << endl;
             }
-            if(step >= 3000) {
-                exit(0);
-            }
+            // if(step >= 5) {
+            //     exit(0);
+            // }
 
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;

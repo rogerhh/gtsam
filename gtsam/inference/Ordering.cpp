@@ -87,11 +87,6 @@ Ordering Ordering::ColamdConstrained(const VariableIndex& variableIndex,
     ++index;
   }
 
-  cout << "A = ";
-  for(int i : A) {
-      cout << i << " ";
-  }
-  cout << endl;
   assert((size_t)count == variableIndex.nEntries());
 
   //double* knobs = nullptr; /* colamd arg 6: parameters (uses defaults if nullptr) */
@@ -103,6 +98,22 @@ Ordering Ordering::ColamdConstrained(const VariableIndex& variableIndex,
   int stats[CCOLAMD_STATS]; /* colamd arg 7: colamd output statistics and error codes */
 
   gttoc(Prepare);
+
+    // cout << "A: ";
+    // for(int i : A) {
+    //     cout << i << " ";
+    // }
+    // cout << endl;
+    // cout << "p: ";
+    // for(int i : p) {
+    //     cout << i << " ";
+    // }
+    // cout << endl;
+    // cout << "cmember: ";
+    // for(int i : cmember) {
+    //     cout << i << " ";
+    // }
+    // cout << endl;
 
   // call colamd, result will be in p
   /* returns (1) if successful, (0) otherwise*/
