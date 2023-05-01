@@ -121,9 +121,7 @@ bool choleskyPartial(Matrix& ABC, size_t nFrontal, size_t topleft) {
   auto C = ABC.block(topleft + nFrontal, topleft + nFrontal, n - nFrontal, n - nFrontal);
 
   // DEBUG zero out strictly upper triangular matrix
-  Eigen::VectorXd d = A.diagonal();
-  A.triangularView<Eigen::Lower>().setZero();
-  A.diagonal() = d;
+  A.triangularView<Eigen::StrictlyLower>().setZero();
   // cout << "Before eliminate. col = " << endl << ABC.block(topleft, topleft, nFrontal, n).transpose() << endl << endl;
 
   // Compute Cholesky factorization A = R'*R, overwrites A.

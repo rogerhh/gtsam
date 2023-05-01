@@ -39,6 +39,7 @@ template class BayesTree<ISAM2Clique>;
 
 static vector<int> keyToOrdering;
 static vector<int> orderingToKey;
+static int last_max_key = -1;
 
 /* ************************************************************************* */
 ISAM2::ISAM2(const ISAM2Params& params) : params_(params), update_count_(0) {
@@ -181,13 +182,13 @@ void ISAM2::recalculate(const ISAM2UpdateParams& updateParams,
     KeySet affectedKeysSet;
     static const double kBatchThreshold = 0.65;
     // Roger: Disable batch for dev
-    if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
-      // Do a batch step - reorder and relinearize all variables
-      recalculateBatch(updateParams, &affectedKeysSet, result);
-    } else {
+    // if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
+    //   // Do a batch step - reorder and relinearize all variables
+    //   recalculateBatch(updateParams, &affectedKeysSet, result);
+    // } else {
      recalculateIncremental(updateParams, relinKeys, affectedKeys, orphanKeys,
                              &affectedKeysSet, &orphans, result);
-    }
+    // }
 
     // Root clique variables for detailed results
     if (result->detail && params_.enableDetailedResults) {
@@ -381,18 +382,49 @@ void ISAM2::recalculateIncremental(const ISAM2UpdateParams& updateParams,
   }
   gttoc(ordering_constraints);
 
-  // Generate ordering
+  /*
+  // Load custom ordering
+  string ordering_filename = "/root/igo-gtsam/build/ordering380";
+  static ifstream ordering_fin(ordering_filename);
+  if(!ordering_fin.is_open()) {
+    cout << "Error opening ordering file: " << ordering_filename << endl;
+    exit(1);
+  }
+  int cur_max_key = *(affectedKeysSet->rbegin());
+  if(cur_max_key > last_max_key) {
+      ordering_fin >> last_max_key;
+  }
+  if(cur_max_key == last_max_key) {
+      orderingToKey.resize(last_max_key + 1);
+      keyToOrdering.resize(last_max_key + 1);
+      for(int i = 0; i <= last_max_key; i++) {
+          Key k;
+          ordering_fin >> k;
+          orderingToKey[i] = k;
+          keyToOrdering[k] = i;
+      }
+  }
+  else {
+      orderingToKey.push_back(cur_max_key);
+      keyToOrdering.push_back(cur_max_key);
+  }
+  vector<int> ordered_indices;
+  for(Key key : *affectedKeysSet) {
+    ordered_indices.push_back(keyToOrdering[key]);
+  }
+  sort(ordered_indices.begin(), ordered_indices.end(), std::less<Key>());
+  vector<Key> ordered_keys;
+  for(int i : ordered_indices) {
+    ordered_keys.push_back(orderingToKey[i]);
+  }
+
+  Ordering ordering(ordered_keys);
+  ordering.print();
+  */
+
   gttic(Ordering);
   const Ordering ordering =
       Ordering::ColamdConstrained(affectedFactorsVarIndex, constraintGroups);
-  // const Ordering ordering = Ordering(*affectedKeysSet);
-  // if(theta_.size() < 300) {
-  // // if(theta_.size() > 2500 && theta_.size() < 2800) {
-  //   // cout << "marked keys size = " << affectedKeysSet->size() << endl;
-  //   cout << "Ordering: ";
-  //   ordering.print();
-  //   cout << endl;
-  // }
   gttoc(Ordering);
 
   // Do elimination

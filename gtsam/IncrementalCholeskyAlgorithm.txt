@@ -59,3 +59,75 @@ Cholesky elimination
     4) Take cholesky of diagonal block
     5) Multiply inverse of diagonal block by all blocks
     6) Take AAt of all column blocks and add to dest blocks
+
+
+4/14
+Multifrontal implementation:
+Assume workspace has been allocated
+Cholesky:
+    1) Traverse each node post-order
+    2) Pre-order:
+        1) Push required matrix workspace on stack. 
+        2) Set new matrix to be 0
+        3) If edit or have editCols
+            1) Gather required columns to workspace. (Currently, all new blocks to a column will be added at the end of the column, so no need to handle scatter. But this may change if factors can be added between any two nodes)
+            2) If have editCols, calculate edit and write to workspace
+            3) If edit, restore relevant columns
+            4) If reconstruct, reset relevant columns
+    3) Post-order:
+        1) Go through all children and gather frontal matrices from children workspaces
+        2) Add relevant Jacobian blocks. Since workspaces now include indices to relevant ancestors, we can add all Jacobian blocks of a factor at the lowest node of that factor. 
+        3) 
+
+
+
+        3) Gather required columns to the first columns of the workspace.
+
+Allocate pass:
+    1) Go through each node pre-order, If marked, setEditOrReconstruct.
+    2) If unmarked, check if clique has reconstructCols
+    3) If marked or has reconstructCols, allocate full matrix for clique
+
+
+How can I design reconstruct to be more regular? How much memory should I allocate for an unmarked node?
+What is the simplest thing to do? Treat unmarked nodes as marked and do post order frontal matrix accumulation
+1. We don't know what unmarked nodes will be needed in reconstruct
+2. We know that unmarked nodes will only need the outerproduct for reconstructCols
+3. We know that the top workspace in stack will always have the reconstructCols
+
+=> It sounds like we should merge reconstructed outerproduct with top of stack as soon as it's done
+For simplicity, we should allocate the full matrix.
+
+We can do edit, reconstruct, eliminate all in one go with multifrontal elim. 
+1. For unmarked nodes, if has reconstruct, gather columns to workspace and perform outer product update
+2. For marked nodes,
+    0) Set workspace to 0
+    1) If edit or has edit:
+        Gather old columns to workspace (appropriately adjusted for new blocks)
+        If has edit, perform outer product update to current workspace
+        If edit, restore columns
+    2) If reconstruct: do nothing
+    3) Accumulate all children contribution blocks
+    4) Eliminate column
+    5) Pop all children contribution blocks on stack
+
+
+Actually,we can't do that even with multifrontal elim. because we should really merge contributions with parent before starting a new branch, this is to avoid storing the contribution from that branch while processing another branch. Therefore, parent will not remain clean when we process it the second time
+
+First pass:
+    1) Push workspace on stack and set to 0
+    2) If edit or has edit:
+        Gather old columns to workspace (appropriately adjusted for new blocks)
+        If has edit, perform outer product update to current workspace
+        If edit, restore columns
+        If reconstruct and no edit, do nothing
+    
+    3) If unmarked and has reconstruct
+        Gather old columns to workspace
+        Reconstruct reconstructCols
+
+Second pass:
+    0) Assume all children has already been accumulated
+    1) If marked, eliminate column
+    2) Add outerproduct to parent workspace
+    3) Pop current workspace

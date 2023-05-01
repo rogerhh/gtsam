@@ -1,5 +1,6 @@
 #!/bin/bash
 
+oldlink=$(readlink -f ISAM2.cpp)
 if [ $1 == "old" ] 
 then
     rm ISAM2.cpp

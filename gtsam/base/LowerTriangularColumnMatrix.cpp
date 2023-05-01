@@ -58,13 +58,31 @@ LowerTriangularColumnMatrix::LowerTriangularColumnMatrix(
     preallocateLastRow();
 }
 
-void LowerTriangularColumnMatrix::preallocateBlocks(const vector<pair<RowKey, size_t>>& blocks) {
+// void LowerTriangularColumnMatrix::preallocateBlocks(const vector<pair<RowKey, size_t>>& blocks) {
+void LowerTriangularColumnMatrix::preallocateBlocks(const BlockIndexVector& blocks,
+                                                    size_t startIndex) {
+    blockIndices_.resize(blocks.size() - startIndex);
+
+    size_t startRow = blocks[startIndex].second.first;
+    for(size_t i = 0; i < blockIndices_.size(); i++) {
+        blockIndices_[i] = blocks[i + startIndex];
+        blockIndices_[i].second.first -= startRow;
+    }
+
+    assert(blockIndices_.back().first == -1);
+    newMaxHeight_ = blockIndices_.back().second.first;
+}
+
+
+// void LowerTriangularColumnMatrix::preallocateBlocks(const vector<pair<RowKey, size_t>>& blocks) {
+void LowerTriangularColumnMatrix::preallocateBlocks(const vector<pair<RowKey, size_t>>& blocks,
+                                                    size_t startIndex) {
     int i = 0;
     if(blockIndices_.size() >= 2) {
         Key lastOldKey = blockIndices_[blockIndices_.size() - 2].first;
 
         // Find the first old block and add new blocks behind that block
-        for(i = blocks.size() - 1; i >= 0; i--) {
+        for(i = blocks.size() - 1; i >= startIndex; i--) {
             // if(blocks[i].first == blockIndices_.back().first) {
             if(blocks[i].first == lastOldKey) {
                 break;

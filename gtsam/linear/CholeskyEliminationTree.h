@@ -22,6 +22,7 @@
 #include <gtsam/base/SparseLowerTriangularBlockMatrix.h>
 #include <gtsam/base/SparseSymmetricBlockMatrix.h>
 #include <gtsam/linear/JacobianMatrix.h>
+#include <gtsam/base/Workspace.h>
 
 namespace gtsam {
 
@@ -29,6 +30,8 @@ class GTSAM_EXPORT CholeskyEliminationTree {
 private:
     class Node;
     class Clique;
+
+    friend std::ostream& operator<<(std::ostream& os, const Clique& clique);
 
 public:
     typedef SparseColumnBlockMatrix::RowMajorMatrix RowMajorMatrix;
@@ -46,12 +49,15 @@ private:
     std::vector<sharedNode> nodes_;
     // sharedNode root_;
     sharedClique root_;
+    std::vector<size_t> widths_;
     SparseLowerTriangularBlockMatrix cholesky_;
     SparseColumnBlockMatrix delta_;   // \Delta // We're solving AtA Delta = Atb
-    JacobianMatrix jacobian_;
+    // JacobianMatrix jacobian_;
     std::vector<size_t> ordering_; // Key to index
     std::vector<Key> orderingToKey_; // index to Key
     std::vector<sharedFactor> factors_;
+    std::vector<ColMajorMatrix> cachedLinearFactors_;
+    Workspace workspace;
 
     enum MarkedStatus {UNMARKED, EDIT, RECONSTRUCT, NEW};
     std::vector<MarkedStatus> markedStatus_;
@@ -69,6 +75,9 @@ private:
     std::vector<bool> backSolveKeys_;
     std::vector<Key> deltaReplaceMask_;
     std::vector<bool> is_reordered_;
+
+    bool groupCliqueFlag = false;
+    size_t lowestReorderedIndex = -1;
 
     // // DEBUG
     // // EDIT means we're waiting to add contribution. EDIT must happen before READY
@@ -119,6 +128,15 @@ private:
     void symbolicEliminateKey(const Key key);
 
     void mergeChildColStructure(sharedNode parent, sharedNode child);
+
+    // Determine if each clique is edit or reconstruct and determine how much memory is needed
+    // Required memory is the max sum of matrix sizes for any path from root to leaf
+    void allocatePass();
+
+    // Allocate required memory for outer products
+    // Required memory is the max sum of matrix sizes for any path from root to leaf
+    void allocateStack();
+    void deallocateStack();
 
     struct OrderingLess {
         CholeskyEliminationTree* eTreePtr = nullptr;
@@ -172,6 +190,22 @@ private:
     // void eliminateColumn(SparseColumnBlockMatrix* column_ptr, 
     //                      Eigen::VectorXd* diagonalY);
 
+    // Allocate a new matrix workspace for the clique
+    // Gather the columns that belong to the clique into the right side of the workspace
+    void gatherColumns(sharedClique clique);
+
+    // Allocate and gather columns of the clique to a new workspace
+    // If reconstruct is true, will not gather but simply reset the columns
+    void allocateAndGatherClique(sharedClique clique, bool allocate, bool reconstruct);
+
+    void gatherClique(sharedClique clique);
+
+    // Copy columns in the workspace back to the cholesky matrix
+    void scatterClique(sharedClique clique, bool scatter=true);
+
+    // Reset the first diagWidth columns in the clique's workspace
+    void resetCliqueColumns(sharedClique clique);
+
     // Only gather columns that are allocated
     // If nothing to gather (e.g., column might be new) then return false
     bool gatherColumns(sharedClique clique, 
@@ -184,10 +218,12 @@ private:
                        std::vector<std::pair<Key, RowHeightPair>>* blockStartVec,
                        std::vector<LowerTriangularColumnMatrix*>* columns);
 
+    /*
     void scatterColumns(const ColMajorMatrix& m, 
                         const std::vector<size_t>& widths,
                         const std::vector<size_t>& heights,
                         const std::vector<LowerTriangularColumnMatrix*>& columns);
+    */
 
     // Only handle edit coming from this clique, if clique is edit, also restore 
     // clique columns, but don't subtract AtA block yet
@@ -198,17 +234,34 @@ private:
     bool reconstructFromClique(sharedClique clique);
     void eliminateClique(sharedClique clique);
 
+    // Merge outerproduct of a clique into its parent's workspace
+    // If parent is nullptr, do nothing
+    void mergeWorkspaceClique(sharedClique clique);
+
     // Handle all edits from this clumn
     // Additional, if this clique is reconstruct, restore column to linear state
 
-    void restoreColumn(ColMajorMatrix& m, size_t totalWidth, size_t totalHeight);
+    void restoreClique(sharedClique clique);
+    // void restoreColumn(Eigen::Map<ColMajorMatrix> m, const Workspace::BlockInfo& blockInfo);
+    // void restoreColumn(ColMajorMatrix& m, size_t diagWidth, size_t totalHeight);
+
+    void editOrReconstructFromClique(
+            sharedClique clique,
+            const std::vector<Key>& destCols,
+            double sign);
 
     // A consolidation of reconstructFromColumn and editFromColumn
-    void editOrReconstructFromColumn(const ColMajorMatrix& m, 
-            const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec,
-            const std::vector<Key>& destCols,
-            const std::vector<Key>& gatheredKeys,
-            double sign);
+    // void editOrReconstructFromColumn(Eigen::Map<ColMajorMatrix> m, 
+    //         const Workspace::BlockInfo& blockInfo,
+    //         const std::vector<Key>& destCols,
+    //         double sign);
+
+    // void editOrReconstructFromColumn(ColMajorMatrix& m, 
+    //         // const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec,
+    //         const BlockIndexVector& blockStartVec,
+    //         const std::vector<Key>& destCols,
+    //         const std::vector<Key>& gatheredKeys,
+    //         double sign);
 
     // Given some source columns (children columns) handle edits for keys in editCols
     // Edit keys may not be in the diagonal block
@@ -231,6 +284,7 @@ private:
     void eliminateColumn(ColMajorMatrix& m,
             const size_t totalWidth,
             const size_t totalHeight,
+            // const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec,
             const std::vector<std::pair<Key, RowHeightPair>>& blockStartVec,
             const std::vector<Key>& gatheredKeys);
 
@@ -243,6 +297,10 @@ private:
 
     void setEditOrReconstruct(sharedClique clique);
 
+    void checkEditOrReconstructClique(sharedClique clique, 
+                                      MarkedStatus mode, 
+                                      std::vector<Key>* destCols);
+
     // A is k x m, B is k x n, C is m x n
     void simpleAtB(Block A, Block B, Block C, size_t m, size_t k, size_t n, bool add);
 
@@ -253,7 +311,7 @@ private:
 
     // ADD AtA of factors
     void prepareEliminateClique(sharedClique clique, const Values& theta);
-    void prepareEliminateColumn(sharedNode node, bool is_reconstruct, const Values& theta);
+    // void prepareEliminateColumn(sharedNode node, bool is_reconstruct, const Values& theta);
 
     // Reorder cliques that were not reset during the reordering
     // Each node needs to have its data structures reordered

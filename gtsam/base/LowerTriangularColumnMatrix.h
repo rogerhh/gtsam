@@ -67,9 +67,11 @@ public:
     
     // if underlying matrix height is the same as expected matrix height
     bool allocated() const;
+
+    void preallocateBlocks(const BlockIndexVector& blocks, size_t startIndex = 0);
     
     // Add new blocks to the end of the column
-    void preallocateBlocks(const std::vector<std::pair<RowKey, size_t>>& blocks);
+    void preallocateBlocks(const std::vector<std::pair<RowKey, size_t>>& blocks, size_t startIndex = 0);
 
     // Add new block to the end of the column, new block must not already be in column
     void preallocateBlock(const std::pair<RowKey, size_t>& blocks);

@@ -562,7 +562,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   static int last_variable_count;
   static bool reorder_flag;
-  const int reorder_period = 10;
+  const int reorder_period = 30;
   // DEBUG
   // if(/*theta_.size() == 260 || theta_.size() == 280 || */ theta_.size() == 287) {
   //   reorder_flag = true;
@@ -570,9 +570,10 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // if(theta_.size() > 2500 && theta_.size() < 2800) {
   //   cout << "marked keys size =  " <<  markedKeys.size() << endl;
   // }
-  if(theta_.size() - last_variable_count >= reorder_period 
-          || (affectedKeys.size() * 10 <= markedKeys.size() 
-              || markedKeys.size() * 2 > theta_.size())) { // && markedKeys.size() >= 10 * affectedKeys.size()) {
+  if(markedKeys.size() > 0
+        && (theta_.size() - last_variable_count >= reorder_period 
+        || affectedKeys.size() * 10 <= markedKeys.size() 
+        || markedKeys.size() * 2 > theta_.size())) { // && markedKeys.size() >= 10 * affectedKeys.size()) {
       last_variable_count = theta_.size();
       reorder_flag = true;
   }
@@ -587,7 +588,12 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   eTree_.symbolicElimination(markedKeys);
   eTree_.choleskyElimination(theta_);
-  eTree_.backwardSolve(&delta_, 0.0001);
+
+  const ISAM2GaussNewtonParams& gaussNewtonParams =
+      std::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
+
+  eTree_.backwardSolve(&delta_, gaussNewtonParams.wildfireThreshold);
+  // eTree_.backwardSolve(&delta_, 0);
   
   // string fname = "/root/igo-gtsam/build/matrix.out";
   // ofstream fout;
@@ -597,13 +603,10 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   //     exit(1);
   // }
   // eTree_.print(fout);
-  eTree_.print(cout);
+  // eTree_.print(cout);
 
-  // updateDelta();
-
-  cout << "Theta = " << endl;
-  theta_.print();
-  calculateEstimate().print();
+  // cout << "Theta = " << endl;
+  // theta_.print();
 
   // cout << "eTree done" << endl;
 
