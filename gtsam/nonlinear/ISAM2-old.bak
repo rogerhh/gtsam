@@ -182,13 +182,13 @@ void ISAM2::recalculate(const ISAM2UpdateParams& updateParams,
     KeySet affectedKeysSet;
     static const double kBatchThreshold = 0.65;
     // Roger: Disable batch for dev
-    // if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
-    //   // Do a batch step - reorder and relinearize all variables
-    //   recalculateBatch(updateParams, &affectedKeysSet, result);
-    // } else {
+    if (affectedKeys.size() >= theta_.size() * kBatchThreshold) {
+      // Do a batch step - reorder and relinearize all variables
+      recalculateBatch(updateParams, &affectedKeysSet, result);
+    } else {
      recalculateIncremental(updateParams, relinKeys, affectedKeys, orphanKeys,
                              &affectedKeysSet, &orphans, result);
-    // }
+    }
 
     // Root clique variables for detailed results
     if (result->detail && params_.enableDetailedResults) {
