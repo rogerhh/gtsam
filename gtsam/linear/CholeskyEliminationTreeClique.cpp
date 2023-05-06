@@ -27,47 +27,7 @@ void CholeskyEliminationTree::Clique::addNode(sharedNode node) {
     node->clique = shared_from_this();
 }
 
-void CholeskyEliminationTree::Clique::detachNode(sharedNode node) {
-    // FIXME: seems like we need to update the ordering of the nodes here
-    // Update: We probably don't need to as all reordered nodes must be detached
-    // Fixed child nodes will be reassigned to a new parent
-
-    // TODO: Need to figure out why this is not working
-    // cout << "In detach node clique children: ";
-    // for(sharedClique clique : children) {
-    //     cout << clique->back()->key << " ";
-    // }
-    // cout << endl;
-
-    int i;
-    for(i = nodes.size() - 1; i >= 0; i--) {
-        if(i > 0) {
-            // make new clique for node
-            sharedClique newClique = make_shared<Clique>(eTreePtr);
-            newClique->addNode(nodes[i]);
-            if(nodes[i] == node) {
-                // The last detached node's clique should have this clique as a child
-                setParent(newClique);
-                // resize vector to detach all nodes that have new cliques
-                nodes.resize(i);
-                break;
-            }
-        }
-        else {
-            assert(nodes[i] == node);
-            assert(node->clique == get_ptr());
-            nodes.resize(1);
-            detachParent();
-        }
-    }
-}
-
 sharedClique CholeskyEliminationTree::Clique::markClique(const Key lowestKey, KeySet* markedKeys) {
-    // cout << "markClique ";
-    // for(sharedNode node : nodes) {
-    //     cout << node->key << " ";
-    // }
-    // cout << endl;
     sharedClique oldParent = parent;
     detachParent();
     if(nodes.size() > 1) {
@@ -95,13 +55,6 @@ sharedClique CholeskyEliminationTree::Clique::markClique(const Key lowestKey, Ke
                                                           newCol * r, 
                                                           newCol, 
                                                           r, blockIndices[i].second.second);
-            // newClique->col_data_ptr = col_data_ptr;
-            // // New clique will have the same number of rows
-            // newClique->col_data_start = newCol * r;
-            // newClique->col_row_start = newCol;
-            // newClique->r = r;
-            // // New clique will have the number of cols as the key
-            // newClique->c = blockIndices[i].second.second;
 
             if(nodes[i]->key == lowestKey) {
                 // The last detached node's clique should have this clique as a child
@@ -260,14 +213,6 @@ void CholeskyEliminationTree::Clique::mergeClique(sharedClique otherClique) {
         if(col_data_ptr2) {
             gatherSources.push_back(make_tuple(col_data_ptr2, col_data_start2, 
                                                col_row_start2, r2, c2));
-            /*
-            size_t otherSize = col_data_ptr2->size();
-            size_t otherR = r;
-            size_t otherC = otherClique->c;
-            assert(otherSize >= r2 * c2);
-            col_data_ptr2->resize(otherSize - r2 * otherC);
-            */
-
         }
         else {
         }

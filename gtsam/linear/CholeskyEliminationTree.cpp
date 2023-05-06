@@ -6,10 +6,8 @@
 */
 
 // GTSAM TODO: 
-// 1. Reorder based on clique structure. I.e. after reordering, group cliques together
 // 2. Marginalization
 // 3. Ability to add factors to variables in the middle
-// 4. After symbolic elimination, allocate contiguous workspace for hardware
 //
 
 
@@ -123,42 +121,6 @@ void CholeskyEliminationTree::markAffectedKeys(const NonlinearFactorGraph& nonli
         }
     }
 
-    /*
-    for(const Key relinKey : relinKeys) {
-        sharedNode relinNode = nodes_[relinKey];
-        relinNode->relinearize = true;
-        for(const FactorIndex factorIndex : relinNode->factorIndices) {
-            if(factorLinearizeStatus_[factorIndex] != LINEARIZED) {
-                // If linear status of that factor is not linearized
-                // Then it's either a new factor or a factor that was already counted
-                continue;
-            }
-            factorLinearizeStatus_[factorIndex] = RELINEARIZED;
-            // cout << "set factor " << factorIndex << " to RELINEARIZED" << endl;
-            sharedFactor factor = nonlinearFactors[factorIndex];
-
-            // Sort factor keys first
-            auto factorKeys = factor->keys();
-            // Can't sort factor->keys() itself because it messes up linearization
-            sort(factorKeys.begin(), factorKeys.end(), orderingLess);
-            
-            // Set up changedFactorColStructure and add to affectedKeys
-            // Lower keys affect higher keys but not the other way around
-            // This needs to be redone after reordering!
-            for(auto it1 = factorKeys.begin(); it1 != factorKeys.end(); it1++) {
-                Key lowerKey = *it1;
-                affectedKeys->insert(lowerKey); // all keys are affected
-                sharedNode lowerNode = nodes_[lowerKey];
-                for(auto it2 = it1; it2 != factorKeys.end(); it2++) {
-                    Key higherKey = *it2;
-                    lowerNode->changedFactorColStructure.push_back(higherKey);
-                    cout << "node " << lowerKey << " push back " << higherKey << endl;
-                }
-            }
-        }
-    }
-    */
-
     // Data structure used to remove duplicate keys and sort
     unordered_map<Key, set<Key>> sortedFactorKeys;
 
@@ -187,47 +149,7 @@ void CholeskyEliminationTree::markAffectedKeys(const NonlinearFactorGraph& nonli
         }
         cachedLinearFactors_.push_back(ColMajorMatrix(height, width));
 
-        // // Sort factor keys first
-        // auto factorKeys = factor->keys();
-        // // Can't sort factor->keys() itself because it messes up linearization
-        // sort(factorKeys.begin(), factorKeys.end(), orderingLess);
-        // for(auto it1 = factorKeys.begin(); it1 != factorKeys.end(); it1++) {
-        //     Key lowerKey = *it1;
-        //     sharedNode lowerNode = nodes_[lowerKey];
-        //     lowerNode->factorIndices.push_back(factorIndex);
-        //     affectedKeys->insert(lowerKey);
-        // cout << "jacobian preallocate " << factorIndex << " " << lowerKey << endl;
-        //     jacobian_.preallocateBlock(factorIndex, lowerKey, factor->dim(), true);
-
-        //     for(auto it2 = it1; it2 != factorKeys.end(); it2++) {
-        //         Key higherKey = *it2;
-        //         // New factors are not part of the changedColStructure
-        //         // As they have to be loaded regardless of edit or reconstruct
-        //         sortedFactorKeys[lowerKey].insert(higherKey);
-        //     }
-        // }
     }
-    // jacobian_.resolveAllocate(-1);
-
-    // // Sort node colStructure
-    // for(auto& p : sortedFactorKeys) {
-    //     Key lowerKey = p.first;
-    //     set<Key>& s = p.second;
-    //     auto& factorColStructure = nodes_[lowerKey]->factorColStructure;
-    //     for(Key& higherKey : factorColStructure) {
-    //         assert(!orderingLess(higherKey, lowerKey));
-    //         s.insert(higherKey);
-    //     }
-    //     // Pull the sorted keys out
-    //     factorColStructure.clear();
-    //     factorColStructure.insert(factorColStructure.end(), s.begin(), s.end());
-    // }
-
-    // cout << "Affected keys: " << endl;
-    // for(Key k : *affectedKeys) {
-    //     cout << k << " ";
-    // }
-    // cout << endl;
 
     // checkInvariant_afterMarkAffected();
 }
@@ -376,8 +298,9 @@ void CholeskyEliminationTree::symbolicEliminateKey(const Key key) {
     clique->findParent();
 
     // FIXME: Seems like there is a case where current clique can have multiple children cliques
-    // But only merge to one of them
+    // But only merge to one of them. This is going to cause a problem when splitting cliques
     // Check supernode. Only merge if we only have one child and child is marked
+    // This is known as a fundamental clique
     if(clique->children.size() == 1) {
         sharedClique childClique = *(clique->children.begin());
         sharedNode child = childClique->back();
@@ -391,7 +314,6 @@ void CholeskyEliminationTree::symbolicEliminateKey(const Key key) {
             
         }
     }
-    // clique->printClique(cout);
 
     // Set root after merging
     if(clique->parent == nullptr) {
@@ -412,31 +334,20 @@ void CholeskyEliminationTree::symbolicEliminateKey(const Key key) {
         changedDescendants.push_back(node->key);
     }
 
-    // for(const Key ancestorKey : node->colStructure) {
-    //     auto& changedDescendants = changedDescendants_.at(ancestorKey);
-    //     // assert(sorted_no_duplicates(changedDescendants));
-    //     assert(changedDescendants.empty()
-    //             || orderingLess(changedDescendants.back().first, node->key));
-    //     changedDescendants_.at(ancestorKey).push_back({node->key});
-    // }
-
     // Merge changed descendants with descendants
     auto& changedDescendants = changedDescendants_.at(node->key);
     // assert(sorted_no_duplicates(changedDescendants));
     if(!changedDescendants.empty()) {
         size_t i = 0;
         auto& descendants = descendants_.at(node->key);
-        // assert(sorted_no_duplicates(descendants));
         for(; i < descendants.size(); i++) {
             // Find the index in descendants that is the same as the 
             // first element in changed descendants. If not found,
             // i will be set to the end of descendants
             if(!orderingLess(descendants[i], changedDescendants[0])) {
-            // if(!orderingLess(descendants[i].first, changedDescendants[0].first)) {
                 break;
             }
             else {
-                // assert(orderingLess(descendants[i].first, changedDescendants[0].first));
                 assert(orderingLess(descendants[i], changedDescendants[0]));
             }
         }
@@ -445,8 +356,6 @@ void CholeskyEliminationTree::symbolicEliminateKey(const Key key) {
         for(size_t j = 0; j < changedDescendants.size(); j++) {
             descendants[i + j] = changedDescendants[j];
         }
-        // assert(sorted_no_duplicates(descendants_.at(node->key)));
-        // assert(sorted_no_duplicates(changedDescendants_.at(node->key)));
     }
 }
 
@@ -575,182 +484,6 @@ void CholeskyEliminationTree::constructCSCMatrix(
 
 }
 
-/*
-void CholeskyEliminationTree::constructCSCMatrix(
-        const vector<Key>& reorderKeys,
-        const KeySet& observedKeys,
-        int* nEntries,
-        int* nVars,
-        int* nFactors,
-        vector<Key>* keyOrdering,
-        vector<int>* A,
-        vector<int>* p,
-        vector<int>* cmember) {
-
-    map<Key, set<FactorIndex>> factorMap;
-    unordered_map<FactorIndex, int> allFactors;
-    set<Key, OrderingLess> fixedKeys(orderingLess);
-
-    for(const Key key : reorderKeys) {
-        sharedNode node = nodes_[key];
-        for(FactorIndex factorIndex : node->factorIndices) {
-            // map factor to an index that starts from 0
-            allFactors.insert({factorIndex, allFactors.size()});
-
-            sharedFactor factor = factors_[factorIndex]; 
-            for(const Key otherKey : factor->keys()) {
-                factorMap[otherKey].insert(allFactors.at(factorIndex));
-                if(!is_reordered_[otherKey]) {
-                    fixedKeys.insert(otherKey);
-                }
-            }
-        }
-    }
-
-    int count = 0;
-
-    // cout << "fixed keys size = " << fixedKeys.size() << endl;
-
-    p->reserve(factorMap.size() + 1);
-    p->push_back(0);
-    // Do fixedKeys first
-    for(const Key key : fixedKeys) {
-        keyOrdering->push_back(key);
-        cmember->push_back(cmember->size());
-        const set<FactorIndex>& s = factorMap.at(key);
-        for(const FactorIndex factorIndex : s) {
-            A->push_back(factorIndex);
-            count++;
-        }
-        p->push_back(count);
-    }
-
-    size_t constraintKey = cmember->size();
-    size_t observedConstraintKey = (reorderKeys.size() == observedKeys.size())? 
-                                        constraintKey : constraintKey + 1;
-
-    // Then do reorderKeys 
-    for(const Key key : reorderKeys) {
-        keyOrdering->push_back(key);
-        if(observedKeys.find(key) != observedKeys.end()) {
-            cmember->push_back(observedConstraintKey);
-        }
-        else {
-            cmember->push_back(constraintKey);
-        }
-        const set<FactorIndex>& s = factorMap.at(key);
-        for(const FactorIndex factorIndex : s) {
-            A->push_back(factorIndex);
-            count++;
-        }
-        p->push_back(count);
-    }
-
-
-    *nEntries = count;
-    *nFactors = allFactors.size();
-    *nVars = factorMap.size();
-
-}
-*/
-
-/*
-void CholeskyEliminationTree::constructCSCMatrix(
-        const vector<Key>& reorderKeys,
-        int* nEntries,
-        int* nVars,
-        int* nFactors,
-        vector<int>* A,
-        vector<int>* p,
-        vector<int>* cmember,
-        unordered_set<Key>* is_reordered) {
-    map<Key, set<FactorIndex>> factorMap;
-    unordered_map<FactorIndex, int> allFactors;
-    unordered_set<Key> fixedKeys;
-
-    for(const Key key : reorderKeys) {
-        is_reordered->insert(key);
-    }
-
-    for(const Key key : reorderKeys) {
-        sharedNode node = nodes_[key];
-        for(FactorIndex factorIndex : node->factorIndices) {
-            // map factor to an index that starts from 0
-            allFactors.insert({factorIndex, allFactors.size()});
-
-            sharedFactor factor = factors_[factorIndex]; 
-            for(const Key otherKey : factor->keys()) {
-                factorMap[otherKey].insert(factorIndex);
-                if(is_reordered->find(otherKey) == is_reordered->end()) {
-                    fixedKeys.insert(otherKey);
-                }
-            }
-        }
-    }
-
-    int count = 0;
-
-    p->reserve(factorMap.size() + 1);
-    p->push_back(0);
-    // Do reorderKeys first
-    for(const Key key : reorderKeys) {
-        const set<FactorIndex>& s = factorMap.at(key);
-        for(const FactorIndex factorIndex : s) {
-            A->push_back(allFactors[factorIndex]);
-            count++;
-        }
-        p->push_back(count);
-    }
-
-
-    // Then do fixed keys with constraint 0
-    for(const Key key : fixedKeys) {
-        const set<FactorIndex>& s = factorMap.at(key);
-        for(const FactorIndex factorIndex : s) {
-            A->push_back(allFactors[factorIndex]);
-            count++;
-        }
-        p->push_back(count);
-    }
-
-    // Use constraints to fix order of fixed keys against reorder keys
-    // fixed keys should be constrained to be in front of reorder keys
-    cmember->resize(factorMap.size());
-
-    // Set up fixed keys constraints
-    // Need to do this kind of convoluted thing to make sure there are no gaps in cmember
-    size_t constraintKey = 0, newConstraintKey = 0;
-    for(int i = 0; i < fixedKeys.size(); i++) {
-        cmember->at(cmember->size() - 1 - i) = constraintKey;
-        newConstraintKey = constraintKey + 1;
-    }
-    constraintKey = newConstraintKey;
-
-    // Set up reorder keys constraints
-    for(int i = 0; i < reorderKeys.size() - 2; i++) {
-        cmember->at(i) = constraintKey;
-        newConstraintKey = constraintKey + 1;
-    }
-    constraintKey = newConstraintKey;
-
-    // Set up the last two keys constraints
-    for(int i = reorderKeys.size() - 2; i < reorderKeys.size() - 1; i++) {
-        cmember->at(i) = constraintKey;
-        newConstraintKey = constraintKey + 1;
-    }
-    constraintKey = newConstraintKey;
-    for(int i = reorderKeys.size() - 1; i < reorderKeys.size(); i++) {
-        cmember->at(i) = constraintKey;
-        newConstraintKey = constraintKey + 1;
-    }
-
-
-    *nEntries = count;
-    *nFactors = allFactors.size();
-    *nVars = factorMap.size();
-}
-*/
-
 void CholeskyEliminationTree::getPartialReordering(const vector<Key>& reorderKeys,
                                                    const KeySet& observedKeys,
                                                    vector<Key>* partialOrdering) {
@@ -765,7 +498,6 @@ void CholeskyEliminationTree::getPartialReordering(const vector<Key>& reorderKey
     int nEntries, nVars, nFactors;
     vector<int> A, p, cmember;
     vector<Key> keyOrdering;
-    // unordered_set<Key> is_reordered;
 
     constructCSCMatrix(reorderKeys, observedKeys,
                        &nEntries, &nVars, &nFactors, 
@@ -785,29 +517,6 @@ void CholeskyEliminationTree::getPartialReordering(const vector<Key>& reorderKey
 
     int stats[CCOLAMD_STATS]; /* colamd arg 7: colamd output statistics and error codes */
 
-    // cout << "A: ";
-    // for(int i : A) {
-    //     cout << i << " ";
-    // }
-    // cout << endl;
-    // cout << "p: ";
-    // for(int i : p) {
-    //     cout << i << " ";
-    // }
-    // cout << endl;
-    // cout << "cmember: ";
-    // for(int i : cmember) {
-    //     cout << i << " ";
-    // }
-    // cout << endl;
-    
-
-    // cout << "p: ";
-    // for(int i = 0; i < p.size(); i++) {
-    //     cout << p.at(i) << " ";
-    // }
-    // cout << endl << endl;
-
     // call colamd, result will be in p
     /* returns (1) if successful, (0) otherwise*/
     if (nVars > 0) {
@@ -819,19 +528,8 @@ void CholeskyEliminationTree::getPartialReordering(const vector<Key>& reorderKey
         }
     }
 
-    // cout << "p: ";
-    // for(int i = 0; i < p.size(); i++) {
-    //     cout << p.at(i) << " ";
-    // }
-    // cout << endl << endl;
-
     partialOrdering->resize(reorderKeys.size());
     size_t index = 0;
-    // cout << "p: ";
-    // for(int i = 0; i < p.size(); i++) {
-    //     cout << p[i] << " ";
-    // }
-    // cout << endl;
     for(int i = 0; i < p.size(); i++) {
         if(p[i] == -1) {
             break;
@@ -840,25 +538,8 @@ void CholeskyEliminationTree::getPartialReordering(const vector<Key>& reorderKey
         if(is_reordered_[key]) {
             partialOrdering->at(index++) = key;
         }
-        // if(p[i] >= reorderKeys.size()) {
-        //     continue;
-        // }
-        // else if(p[i] == -1) {
-        //     break;
-        // }
-        // const Key key = reorderKeys[p[i]];
-        // // if(is_reordered.find(key) != is_reordered.end()) {
-        //     // We only care about the keys in reorderKeys
-        //     partialOrdering->at(index++) = key;
-        // // }
     }
 
-    // if(nodes_.size() < 400) {
-    //     Ordering ordering(*partialOrdering);
-    //     cout << "Ordering: " << endl;
-    //     ordering.print();
-    //     cout << endl;
-    // }
 }
 
 void CholeskyEliminationTree::updateOrdering(const KeySet& markedKeys, 
@@ -906,17 +587,6 @@ void CholeskyEliminationTree::updateOrdering(const KeySet& markedKeys,
                             partialOrdering.begin(), 
                             partialOrdering.end());
 
-    // cout << "Delta reorder keys: ";
-    // for(Key k : deltaReorderKeys) {
-    //     cout << k << " ";
-    // }
-    // cout << endl;
-    // cout << "Partial ordering: ";
-    // for(Key k : partialOrdering) {
-    //     cout << k << " ";
-    // }
-    // cout << endl;
-    
     for(int i = 0; i < newOrderingToKey.size(); i++) {
         Key key = newOrderingToKey[i];
         ordering_[key] = i;
@@ -924,52 +594,12 @@ void CholeskyEliminationTree::updateOrdering(const KeySet& markedKeys,
 
     orderingToKey_ = std::move(newOrderingToKey);
 
-    // size_t curIndex = 0;
-    // for(size_t i = 0; i < orderingToKey_.size(); i++) {
-    //     Key key = orderingToKey_[i];
-    //     if(markedKeys.find(key) == markedKeys.end()) {
-
-    //         if(lowestReorderedIndex == -1 && ordering_[key] != curIndex) {
-    //             lowestReorderedIndex = curIndex;
-    //             // cout << "lowestReorderedIndex = " << lowestReorderedIndex << endl;
-    //         }
-
-    //         orderingToKey_[curIndex] = key;
-    //         ordering_[key] = curIndex;
-    //         // cout << "Key " << key << " is now position " << curIndex << endl;;
-
-    //         curIndex++;
-    //     }
-    //     else {
-    //         if(lowestReorderedIndex == -1) {
-    //             lowestReorderedIndex = i;
-    //             // cout << "lowestReorderedIndex = " << lowestReorderedIndex << endl;
-    //         }
-    //     }
-    // }
-
     ordering_version_++;    // update ordering version
 
     if(!delta_.allocated()) {
         cout << "delta not allocated!" << endl;
         exit(1);
     }
-    // cout << "reorder keys: ";
-    // for(Key k : partialOrdering) {
-    //     cout << k << " ";
-    // }
-    // cout << endl;
-    // delta_.reorderBlocks(deltaReorderKeys, lowestReorderedIndex);
-
-
-    // cout << "update ordering here4" << endl;
-
-    // for(size_t i = 0; i < partialOrdering.size(); i++) {
-    //     Key key = partialOrdering[i];
-    //     orderingToKey_[curIndex + i] = key;
-    //     ordering_[key] = curIndex + i;
-    //     // cout << "Key " << key << " is now position " << curIndex + i << endl;
-    // }
 
     // Reset all affected nodes
     for(size_t i = 0; i < partialOrdering.size(); i++) {
@@ -987,11 +617,6 @@ void CholeskyEliminationTree::updateOrdering(const KeySet& markedKeys,
         for(sharedClique child : cliqueChildren) {
             reparentOrphanClique(child);
         }
-
-        // node->colContribution.clear();
-        // assert(node->changedColStructure.empty());
-        // assert(node->changedColContribution.empty());
-        // assert(node->newColContribution.empty());
 
         assert(node->ordering_version != ordering_version_);
         node->ordering_version = ordering_version_;
@@ -1019,33 +644,6 @@ void CholeskyEliminationTree::updateOrdering(const KeySet& markedKeys,
         }
         node->changedFactorColStructure = std::move(newChangedFactorColStructure);
 
-
-        // Need to also change descendants 
-        /*
-        node->factorColStructure.clear();
-        node->changedFactorColStructure.clear();
-        for(const FactorIndex factorIndex : node->factorIndices) {
-            sharedFactor factor = factors_[factorIndex];
-            for(const Key otherKey : factor->keys()) {
-                if(!orderingLess(otherKey, key)) {
-                    // otherKey is greater than or equal to us
-                    node->factorColStructure.push_back(otherKey);
-                    if(factorLinearizeStatus_[factorIndex] == RELINEARIZED) {
-                        node->changedFactorColStructure.push_back(otherKey);
-                    }
-                }
-            }
-        }
-
-        std::sort(node->factorColStructure.begin(), 
-                  node->factorColStructure.end(),
-                  orderingLess);
-
-        std::sort(node->changedFactorColStructure.begin(), 
-                  node->changedFactorColStructure.end(),
-                  orderingLess);
-        */
-
         // Fix descendants
         // Descendants in the reordered keys need to be removed
         // While descendants that are not marked/reordered need to be kept
@@ -1071,64 +669,6 @@ void CholeskyEliminationTree::reparentOrphanClique(sharedClique clique) {
     assert(clique->parent != nullptr);
 }
 
-/*
-void CholeskyEliminationTree::updateOrdering(KeySet* affectedKeys) {
-    // cout << "[CholeskyEliminationTree] updateOrdering()" << endl;
-    getTotalReordering();
-
-    // TODO: Support partial ordering
-
-    // For each variable, reset all relevant data structures and check all factors
-    y_.resetBlocks(false);
-    delta_.resetBlocks(false);
-
-    map<size_t, Key> orderingToKey_;
-    for(size_t key = 0; key < ordering_.size(); key++) {
-        orderingToKey_.insert({ordering_[key], key});
-        sharedNode node = nodes_[key];
-        node->colStructure.clear();
-        node->colContribution.clear();
-        assert(node->changedColStructure.empty());
-        assert(node->changedColContribution.empty());
-        assert(node->newColContribution.empty());
-        assert(node->relinearize == false);
-        assert(node->marked == false);
-
-        affectedKeys->insert(key);
-        node->marked = true;
-
-        cholesky_.resetColumn(key);
-
-        // Re-add all factors
-        for(const FactorIndex factorIndex : node->factorIndices) {
-            assert(factorLinearizeStatus_[factorIndex] == LINEARIZED);
-            sharedFactor factor = factors_[factorIndex];
-            for(const Key otherKey : factor->keys()) {
-                if(!orderingLess(otherKey, key)) {
-                    // If the other key is in our column, it adds to a contribution block
-                    // and a column structure block
-                    node->newColContribution[key]++;
-                    node->changedColStructure.insert({otherKey, 1});
-                }
-                
-            }
-        }
-    }
-
-
-    for(int i = 0; i < ordering_.size(); i++) {
-        const Key key = orderingToKey_[i];
-
-        size_t width = cholesky_.column(key).width();
-        y_.preallocateBlock(key, width, true);
-        delta_.preallocateBlock(key, width, true);
-    }
-
-    y_.resolveAllocate();
-    delta_.resolveAllocate();
-} 
-*/
-
 void CholeskyEliminationTree::setEditOrReconstruct(sharedClique clique) {
 
     // If reordered, automatically reconstruct
@@ -1152,21 +692,8 @@ void CholeskyEliminationTree::setEditOrReconstruct(sharedClique clique) {
                 changedCols++;
                 it2++;
             }
-            // for(auto& p : descendants_.at(nodeKey)) {
-            //     totalCols += p.second;
-            // }
-            // for(auto& p : changedDescendants_.at(nodeKey)) {
-            //     changedCols += p.second;
-            // }
             totalCols += descendants_.at(nodeKey).size();
             changedCols += changedDescendants_.at(nodeKey).size();
-            // for(const Key key : descendants_.at(nodeKey)) {
-            //     cliqueDescendants.insert(key);
-            // }
-            // for(const Key key : changedDescendants_.at(nodeKey)) {
-
-            //     cliqueChangedDescendants.insert(key);
-            // }
         }
 
         if(totalCols == 0 || changedCols >= 0.9 * totalCols) {
@@ -1210,84 +737,6 @@ void CholeskyEliminationTree::checkEditOrReconstructClique(
         Key key = colStructure[i];
         if(markedStatus_[key] == mode) {
             destCols->push_back(key);
-        }
-    }
-}
-
-/*
-void CholeskyEliminationTree::setEditOrReconstruct(sharedClique clique) {
-
-    // If reordered, automatically reconstruct
-    if(clique->front()->is_reordered) {
-    // if(true) {
-        clique->is_reconstruct = true;
-    }
-    else {
-
-        unordered_set<Key> cliqueFactorColStructure;
-        unordered_set<Key> cliqueChangedFactorColStructure;
-        unordered_set<Key> cliqueDescendants;
-        unordered_set<Key> cliqueChangedDescendants;
-        // TODO: optimize for one node cliques
-        for(sharedNode node : clique->nodes) {
-            Key& nodeKey = node->key;
-            auto it1 = node->factorColStructure.find(nodeKey);
-            while(it1 != node->factorColStructure.end()) {
-                cliqueFactorColStructure.insert(*it1);
-                it1++;
-            }
-            auto it2 = node->changedFactorColStructure.find(nodeKey);
-            while(it2 != node->changedFactorColStructure.end()) {
-                cliqueChangedFactorColStructure.insert(*it2);
-                it2++;
-            }
-            // for(const Key key : node->factorColStructure) {
-            //     cliqueFactorColStructure.insert(key);
-            // }
-            // for(const Key key : node->changedFactorColStructure) {
-            //     cliqueChangedFactorColStructure.insert(key);
-            // }
-            for(const Key key : descendants_.at(nodeKey)) {
-                cliqueDescendants.insert(key);
-            }
-            for(const Key key : changedDescendants_.at(nodeKey)) {
-                cliqueChangedDescendants.insert(key);
-            }
-        }
-
-        // Remove clique keys
-        for(sharedNode node : clique->nodes) {
-            const Key key = node->key;
-            cliqueFactorColStructure.erase(key);
-            cliqueChangedFactorColStructure.erase(key);
-            cliqueDescendants.erase(key);
-            cliqueChangedDescendants.erase(key);
-        }
-
-        size_t totalCols = cliqueFactorColStructure.size() + cliqueDescendants.size();
-        size_t changedCols = cliqueChangedFactorColStructure.size() 
-            + cliqueChangedDescendants.size();
-        if(totalCols == 0 || changedCols >= 0.95 * totalCols) {
-            clique->is_reconstruct = true;
-        }
-        else {
-            clique->is_reconstruct = false;
-        }
-    }
-
-}
-}
-*/
-
-void CholeskyEliminationTree::allocatePass() {
-    vector<pair<sharedClique, bool>> stack(1, {root_, false});
-    while(!stack.empty()) {
-        auto& curPair = stack.back();
-        sharedClique clique = curPair.first;
-        bool& expanded = curPair.second;
-
-        if(!expanded) {
-            expanded = true;
         }
     }
 }
@@ -1354,11 +803,9 @@ void CholeskyEliminationTree::allocateStack() {
 
             clique->selfSize = (cliqueWidth + subDiagHeight) * (cliqueWidth + subDiagHeight);
             clique->accumSize = clique->selfSize + maxChildSize;
-            // cout << "Clique " << *clique << " needs " << clique->selfSize << " memory" << endl;
         }
     }
 
-    // cout << "Workspace allocating " << root_->accumSize << endl;
     workspace.allocate(root_->accumSize);
 }
 
@@ -1402,7 +849,6 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
                         gathered = true;
                     }
                     restoreClique(clique);
-                    // prepareEditClique(clique);
                 }
                 else {
                     if(gathered) {
@@ -1412,11 +858,6 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
                         allocateAndGatherClique(clique, true, true);
                     }
                 }
-
-                // // Allocate jacobian
-                // for(sharedNode node : clique->nodes) {
-                //     jacobian_.resolveAllocate(node->key);
-                // }
             }
             else {
                 // Reorder fixed nodes
@@ -1460,21 +901,16 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
             if(clique->marked) {
                 // All factors of this clique should be relinearized
                 // Do AtA for each node
-                // cout << "Before prepareElim" << endl;
                 prepareEliminateClique(clique, theta);
 
                 // Eliminiate clique
-                // cout << "Before elim" << endl;
                 eliminateClique(clique);
 
                 // Merge with parent
-                // cout << "Before merge" << endl;
                 mergeWorkspaceClique(clique);
 
                 // Scatter workspace back into columns
-                // cout << "Before scatter" << endl;
                 scatterClique(clique);
-                // cout << "After scatter" << endl;
 
                 // Reset node member variables
                 for(sharedNode node : clique->nodes) {
@@ -1488,18 +924,13 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
             }
             else {
                 // Add AtA blocks for reconstruct columns that may be connected to unmarked nodes
-                // cout << "Before unmarked prepareElim" << endl;
                 prepareEliminateClique(clique, theta);
 
                 // Merge with parent
-                // cout << "Before unmarked merge" << endl;
                 mergeWorkspaceClique(clique);
 
                 // Still need to scatter to clear workspace
-                // cout << "Before unmarked scatter" << endl;
                 scatterClique(clique, false);
-
-                // cout << "After unmarked scatter" << endl;
             }
 
             // cout << "before reset clique" << endl;
@@ -1509,265 +940,12 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
             clique->is_reconstruct = true;
             clique->has_reconstruct = false;
             clique->workspaceIndex = -1;
-
-            // cout << "after reset clique" << endl;
         }
     }
 
 
     // checkInvariant_afterCholesky();
-
-    // // DEBUG Checks
-    // for(sharedNode node : nodes_) {
-    //     const auto& column = cholesky_.column(node->key);
-    //     if(!column.allocated()) {
-    //         cout << "Column " << node->key << " not allocated!" << endl;
-    //         exit(1);
-    //     }
-    // }
 }
-
-/*
-void CholeskyEliminationTree::choleskyElimination(Values& theta) {
-    // cout << "[CholeskyEliminationTree] choleskyElimination()" << endl;
-    vector<pair<sharedNode, bool>> stack(1, {root_, false});
-    while(!stack.empty()) {
-        auto& curPair = stack.back();
-        sharedNode node = curPair.first;
-        sharedNode parent = node->parent;
-        const Key key = node->key;
-        bool& expanded = curPair.second;
-        if(!expanded) {
-            // restore pass
-            // After restore pass, the node should:
-            //    1) Be done with all necessary edits
-            //    2) Decide if reconstruct or edit
-            //    2) Memory should be allocated
-            //    3) If reconstruct, columns should be set to zero and blocks reordered
-            //    4) If edit, diagonal block should be multiplied to the column
-            expanded = true;
-            // cout << "Restore pass key: " << key << endl;
-
-            // Pass down the reconstruct columns and edit columns (for marked nodes)
-            assert(node->reconstructCols.empty());
-            if(parent) {
-                for(const Key ancestorKey : parent->reconstructCols) {
-                    if(node->colStructure.find(ancestorKey) != node->colStructure.end()) {
-                        assert(orderingLess(key, ancestorKey));
-                        node->reconstructCols.push_back(ancestorKey);
-                        // cout << "Reconstruct ancestor " << ancestorKey << endl;
-                    }
-                }
-
-                if(node->marked) {
-                    for(const Key ancestorKey : parent->editCols) {
-                        assert(orderingLess(key, ancestorKey));
-                        if(node->colStructure.find(ancestorKey) != node->colStructure.end()) {
-                            node->editCols.push_back(ancestorKey);
-                        }
-                    }
-                }
-            }
-
-            // Only expand to children if we are marked or have a reconstruct
-            // It is possible to be marked but all ancestors are edits
-            if(node->marked || !node->reconstructCols.empty()) {
-                if(node->marked) {
-                    // FIXME: this is really slow, let's fix
-                    handleEdits(node);
-                
-                    if(node->is_reconstruct) {
-                        node->reconstructCols.push_back(key);
-
-                        cholesky_.resetBlocks(node->key);
-
-                    }
-                    else {
-                        // cout << "node marked. push to edit col" << endl;
-                        node->editCols.push_back(key);
-                        node->is_reconstruct = false;
-
-                        // need to restore column and subtract the old linearized blocks
-                        prepareEditColumn(node);
-                    }
-                    
-                    // Allocate blocks for edit or reconstruct
-                    for(const auto& p : node->colStructure) {
-                        const Key otherKey = p.first;
-                        assert(!orderingLess(otherKey, key));
-                        // If reconstruct, initialize blocks
-                        bool alloc = cholesky_.preallocateBlock(otherKey, key, node->is_reconstruct);
-                    }
-
-                    jacobian_.resolveAllocate(node->key);
-                    cholesky_.resolveAllocate(node->key);
-                }
-                else {
-                    // handle reconstructs
-                    handleReconstructs(node);
-                }
-
-                // Only expand to children if we are marked or have a reconstruct
-                // It is possible to be marked but all ancestors are edits
-                for(sharedNode child : node->children) {
-                    stack.push_back({child, false});
-                }
-
-            }
-
-            // Set edit or reconstruct
-            // Compare edit cost and reconstruct cost
-            // Edit involves (extra cost):
-            //  1) Multiplying diagonal block to the column (len(L) mults)
-            //  2) Restoring the blocks that were changed (len(changeContribution) adds + mults)
-            //  Everything else remains the same
-            // Reconstruct involves (extra cost):
-            //  1) Setting all to 0 (memset; doesn't count)
-            //  2) Reconstructing all the blocks that were not changed but were reset (len(notChangedContribution) adds + mults)
-            //  So roughly, if 2*len(changedContribution) < len(totalContribution) - len(L)
-            //  We should do edit
-        }
-        else {
-            // cout << "Eliminate pass key: " << key << endl;
-            // eliminate pass
-            // Appropriate data structure should be reset
-            stack.pop_back();
-
-            // Unmarked nodes already reconstructed
-            if(node->marked) {
-                // cout << "AtA" << endl;
-
-                // All factors of this node should be relinearized
-                for(const FactorIndex factorIndex : node->factorIndices) {
-                    sharedFactor factor = factors_[factorIndex];
-                    if(!node->is_reconstruct && factorLinearizeStatus_[factorIndex] == LINEARIZED) {
-                        // Can skip factor if node is edit and factor has already been linearized
-                        continue;
-                    }
-                    if(factorLinearizeStatus_[factorIndex] != LINEARIZED) {
-                        vector<Matrix> A;
-                        Vector b(factor->dim());
-                        factor->linearizeToMatrix(theta, &A, &b);
-                        for(int i = 0; i < factor->size(); i++) {
-                            const Key factorKey = factor->keys()[i];
-                            jacobian_.block(factorIndex, factorKey) = A[i];
-                            b_.block(factorIndex) = b;
-                        }
-                        factorLinearizeStatus_[factorIndex] = LINEARIZED;
-                    }
-                    // Do AtA and Atb here, but just for this column
-                    // If edit, only need to do factors that are un/relienarized
-                    SparseColumnBlockMatrix& column = cholesky_.column(key);
-                    for(const Key otherKey : factor->keys()) {
-                        if(!orderingLess(otherKey, key)) {
-                            assert(column.blockExists(otherKey));
-                            // TODO: AtA can probably be done at once for each row
-                            column.block(otherKey) += jacobian_.block(factorIndex, otherKey).transpose() * jacobian_.block(factorIndex, key);
-                        }
-                    }
-                    y_.block(key) += jacobian_.block(factorIndex, key).transpose() * b_.block(factorIndex);
-                }
-
-                // If in a supernode and adopted, then can skip this step. Ancestor will eliminate
-                // If in a supernode but is at the top of supernode, construct the column to eliminate
-                // If not in a supernode, then just eliminate
-                if(!node->adoptedSkip) {
-                    // If not in supernode or if at top of supernode
-                    if(node->adoptedCols.empty()) {
-                        // if not in supernode
-                        // Do elimination on this node
-                        const size_t colWidth = cholesky_.column(key).width();
-                        Eigen::VectorXd diagonalY(colWidth);
-                        // copy data over
-                        diagonalY = y_.block(key);
-                        eliminateColumn(&cholesky_.column(key), &diagonalY);
-                        
-                        // copy data back
-                        y_.block(key) = diagonalY;
-                    }
-                    else {
-                        // construct supernode
-
-                        // technically this node also adopts self
-                        node->adoptedCols.push_back(key);
-
-                        // We only need to allocate super delta for diagonal
-                        // Aggregate all widths
-                        size_t totalWidth = 0;
-                        for(const Key adoptedKey : node->adoptedCols) {
-                            const size_t adoptedWidth = cholesky_.column(adoptedKey).width();
-                            totalWidth += adoptedWidth;
-                        }
-                        size_t totalHeight = cholesky_.column(node->adoptedCols.front()).height();
-                        SparseColumnBlockMatrix superColumn(INT_MAX, totalWidth, true);
-                        Eigen::VectorXd diagonalY(totalWidth);
-                        auto iter = node->colStructure.begin();
-                        iter++; // don't include diagonal as we already have a big diagonal
-                        for(; iter != node->colStructure.end(); iter++) {
-                            const Key otherKey = iter->first;
-                            const Key otherWidth = cholesky_.column(otherKey).width();
-                            superColumn.preallocateBlock(otherKey, otherWidth, true);
-                        }
-                        superColumn.resolveAllocate();
-                        assert(superColumn.height() == totalHeight);
-
-                        // Copy data over
-                        size_t startCol = 0;
-                        for(const Key adoptedKey : node->adoptedCols) {
-                            const auto& adoptedColumn = cholesky_.column(adoptedKey);
-                            size_t adoptedWidth = adoptedColumn.width();
-                            size_t adoptedHeight = adoptedColumn.height();
-                            assert(totalHeight - startCol == adoptedHeight);
-                            Block colBlock = superColumn.submatrix(startCol, startCol, 
-                                                  adoptedHeight, adoptedWidth);
-                            colBlock = adoptedColumn.blockRange(0, adoptedHeight);
-
-                            diagonalY.block(startCol, 0, adoptedWidth, 1) = y_.block(adoptedKey);
-
-                            startCol += adoptedWidth;
-                        }
-
-                        eliminateColumn(&superColumn, &diagonalY);
-
-                        // Copy data back
-                        startCol = 0;
-                        for(const Key adoptedKey : node->adoptedCols) {
-                            auto& adoptedColumn = cholesky_.column(adoptedKey);
-                            size_t adoptedWidth = adoptedColumn.width();
-                            size_t adoptedHeight = adoptedColumn.height();
-                            assert(totalHeight - startCol == adoptedHeight);
-                            Block colBlock = superColumn.submatrix(startCol, startCol, 
-                                                  adoptedHeight, adoptedWidth);
-                            adoptedColumn.blockRange(0, adoptedHeight) = colBlock;
-
-                            y_.block(adoptedKey) 
-                                = diagonalY.block(startCol, 0, adoptedWidth, 1);
-
-                            startCol += adoptedWidth;
-                        }
-
-                    }
-                }
-
-                // cout << "Eliminate pass done" << endl;
-            }
-
-            // Reset member variables
-            node->marked = false;
-            node->relinearize = false;
-            node->changedColStructure.clear();
-            node->changedColContribution.clear();
-            node->newColContribution.clear();
-            node->reconstructCols.clear();
-            node->editCols.clear();
-            node->adoptedSkip = false;
-            node->adoptedCols.clear();
-        }
-        
-    }
-
-}
-*/
 
 void CholeskyEliminationTree::print(std::ostream& os) {
 
@@ -1802,258 +980,6 @@ void CholeskyEliminationTree::print(std::ostream& os) {
     }
     os << endl;
 }
-
-/*
-void CholeskyEliminationTree::eliminateColumn(SparseColumnBlockMatrix* column_ptr, 
-                                              Eigen::VectorXd* diagonalY) {
-    SparseColumnBlockMatrix& column = *column_ptr;
-
-    // cout << "new column" << endl;
-    // column.print(cout);
-    Block D = column.diagonalBlock();
-    Eigen::LLT<Eigen::Ref<Block>, Eigen::Lower> llt(D);
-    auto L = D.triangularView<Eigen::Lower>();
-
-    L.solveInPlace(*diagonalY); // Ly = Atb
-
-    if(column.height() > column.width()) {
-        Block B = column.belowDiagonalBlocks();
-        L.solveInPlace(B.transpose());
-        // cout << "After solve in place" << endl;
-        // column.print(cout);
-        const vector<pair<Key, RowHeightPair>>& blockStartVec = column.blockStartVec();
-        size_t remainingHeight = column.height() - column.width();
-
-        // // 03/09/2023: Redo this part to do outer product at once
-        vector<RowHeightPair> destBlockStart;
-        RowMajorMatrix augmentedB(remainingHeight + 1, column.width());     // This is the augmented matrix with y
-        augmentedB.block(0, 0, remainingHeight, column.width()) = B;
-        augmentedB.block(remainingHeight, 0, 1, column.width()) = diagonalY->transpose();
-        RowMajorMatrix outerProduct(remainingHeight + 1, remainingHeight + 1);
-        outerProduct.setZero();
-        outerProduct.selfadjointView<Eigen::Lower>().rankUpdate(augmentedB);
-
-        for(size_t i = 1; i < blockStartVec.size(); i++) {   // start from block 1 instead of 0
-            const Key otherKey = blockStartVec[i].first;
-            auto& destColumn = cholesky_.column(otherKey);
-
-            // Find the destination indices first
-            destBlockStart.clear();
-            size_t lastDestRow = INT_MAX;
-            const auto& otherBlockStartMap = destColumn.blockStartMap();
-            for(size_t j = i; j < blockStartVec.size(); j++) {
-                const Key destKey = blockStartVec[j].first;
-                const RowHeightPair p = otherBlockStartMap.at(destKey);
-                const size_t destRow = p.first;
-                const size_t destHeight = p.second;
-                if(lastDestRow != destRow) {
-                    destBlockStart.push_back({destRow, destHeight});
-                }
-                else {
-                    // Merge two blocks together
-                    destBlockStart.back().second += destHeight;
-                }
-                lastDestRow = destRow + destHeight;
-            }
-
-            // Take width off since we're not counting diagonal blocks
-            const size_t otherRow = blockStartVec[i].second.first - column.width();
-            const size_t otherHeight = blockStartVec[i].second.second;
-            size_t curRow = otherRow;
-            for(const RowHeightPair p : destBlockStart) {
-                const size_t destRow = p.first;
-                const size_t destHeight = p.second;
-                destColumn.blockRange(destRow, destHeight) 
-                    -= outerProduct.block(curRow, otherRow, destHeight, otherHeight);
-                curRow += destHeight;
-            }
-
-        }
-        
-        // Update Atb, separate from the previous loop because the destinations could 
-        // be out of order, and we don't want to update too many times
-        const size_t lastRow = remainingHeight;
-        size_t curCol = 0;
-        for(size_t i = 1; i < blockStartVec.size(); i++) {
-            const Key destKey = blockStartVec[i].first;
-            const size_t destHeight = blockStartVec[i].second.second;
-            y_.block(destKey) -= outerProduct.block(lastRow, curCol, 1, destHeight).transpose();
-            curCol += destHeight;
-        }
-
-    }
-
-    cout << "After eliminate column" << endl;
-    column.print(cout);
-}
-*/
-
-/*
-void CholeskyEliminationTree::handleEdits(sharedNode node) {
-    const Key key = node->key;
-    SparseColumnBlockMatrix& column = cholesky_.column(key);
-    // handle edits only if matrix is not new
-    // If node is marked and there is a reordering
-    // All ancestors will also be reconstructs, so don't have to worry about it
-    if(column.matrixHeight() != 0) {
-        assert(column.allocated());
-        const auto& blockStartVec = column.blockStartVec();
-        auto editIter = node->editCols.rbegin();  // editCols is in reverse order because we're going from the top to bot of the tree
-        auto editIterEnd = node->editCols.rend();
-        vector<RowHeightPair> destBlockStart(blockStartVec.size());
-        // Scratchpad space for outer product
-        RowMajorMatrix outerProductColumn(column.height(), column.width());
-
-        for(size_t i = 1; i < blockStartVec.size(); i++) {
-            const Key otherKey = blockStartVec[i].first;
-            if(editIter != editIterEnd 
-                    && *editIter == otherKey) {
-                // Found ancestor key in reconstructCols
-                editIter++;
-                // cout << "Edit column " << otherKey << endl;
-            }
-            else {
-                continue;
-            }
-            const size_t otherRow = blockStartVec[i].second.first;
-            const size_t otherHeight = blockStartVec[i].second.second;
-
-            auto& destColumn = cholesky_.column(otherKey);
-
-            // cout << "In reconstruct. orig est column = " << endl;
-            // destColumn.print(cout);
-
-            // Find the destination indices first
-            const auto& otherBlockStartMap = destColumn.blockStartMap();
-            for(size_t j = i; j < blockStartVec.size(); j++) {
-                const Key destKey = blockStartVec[j].first;
-                destBlockStart[j] = otherBlockStartMap.at(destKey);
-                assert(column.blockStartMap().at(destKey).second == destBlockStart[j].second);
-            }
-
-            size_t remainingHeight = column.height() - otherRow;
-            Block curBlock = column.blockRange(otherRow, otherHeight);
-            Block remainingBlocks = column.blockRange(otherRow, remainingHeight);
-
-            outerProductColumn.block(otherRow, 0, 
-                    remainingHeight, column.width()).noalias() 
-                = remainingBlocks * curBlock.transpose();
-
-
-            size_t curRow = otherRow;
-            for(size_t j = i; j < blockStartVec.size(); j++) {
-                const size_t destRow = destBlockStart[j].first;
-                const size_t destHeight = destBlockStart[j].second;
-                // For edit, we add the block back
-                destColumn.blockRange(destRow, destHeight) 
-                    += outerProductColumn.block(curRow, 0, destHeight, otherHeight);
-                curRow += destHeight;
-
-            }
-        }
-
-        // FIXME: handle edit needs to fix Atb
-        if(column.hasBelowDiagonalBlocks() && !node->editCols.empty()) {
-            editIter = node->editCols.rbegin();  
-            editIterEnd = node->editCols.rend();
-
-            // Edit needs to fix Atb. check if in editCols
-            Eigen::VectorXd outerprodRhs = column.belowDiagonalBlocks() * y_.block(key);
-
-            size_t curRow = 0;
-            for(size_t i = 1; i < blockStartVec.size(); i++) {
-                const size_t destKey = blockStartVec[i].first;
-                const size_t destHeight = blockStartVec[i].second.second;
-
-                if(editIter != editIterEnd
-                        && *editIter == destKey) {
-                    // Found ancestor key in editIter
-                    editIter++;
-                    // ADD outerProduct
-                    y_.block(destKey) += outerprodRhs.block(curRow, 0, destHeight, 1);
-                }
-                curRow += destHeight;
-            }
-        }
-    }
-}
-
-void CholeskyEliminationTree::handleReconstructs(sharedNode node) {
-    const Key key = node->key;
-    auto& column = cholesky_.column(key);
-    const auto& blockStartVec = column.blockStartVec();
-    auto reconstructIter = node->reconstructCols.rbegin();  // reconstructCols is in reverse order because we're going from the top to bot of the tree
-    auto reconstructIterEnd = node->reconstructCols.rend();
-    vector<RowHeightPair> destBlockStart(blockStartVec.size());
-    // Scratchpad space for outer product
-    RowMajorMatrix outerProductColumn(column.height(), column.width());
-    for(size_t i = 1; i < blockStartVec.size(); i++) {
-        const Key otherKey = blockStartVec[i].first;
-        if(reconstructIter != reconstructIterEnd 
-                && *reconstructIter == otherKey) {
-            // Found ancestor key in reconstructCols
-            reconstructIter++;
-            // cout << "Reconstruct column " << otherKey << endl;
-        }
-        else {
-            continue;
-        }
-        const size_t otherRow = blockStartVec[i].second.first;
-        const size_t otherHeight = blockStartVec[i].second.second;
-
-        auto& destColumn = cholesky_.column(otherKey);
-
-        // Find the destination indices first
-        const auto& destBlockStartMap = destColumn.blockStartMap();
-        for(size_t j = i; j < blockStartVec.size(); j++) {
-            const Key destKey = blockStartVec[j].first;
-            destBlockStart[j] = otherBlockStartMap.at(destKey);
-            assert(column.blockStartMap().at(destKey).second == destBlockStart[j].second);
-        }
-
-        size_t remainingHeight = column.height() - otherRow;
-        Block curBlock = column.blockRange(otherRow, otherHeight);
-        Block remainingBlocks = column.blockRange(otherRow, remainingHeight);
-
-        outerProductColumn.block(otherRow, 0, 
-                remainingHeight, column.width()).noalias()
-            = remainingBlocks * curBlock.transpose();
-
-
-        size_t curRow = otherRow;
-        for(size_t j = i; j < blockStartVec.size(); j++) {
-            const size_t destRow = destBlockStart[j].first;
-            const size_t destHeight = destBlockStart[j].second;
-            destColumn.blockRange(destRow, destHeight) 
-                -= outerProductColumn.block(curRow, 0, destHeight, otherHeight);
-            curRow += destHeight;
-
-        }
-    }
-    // TODO: Add Atb as a block in the column
-    if(column.hasBelowDiagonalBlocks() && !node->reconstructCols.empty()) {
-        reconstructIter = node->reconstructCols.rbegin();  
-        reconstructIterEnd = node->reconstructCols.rend();
-
-        // Reconstruct needs to fix Atb. FIXME: check if in reconstruct Cols
-        Eigen::VectorXd outerprodRhs = column.belowDiagonalBlocks() * y_.block(key);
-
-        size_t curRow = 0;
-        for(size_t i = 1; i < blockStartVec.size(); i++) {
-            const size_t destKey = blockStartVec[i].first;
-            const size_t destHeight = blockStartVec[i].second.second;
-
-            if(reconstructIter != reconstructIterEnd 
-                    && *reconstructIter == destKey) {
-                // Found ancestor key in reconstructCols
-                reconstructIter++;
-                y_.block(destKey) -= outerprodRhs.block(curRow, 0, destHeight, 1);
-            }
-            curRow += destHeight;
-        }
-    }
-}
-*/
 
 void CholeskyEliminationTree::allocateAndGatherClique(sharedClique clique, bool allocate, bool reconstruct) {
 
@@ -2108,36 +1034,6 @@ void CholeskyEliminationTree::allocateAndGatherClique(sharedClique clique, bool 
             curCol += c;
         }
         // cout << "gathered \n" << newCol << endl << endl;
-
-        /*
-        if(clique->col_data_ptr != nullptr) {
-            assert(clique->col_data_start + clique->r * clique->c <= clique->col_data_ptr->size());
-            Eigen::Map<ColMajorMatrix> oldCol(clique->col_data_ptr->data() + clique->col_data_start, 
-                                              clique->r, clique->c);
-            Eigen::Map<ColMajorMatrix> newCol = workspace.get_matrices(clique->workspaceIndex)[0];
-
-            assert(clique->r - clique->col_row_start <= newCol.rows());
-            assert(clique->c <= newCol.cols());
-
-            block(newCol, 0, 0, 
-                  clique->r - clique->col_row_start - 1, 
-                  clique->c) 
-                = block(oldCol, clique->col_row_start, 0, 
-                        clique->r - clique->col_row_start - 1, 
-                        clique->c);
-
-            // Do last row independently
-            block(newCol, totalHeight - 1, 0, 1, clique->c) 
-                = block(oldCol, clique->r - 1, 0, 1, clique->c);
-
-            if(nodes_.size() == 358) {
-                cout << "In gather, oldCol = \n" << oldCol << endl << endl;
-                cout << "In gather, newCol = \n" << newCol << endl << endl;
-            }
-
-            // cout << "gathered \n" << oldCol << endl << endl;
-        }
-        */
     }
 
     // The column of the clique might be currently living in the space of another clique
@@ -2151,16 +1047,6 @@ void CholeskyEliminationTree::allocateAndGatherClique(sharedClique clique, bool 
             col_data_ptr->resize(col_data_ptr->size() - r * c);
         }
     }
-
-    /*
-    // The column of the clique might be currently living in the space of another clique
-    // Release that space now. 
-    if(clique->col_data_ptr && clique->col_data_start != 0) {
-        assert(clique->col_data_ptr->size() >= clique->r * clique->c);
-        assert(allocate);
-        clique->col_data_ptr->resize(clique->col_data_ptr->size() - clique->r * clique->c);
-    }
-    */
 
     if(allocate) {
         clique->gatherSources.clear();
@@ -2181,29 +1067,6 @@ void CholeskyEliminationTree::allocateAndGatherClique(sharedClique clique, bool 
 
 }
 
-void CholeskyEliminationTree::gatherClique(sharedClique clique) {
-
-    // col is [D B]^T. C is the frontal matrix
-    Eigen::Map<ColMajorMatrix> DB = workspace.get_matrices(clique->workspaceIndex)[0];
-
-    const auto& blockIndices = clique->blockIndices;
-
-    for(size_t i = 0; i < clique->nodes.size(); i++) {
-        Key key = blockIndices[i].first;
-        auto& column = cholesky_.at(key);
-        size_t row = blockIndices[i].second.first;
-        size_t width = blockIndices[i].second.second;
-
-        // Column must be fully allocated
-        assert(column.allocated());
-        DB.block(row, row, column.matrixHeight(), width) 
-            = column.blockRange(0, column.matrixHeight());
-    }
-
-    // Need to zero out the upper diagonal
-    DB.triangularView<Eigen::StrictlyUpper>().setZero();
-}
-
 void CholeskyEliminationTree::scatterClique(sharedClique clique, bool scatter) {
     if(scatter) {
         assert(clique->gatherSources.size() == 1);
@@ -2213,238 +1076,18 @@ void CholeskyEliminationTree::scatterClique(sharedClique clique, bool scatter) {
 
         Eigen::Map<ColMajorMatrix> col(col_data_ptr->data(), r, c);
         col = workspace.get_matrices(clique->workspaceIndex)[0];
-
-        // Eigen::Map<ColMajorMatrix> DB = workspace.get_matrices(clique->workspaceIndex)[0];
-        // const BlockIndexVector& blockIndices = clique->blockIndices;
-
-        // assert(blockIndices.back().first == -1);
-
-        // for(size_t i = 0; i < clique->nodes.size(); i++) {
-        //     const auto& p = blockIndices[i];
-        //     Key key = p.first;;
-        //     size_t row = p.second.first, width = p.second.second;
-
-        //     auto& column = cholesky_.at(key);
-        //     size_t height = column.matrixHeight();
-        //     column.blockRange(0, height) = block(DB, row, row, height, width);
-        // }
     }
 
     workspace.pop_matrices();
-
 }
 
 void CholeskyEliminationTree::resetCliqueColumns(sharedClique clique) {
     Eigen::Map<ColMajorMatrix> col = workspace.get_matrices(clique->workspaceIndex)[0];
     col.setZero();
-    /*
-    const auto& blockInfo = workspace.getBlockInfo(clique->workspaceIndex);
-
-    size_t diagWidth = blockInfo.blockIndices[blockInfo.cliqueSize].second.first;
-    size_t totalHeight = blockInfo.r;
-
-    assert(totalHeight == m.rows());
-    assert(blockInfo.c == m.cols());
-
-    Eigen::Block<Eigen::Map<ColMajorMatrix>>(m, 0, 0, totalHeight, diagWidth).setZero();
-    */
 }
-
-/*
-void CholeskyEliminationTree::gatherColumns(sharedClique clique) {
-
-    BlockIndexVector blockIndices;
-    size_t curRow = 0;
-    for(Key key : clique->front()->colStructure) {
-        size_t width = colWidth(key);
-
-        blockIndices.push_back({key, {curRow, width}});
-
-        curRow += width;
-    }
-    blockIndices.push_back({LAST_ROW, {curRow, 1}});
-    curRow += 1;
-
-    size_t& totalHeight = curRow;
-    assert(totalHeight * totalHeight == clique->selfSize);
-    clique->workspaceIndex = workspace.push_matrix(totalHeight, totalHeight, 
-                                                   clique->nodes.size(), 
-                                                   blockIndices);
-
-    Eigen::Map<ColMajorMatrix> m = workspace.matrix(clique->workspaceIndex);
-
-    m.setZero();
-
-    // If marked, check edit or has editCols. If unmarked, check if has reconstructCols
-    bool gatherFlag = false;
-    if(clique->marked && (!clique->is_reconstruct || clique->has_edit)) {
-        gatherFlag = true;
-    }
-    else if(!clique->marked && clique->has_reconstruct) {
-        gatherFlag = true;
-    }
-
-    if(gatherFlag) {
-        const auto& blockInfo = workspace.getBlockInfo(clique->workspaceIndex);
-        const auto& blockIndices = blockInfo.blockIndices;
-        for(size_t i = 0; i < blockInfo.cliqueSize; i++) {
-            Key key = blockIndices[i].first;
-            auto& column = cholesky_.at(key);
-            size_t row = blockIndices[i].second.first;
-            size_t width = blockIndices[i].second.second;
-
-            // Column may not be fully allocated
-            m.block(row, row, column.matrixHeight(), width) 
-                = column.blockRange(0, column.matrixHeight());
-        }
-
-        // Need to zero out the upper diagonal
-        m.triangularView<Eigen::StrictlyUpper>().setZero();
-    }
-
-    clique->printClique(cout);
-    cout << m << endl;
-
-    char t;
-    cout << "end gather" << endl;
-    cin >> t;
-    cout << endl;
-
-
-}
-*/
-
-bool CholeskyEliminationTree::gatherColumns(
-        sharedClique clique, 
-        ColMajorMatrix* m,
-        size_t* totalWidth,
-        size_t* totalHeight,
-        vector<Key>* keys,
-        vector<size_t>* widths,
-        vector<size_t>* heights,
-        BlockIndexVector* blockIndices,
-        vector<LowerTriangularColumnMatrix*>* columns) {
-
-    // cout << "gatherColumns" << endl;
-
-    // TODO: Optimize this for when clique only has one column
-    // At this point, some new columns may not be allocated nor fully allocated
-    *totalWidth = 0;
-    for(sharedNode node : clique->nodes) {
-        auto column_ptr = &cholesky_.column(node->key);
-        if(!column_ptr->allocated()) {
-            // cout << "skipped " << node->key << endl;
-            assert(node == clique->back());
-            break;
-        }
-        else {
-            // cout << "gathering " << node->key << endl;
-        }
-        keys->push_back(node->key);
-        columns->push_back(column_ptr);
-        widths->push_back(column_ptr->width());
-        heights->push_back(column_ptr->matrixHeight());
-        *totalWidth += widths->back();
-    }
-
-    if(columns->empty()) {
-        // Generally the final column is in a clique with the second
-        // to last column
-        return false;
-    }
-
-    *totalHeight = heights->front();   // This needs to account for the b row
-
-    *m = ColMajorMatrix(*totalHeight, *totalWidth);
-
-    size_t curCol = 0, curRow = 0;
-    for(size_t i = 0; i < keys->size(); i++) {
-        m->block(curRow, curCol, (*heights)[i], (*widths)[i]) 
-            = (*columns)[i]->blockRange(0, (*heights)[i]);
-
-        curCol += (*widths)[i];
-        curRow += (*widths)[i];
-    }
-
-    // Need to zero out the upper diagonal
-    Block Dblock = m->block(0, 0, *totalWidth, *totalWidth);
-    Eigen::VectorXd D = Dblock.diagonal();
-    Dblock.triangularView<Eigen::Upper>().setZero();
-    Dblock.diagonal() = D;
-
-    // Populate blockIndices for the new column, it can just be diagonal block
-    // plus the rest of the last column's blockIndices
-    *blockIndices = vector<pair<Key, RowHeightPair>>(1, {keys->front(), {0, *totalWidth}});
-    const auto& lastBlockIndices = columns->back()->blockIndices();
-    curRow = *totalWidth;
-    for(size_t i = 1; i < lastBlockIndices.size(); i++) {
-        const auto& p = lastBlockIndices[i];
-        const Key key = p.first;
-        const size_t height = p.second.second;
-        blockIndices->push_back({key, {curRow, height}});
-        curRow += height;
-    }
-
-    return true;
-}
-
-/*
-void CholeskyEliminationTree::scatterColumns(const ColMajorMatrix& m, 
-        const std::vector<size_t>& widths,
-        const std::vector<size_t>& heights,
-        const std::vector<LowerTriangularColumnMatrix*>& columns) {
-    // cout << "In scatterColumns" << endl;
-    size_t curRow = 0;
-    for(size_t i = 0; i < widths.size(); i++) {
-        auto& destColumn = *(columns[i]);
-        size_t width = widths[i];
-        size_t height = heights[i];
-        // cout << "key = " << destColumn.key() << " width = " << width << " height = " << height << " col height = " << destColumn.height() << endl;
-        destColumn.blockRange(0, height) 
-            = m.block(curRow, curRow, height, width);
-        curRow += width;
-    }
-}
-*/
-
-/*
-void CholeskyEliminationTree::editAndRestoreFromClique(sharedClique clique) {
-    assert(clique->marked);
-    assert(clique->has_edit || !clique->is_reconstruct);
-    // cout << "in edit and restore. editCols.size = " << clique->editCols.size() << " " << clique->is_reconstruct << endl;
-    vector<Key> editCols;
-    editCols.reserve(clique->back()->colStructure.size() - 1);
-    for(size_t i = 1; i < clique->back()->colStructure.size(); i++) {
-        Key key = clique->back()->colStructure[i];
-        if(markedStatus_[key] == EDIT) {
-            editCols.push_back(key);
-        }
-    }
-
-    // cout << "editCols: ";
-    // for(Key k : editCols) {
-    //     cout << k << " ";
-    // }
-    // cout << endl;
-
-    // Assume columns are already gathered in workspace
-    const auto& blockInfo = workspace.getBlockInfo(clique->workspaceIndex);
-    auto m = workspace.matrix(clique->workspaceIndex);
-
-    if(!editCols.empty()) {
-        editOrReconstructFromColumn(m, blockInfo, editCols, 1);
-    }
-
-    if(!clique->is_reconstruct) {
-        restoreColumn(m, blockInfo);
-    }
-}
-*/
 
 void CholeskyEliminationTree::restoreClique(
     sharedClique clique) {
-    // Eigen::Map<ColMajorMatrix> m,
-    // const Workspace::BlockInfo& blockInfo) {
 
     auto col = workspace.get_matrices(clique->workspaceIndex)[0];
 
@@ -2452,60 +1095,11 @@ void CholeskyEliminationTree::restoreClique(
     size_t diagWidth = blockIndices[clique->cliqueSize()].second.first;
     auto D = Eigen::Block<Eigen::Map<ColMajorMatrix>>(col, 0, 0, diagWidth, diagWidth);
 
-    // size_t totalHeight = blockInfo.r;
-    // assert(totalHeight == blockInfo.blockIndices.back().second.first + 1);
-    // assert(diagWidth == col.cols());
-
-
-    // Block D = m.block(0, 0, diagWidth, diagWidth);
-    // Block col = m.block(0, 0, totalHeight, diagWidth);
-
     D.triangularView<Eigen::StrictlyUpper>().setZero();
 
     col *= D.transpose();
 }
 
-/*
-void CholeskyEliminationTree::restoreColumn(ColMajorMatrix& m, 
-        size_t diagWidth, size_t totalHeight) {
-
-    Block D = m.block(0, 0, diagWidth, diagWidth);
-    Block col = m.block(0, 0, totalHeight, diagWidth);
-    // Reset D's upper triangular matrix
-    Eigen::VectorXd d = D.diagonal();
-    D.triangularView<Eigen::Upper>().setZero();
-    D.diagonal() = d;
-
-    // ColMajorMatrix colCopy = col;
-    // ColMajorMatrix DTCopy = D.transpose();
-
-    // We did L^-1 B^T before, now we want to do L*B^T which is B*L^T
-    // col.noalias() = colCopy * DTCopy;
-    col *= D.transpose();
-
-}
-*/
-
-/*
-void CholeskyEliminationTree::restoreColumn(ColMajorMatrix& m, 
-        size_t totalWidth, size_t totalHeight) {
-
-    Block D = m.block(0, 0, totalWidth, totalWidth);
-    Block col = m.block(0, 0, totalHeight, totalWidth);
-    // Reset D's upper triangular matrix
-    Eigen::VectorXd d = D.diagonal();
-    D.triangularView<Eigen::Upper>().setZero();
-    D.diagonal() = d;
-
-    // ColMajorMatrix colCopy = col;
-    // ColMajorMatrix DTCopy = D.transpose();
-
-    // We did L^-1 B^T before, now we want to do L*B^T which is B*L^T
-    // col.noalias() = colCopy * DTCopy;
-    col *= D.transpose();
-
-}
-*/
 
 void CholeskyEliminationTree::editOrReconstructFromClique(
     sharedClique clique,
@@ -2545,17 +1139,6 @@ void CholeskyEliminationTree::editOrReconstructFromClique(
         auto destIt = destCols.begin();
         auto destEnd = destCols.end();
 
-        // cout << "blockIndices: ";
-        // for(auto p : blockIndices) {
-        //     cout << p.first << " ";
-        // }
-        // cout << endl;
-        // cout << "destCols: ";
-        // for(Key k : destCols) {
-        //     cout << k << " ";
-        // }
-        // cout << endl;
-
         // Set unused columns to be 0 since we did everything at once
         for(size_t i = cliqueSize; i < blockIndices.size(); i++) {
             Key key = blockIndices[i].first;   
@@ -2563,10 +1146,8 @@ void CholeskyEliminationTree::editOrReconstructFromClique(
             if(destIt == destEnd || *destIt != key) {
                 size_t col = blockIndices[i].second.first - diagWidth;   
                 size_t width = blockIndices[i].second.second;   
-                // cout << "col = " << col << " cHeight = " << cHeight << " width = " << width << endl;
 
                 block(C, 0, col, cHeight, width).setZero();
-                // m.block(0, col, totalHeight, width).setZero();
             }
             else if (destIt != destEnd){
                 destIt++;
@@ -2592,451 +1173,6 @@ void CholeskyEliminationTree::editOrReconstructFromClique(
                     sign * block(DB, col, 0, height, diagWidth)
                          * block(DB, col, 0, width, diagWidth).transpose();
             }
-        }
-    }
-}
-
-/*
-void CholeskyEliminationTree::editOrReconstructFromColumn(
-    const ColMajorMatrix& m,
-    const vector<pair<Key, RowHeightPair>>& blockStartVec,
-    const vector<Key>& destCols,
-    const vector<Key>& gatheredKeys,
-    double sign) {
-
-    bool processGrouped = true;
-    size_t destSize = destCols.size();
-    size_t totalSize = blockStartVec.size() - 1;
-    if(destSize * 2 < totalSize) {
-        processGrouped = false;
-        // cout << "edit single" << endl;
-    }
-
-    // Maybe we should have 2 ways of doing this, one where there are not
-    // a lot of edit keys, one where there are
-    size_t firstRow = blockStartVec[1].second.first;
-    size_t bHeight = m.rows() - firstRow;
-    size_t bWidth = blockStartVec[0].second.second;             // diagonal height
-
-    auto b = m.block(firstRow, 0, bHeight, bWidth);
-    ColMajorMatrix outerProduct;
-    if(processGrouped) {
-        outerProduct = ColMajorMatrix(bHeight, bHeight);
-        outerProduct.setZero();
-        outerProduct.selfadjointView<Eigen::Lower>().rankUpdate(b, sign);
-    }
-
-    auto destIter = destCols.begin();
-    auto destEnd = destCols.end();
-    for(size_t i = 1; i < blockStartVec.size(); i++) {
-        // Start from index 1 to skip diagonal block
-        const Key otherKey = blockStartVec[i].first;
-        if(destIter != destEnd
-                && *destIter == otherKey) {
-            // Found ancestor key 
-            destIter++;
-        }
-        else {
-            continue;
-        }
-
-        const auto p = blockStartVec[i].second;
-        const size_t otherRow = p.first;
-        const size_t otherHeight = p.second;
-
-        auto& destColumn = cholesky_.column(otherKey);
-    
-        // Find destination indices first
-        vector<RowHeightPair> destBlockStart;
-        const auto& destBlockIndices = destColumn.blockIndices();
-        findDestBlocks(blockStartVec.begin() + i,
-                       blockStartVec.end(),
-                       destBlockIndices,
-                       &destBlockStart);
-
-        // Start from row 0 for edit since we don't edit the diagonal
-        size_t curRow = 0;
-        size_t curCol = otherRow - bWidth;
-
-        if(!processGrouped) {
-            outerProduct = sign * m.block(otherRow, 0, bHeight - curCol, bWidth) * m.block(otherRow, 0, otherHeight, bWidth).transpose();
-        }
-
-        Block outerProductColumn = processGrouped? outerProduct.block(curCol, curCol, bHeight - curCol, otherHeight) : outerProduct.block(0, 0, bHeight - curCol, otherHeight);
-        // if(editGrouped) {
-        //     outerProductColumn 
-        //         = outerProduct.block(curCol, curCol, bHeight - curCol, otherHeight);
-        // }
-
-        for(const auto& p : destBlockStart) {
-            const size_t destRow = p.first;
-            const size_t destHeight = p.second;
-            // For edit, we ADD the block 
-            // destColumn.blockRange(destRow, destHeight)
-            //     += outerProduct.block(curRow, curCol, destHeight, otherHeight);
-            destColumn.blockRange(destRow, destHeight)
-                += outerProductColumn.block(curRow, 0, destHeight, otherHeight);
-            curRow += destHeight;
-        }
-    }
-}
-*/
-
-void CholeskyEliminationTree::editFromColumn(const ColMajorMatrix& m,
-    const vector<pair<Key, RowHeightPair>>& blockStartVec,
-    const vector<Key>& editCols,
-    const vector<Key>& gatheredKeys) {
-    assert(!editCols.empty());
-    // assert(editCols.back() != LAST_ROW);
-
-    assert(blockStartVec.size() >= 2);
-    assert(sorted_no_duplicates(editCols));
-
-    bool editGrouped = true;
-    size_t editSize = editCols.size();
-    size_t totalSize = blockStartVec.size() - 1;
-    if(editSize * 6 < totalSize) {
-        editGrouped = false;
-        // cout << "edit single" << endl;
-    }
-
-    // Maybe we should have 2 ways of doing this, one where there are not
-    // a lot of edit keys, one where there are
-    size_t firstRow = blockStartVec[1].second.first;
-    size_t bHeight = m.rows() - firstRow;
-    size_t bWidth = blockStartVec[0].second.second;             // diagonal height
-
-    auto b = m.block(firstRow, 0, bHeight, bWidth);
-    ColMajorMatrix outerProduct;
-    if(editGrouped) {
-        outerProduct = ColMajorMatrix(bHeight, bHeight);
-        outerProduct.setZero();
-        outerProduct.selfadjointView<Eigen::Lower>().rankUpdate(b);
-    }
-
-    auto editIter = editCols.begin();
-    auto editEnd = editCols.end();
-    for(size_t i = 1; i < blockStartVec.size(); i++) {
-        // Start from index 1 to skip diagonal block
-        const Key otherKey = blockStartVec[i].first;
-        if(editIter != editEnd
-                && *editIter == otherKey) {
-            // Found ancestor key 
-            editIter++;
-        }
-        else {
-            continue;
-        }
-
-        const auto p = blockStartVec[i].second;
-        const size_t otherRow = p.first;
-        const size_t otherHeight = p.second;
-
-        auto& destColumn = cholesky_.column(otherKey);
-    
-        // Find destination indices first
-        vector<RowHeightPair> destBlockStart;
-        const auto& destBlockIndices = destColumn.blockIndices();
-        findDestBlocks(blockStartVec.begin() + i,
-                       blockStartVec.end(),
-                       destBlockIndices,
-                       &destBlockStart);
-
-        // Start from row 0 for edit since we don't edit the diagonal
-        size_t curRow = 0;
-        size_t curCol = otherRow - bWidth;
-
-        if(!editGrouped) {
-            outerProduct = m.block(otherRow, 0, bHeight - curCol, bWidth) * m.block(otherRow, 0, otherHeight, bWidth).transpose();
-        }
-
-        Block outerProductColumn = editGrouped? outerProduct.block(curCol, curCol, bHeight - curCol, otherHeight) : outerProduct.block(0, 0, bHeight - curCol, otherHeight);
-        // if(editGrouped) {
-        //     outerProductColumn 
-        //         = outerProduct.block(curCol, curCol, bHeight - curCol, otherHeight);
-        // }
-
-        for(const auto& p : destBlockStart) {
-            const size_t destRow = p.first;
-            const size_t destHeight = p.second;
-            // For edit, we ADD the block 
-            // destColumn.blockRange(destRow, destHeight)
-            //     += outerProduct.block(curRow, curCol, destHeight, otherHeight);
-            destColumn.blockRange(destRow, destHeight)
-                += outerProductColumn.block(curRow, 0, destHeight, otherHeight);
-            curRow += destHeight;
-        }
-
-        // // DEBUG
-        // for(const Key k : gatheredKeys) {
-        //     assert(descendantStatus[otherKey].find(k) != descendantStatus[otherKey].end());
-        //     assert(descendantStatus[otherKey].at(k) == EDIT);
-        //     descendantStatus[otherKey].at(k) = READY;
-        // }
-    }
-}
-
-/*
-void CholeskyEliminationTree::editFromColumn(const ColMajorMatrix& m,
-    const vector<pair<Key, RowHeightPair>>& blockStartVec,
-    const vector<Key>& editCols,
-    const vector<Key>& gatheredKeys) {
-    assert(!editCols.empty());
-    // assert(editCols.back() != LAST_ROW);
-
-    assert(blockStartVec.size() >= 2);
-    assert(sorted_no_duplicates(editCols));
-
-    bool editGrouped = true;
-    size_t editSize = editCols.size();
-    size_t totalSize = blockStartVec.size() - 1;
-    if(editSize * 2 < totalSize) {
-        editGrouped = false;
-    }
-
-    // Maybe we should have 2 ways of doing this, one where there are not
-    // a lot of edit keys, one where there are
-    size_t firstRow = blockStartVec[1].second.first;
-    size_t bHeight = m.rows() - firstRow;
-    size_t bWidth = blockStartVec[0].second.second;             // diagonal height
-
-    auto b = m.block(firstRow, 0, bHeight, bWidth);
-    ColMajorMatrix outerProduct(bHeight, bHeight);
-    outerProduct.setZero();
-
-    outerProduct.selfadjointView<Eigen::Lower>().rankUpdate(b);
-
-    auto editIter = editCols.begin();
-    auto editEnd = editCols.end();
-    for(size_t i = 1; i < blockStartVec.size(); i++) {
-        // Start from index 1 to skip diagonal block
-        const Key otherKey = blockStartVec[i].first;
-        if(editIter != editEnd
-                && *editIter == otherKey) {
-            // Found ancestor key 
-            editIter++;
-        }
-        else {
-            continue;
-        }
-
-        const auto p = blockStartVec[i].second;
-        const size_t otherRow = p.first;
-        const size_t otherHeight = p.second;
-
-        auto& destColumn = cholesky_.column(otherKey);
-    
-        // Find destination indices first
-        vector<RowHeightPair> destBlockStart;
-        const auto& destBlockIndices = destColumn.blockIndices();
-        findDestBlocks(blockStartVec.begin() + i,
-                       blockStartVec.end(),
-                       destBlockIndices,
-                       &destBlockStart);
-
-        // Start from row 0 for edit since we don't edit the diagonal
-        size_t curRow = otherRow - bWidth;
-        size_t curCol = otherRow - bWidth;
-        for(const auto& p : destBlockStart) {
-            const size_t destRow = p.first;
-            const size_t destHeight = p.second;
-            // For edit, we ADD the block 
-            destColumn.blockRange(destRow, destHeight)
-                += outerProduct.block(curRow, curCol, destHeight, otherHeight);
-            curRow += destHeight;
-        }
-
-        // // DEBUG
-        // for(const Key k : gatheredKeys) {
-        //     assert(descendantStatus[otherKey].find(k) != descendantStatus[otherKey].end());
-        //     assert(descendantStatus[otherKey].at(k) == EDIT);
-        //     descendantStatus[otherKey].at(k) = READY;
-        // }
-    }
-}
-*/
-
-/*
-bool CholeskyEliminationTree::reconstructFromClique(sharedClique clique) {
-    // First gather all the columns
-    // then call reconstruct column
-    
-    const Key firstKey = clique->front()->key;
-    size_t totalWidth = 0;
-    size_t totalHeight = 0;
-    vector<Key> keys;
-    vector<size_t> widths;
-    vector<size_t> heights;
-    BlockIndexVector blockStartVec;
-    vector<LowerTriangularColumnMatrix*> columns;
-
-    vector<Key> reconstructCols;
-    reconstructCols.reserve(clique->back()->colStructure.size());
-    for(Key key : clique->back()->colStructure) {
-        if(markedStatus_[key] == RECONSTRUCT) {
-            // cout << "Pushed " << key << " to reconstructCols" << endl;
-            reconstructCols.push_back(key);
-        }
-    }
-    assert(sorted_no_duplicates(clique->back()->colStructure));
-
-    // cout << "reconstructCols: ";
-    // for(Key k : reconstructCols) {
-    //     cout << "[" << k << " " << ordering_[k] << "] ";
-    // }
-    // cout << endl;
-
-    assert(sorted_no_duplicates(reconstructCols));
-
-    if(reconstructCols.empty()) {
-        return false;
-    }
-
-    ColMajorMatrix m;
-
-    // bool gathered = gatherColumns(clique, &m, &totalWidth, &totalHeight, 
-    //                               &keys, &widths, &heights, &blockStartVec, &columns);
-    // assert(gathered);
-
-    // editOrReconstructFromColumn(m, blockStartVec, reconstructCols, keys, -1);
-    // reconstructFromColumn(m, blockStartVec, reconstructCols, keys);
-
-    return true;
-}
-*/
-
-/*
-bool CholeskyEliminationTree::reconstructFromClique(sharedClique clique) {
-    // First gather all the columns
-    // then call reconstruct column
-    
-    const Key firstKey = clique->front()->key;
-    size_t totalWidth = 0;
-    size_t totalHeight = 0;
-    vector<Key> keys;
-    vector<size_t> widths;
-    vector<size_t> heights;
-    BlockIndexVector blockStartVec;
-    vector<LowerTriangularColumnMatrix*> columns;
-
-    vector<Key> reconstructCols;
-    reconstructCols.reserve(clique->back()->colStructure.size());
-    for(Key key : clique->back()->colStructure) {
-        if(markedStatus_[key] == RECONSTRUCT) {
-            // cout << "Pushed " << key << " to reconstructCols" << endl;
-            reconstructCols.push_back(key);
-        }
-    }
-    assert(sorted_no_duplicates(clique->back()->colStructure));
-
-    // cout << "reconstructCols: ";
-    // for(Key k : reconstructCols) {
-    //     cout << "[" << k << " " << ordering_[k] << "] ";
-    // }
-    // cout << endl;
-
-    assert(sorted_no_duplicates(reconstructCols));
-
-    if(reconstructCols.empty()) {
-        return false;
-    }
-
-    ColMajorMatrix m;
-
-    // bool gathered = gatherColumns(clique, &m, &totalWidth, &totalHeight, 
-    //                               &keys, &widths, &heights, &blockStartVec, &columns);
-    // assert(gathered);
-
-    // editOrReconstructFromColumn(m, blockStartVec, reconstructCols, keys, -1);
-    // reconstructFromColumn(m, blockStartVec, reconstructCols, keys);
-
-    return true;
-}
-*/
-
-void CholeskyEliminationTree::reconstructFromColumn(const ColMajorMatrix& m,
-    const vector<std::pair<Key, RowHeightPair>>& blockStartVec,
-    const vector<Key>& reconstructCols,
-    const vector<Key>& gatheredKeys) {
-    assert(!reconstructCols.empty());
-    assert(sorted_no_duplicates(reconstructCols));
-    // assert(reconstructCols.back() != LAST_ROW);
-
-    assert(blockStartVec.size() >= 2);
-
-    bool reconstructGrouped = true;
-    size_t reconstructSize = reconstructCols.size();
-    size_t totalSize = blockStartVec.size() - 1;
-    if(reconstructSize * 6 < totalSize) {
-        reconstructGrouped = false;
-        // cout << "edit single" << endl;
-    }
-
-    // Maybe we should have 2 ways of doing this, one where there are not
-    // a lot of reconstruct keys, one where there are
-    size_t firstRow = blockStartVec[1].second.first;
-    size_t bHeight = m.rows() - firstRow;
-    size_t bWidth = blockStartVec[0].second.second;             // diagonal height
-
-    auto b = m.block(firstRow, 0, bHeight, bWidth);
-    ColMajorMatrix outerProduct;
-    if(reconstructGrouped) {
-        outerProduct = ColMajorMatrix(bHeight, bHeight);
-        outerProduct.setZero();
-        outerProduct.selfadjointView<Eigen::Lower>().rankUpdate(b);
-    }
-
-    auto reconstructIter = reconstructCols.begin();
-    auto reconstructEnd = reconstructCols.end();
-    for(size_t i = 1; i < blockStartVec.size(); i++) {
-        // Start from index 1 to skip diagonal block
-        const Key otherKey = blockStartVec[i].first;
-        if(reconstructIter != reconstructEnd
-                && *reconstructIter == otherKey) {
-            // Found ancestor key 
-            reconstructIter++;
-            // cout << "Reconstruct column " << otherKey << endl;
-        }
-        else {
-            continue;
-        }
-
-        const auto p = blockStartVec[i].second;
-        const size_t otherRow = p.first;
-        const size_t otherHeight = p.second;
-
-        auto& destColumn = cholesky_.column(otherKey);
-    
-        // Find destination indices first
-        vector<RowHeightPair> destBlockStart;
-        const auto& destBlockIndices = destColumn.blockIndices();
-        findDestBlocks(blockStartVec.begin() + i,
-                       blockStartVec.end(),
-                       destBlockIndices,
-                       &destBlockStart);
-
-        // Start from row 0 for reconstruct since we don't reconstruct the diagonal
-        size_t curRow = 0;
-        size_t curCol = otherRow - bWidth;
-
-        if(!reconstructGrouped) {
-            outerProduct = m.block(otherRow, 0, bHeight - curCol, bWidth) * m.block(otherRow, 0, otherHeight, bWidth).transpose();
-        }
-
-        Block outerProductColumn = reconstructGrouped? outerProduct.block(curCol, curCol, bHeight - curCol, otherHeight) : outerProduct.block(0, 0, bHeight - curCol, otherHeight);
-
-        // size_t curRow = otherRow - bWidth;
-        // size_t curCol = otherRow - bWidth;
-        for(const auto& p : destBlockStart) {
-            const size_t destRow = p.first;
-            const size_t destHeight = p.second;
-            // cout << "destKey = " << destColumn.key() << " destRow = " << destRow << " destHeight = " << destHeight << endl;
-            // For reconstruct, we SUBTRACT the block 
-            // destColumn.blockRange(destRow, destHeight)
-            //     -= outerProduct.block(curRow, curCol, destHeight, otherHeight);
-            destColumn.blockRange(destRow, destHeight)
-                -= outerProductColumn.block(curRow, 0, destHeight, otherHeight);
-            curRow += destHeight;
         }
     }
 }
@@ -3122,12 +1258,6 @@ void CholeskyEliminationTree::mergeWorkspaceClique(sharedClique clique) {
 
         assert(childCol >= childDiagWidth);
 
-        // Need to copy last row though
-        // if(childKey == -1) {
-        //     // No need to copy last column
-        //     break;
-        // }
-
         const auto& pParent = parentBlockIndices.at(i);
         Key parentKey = pParent.first;
         size_t parentCol = pParent.second.first, parentWidth = pParent.second.second;
@@ -3206,134 +1336,6 @@ void CholeskyEliminationTree::mergeWorkspaceClique(sharedClique clique) {
     // cout << parentC << endl << endl;
 }
 
-/*
-void CholeskyEliminationTree::eliminateClique(sharedClique clique) {
-    // cout << "CholeskyEliminationTree::eliminateClique()" << endl;
-    // First gather all the columns
-    // then call eliminate column
-    const Key firstKey = clique->front()->key;
-    size_t totalWidth = 0;
-    size_t totalHeight = 0;
-    vector<Key> keys;
-    vector<size_t> widths;
-    vector<size_t> heights;
-    BlockIndexVector blockStartVec;
-    vector<LowerTriangularColumnMatrix*> columns;
-
-    ColMajorMatrix m;
-
-    // gatherColumns(clique, &m, &totalWidth, &totalHeight, 
-    //               &keys, &widths, &heights, &blockStartVec, &columns);
-
-    eliminateColumn(m, totalWidth, totalHeight, blockStartVec, keys);
-
-    scatterColumns(m, widths, heights, columns);
-}
-*/
-
-void CholeskyEliminationTree::eliminateColumn(ColMajorMatrix& m,
-        const size_t totalWidth,
-        const size_t totalHeight,
-        const vector<std::pair<Key, RowHeightPair>>& blockStartVec,
-        const vector<Key>& gatheredKeys) {
-
-    // cout << "Before eliminate column. m = " << endl << m << endl << endl;  
-
-    size_t diagonalWidth = totalWidth;
-    Block D = m.block(0, 0, diagonalWidth, diagonalWidth);
-    Eigen::LLT<Eigen::Ref<Block>, Eigen::Lower> llt(D);
-    if(llt.info() == Eigen::NumericalIssue) {
-        cout << "Diagonal block not positive definite!" << endl;
-        Key firstKey = blockStartVec[0].first;
-        cout << "First key: " << firstKey << " clique is_reconstruct? " << nodes_[firstKey]->clique->is_reconstruct << endl;
-        exit(1);
-    }
-    auto L = D.triangularView<Eigen::Lower>();
-
-    if(totalHeight > totalWidth) {  
-        size_t remainingHeight = totalHeight - totalWidth;
-        Block B = m.block(totalWidth, 0, remainingHeight, totalWidth);
-        L.solveInPlace(B.transpose());
-
-        // if(nodes_.size() >= 2500) {
-        //     cout << remainingHeight << " " << totalWidth << endl;
-        // }
-
-        ColMajorMatrix outerProduct(remainingHeight, remainingHeight);
-        outerProduct.setZero();
-        outerProduct.selfadjointView<Eigen::Lower>().rankUpdate(B);
-
-        for(size_t i = 1; i < blockStartVec.size() - 1; i++) {
-            // Start from index 1 to skip diagonal block
-            // end at -1 as the b row cannot be a source of outerproduct
-            const Key otherKey = blockStartVec[i].first;
-
-            const auto p = blockStartVec[i].second;
-            const size_t otherRow = p.first;
-            const size_t otherHeight = p.second;
-
-            auto& destColumn = cholesky_.column(otherKey);
-
-            // Find destination indices first
-            vector<RowHeightPair> destBlockStart;
-            const auto& destBlockIndices = destColumn.blockIndices();
-            // cout << "eliminate column findDestBlocks otherKey = " << otherKey << endl; 
-            findDestBlocks(blockStartVec.begin() + i,
-                    blockStartVec.end(),
-                    destBlockIndices,
-                    &destBlockStart);
-
-            // Start from row 0 for reconstruct since we don't reconstruct the diagonal
-            size_t curRow = otherRow - diagonalWidth;
-            size_t curCol = otherRow - diagonalWidth;
-            for(const auto& p : destBlockStart) {
-                const size_t destRow = p.first;
-                const size_t destHeight = p.second;
-                // cout << "destColumn " << destColumn.key() << " destRow = " << destRow 
-                //      << " destHeight = " << destHeight << endl << endl;
-                // For eliminate, we SUBTRACT the block 
-                destColumn.blockRange(destRow, destHeight)
-                    -= outerProduct.block(curRow, curCol, destHeight, otherHeight);
-                curRow += destHeight;
-            }
-        }
-    }
-    // cout << "After eliminate column. m = " << endl << m << endl << endl;  
-
-}
-
-template<typename Iterator>
-void CholeskyEliminationTree::findDestBlocks(Iterator start, Iterator end, 
-        const BlockIndexVector& destBlockIndices,
-        std::vector<RowHeightPair>* destBlockStart) {
-
-    destBlockStart->clear();
-
-    auto destIt = destBlockIndices.begin();
-    auto destEnd = destBlockIndices.end();
-    size_t lastRow = LAST_ROW - 1;    // Use to merge destination blocks
-    for(; start != end; start++) {
-        const Key destKey = start->first;
-
-        while(destIt->first != destKey) {
-            destIt++;
-            assert(destIt != destEnd);
-        }
-
-        size_t destRow = destIt->second.first;
-        size_t destHeight = destIt->second.second;
-
-        if(destRow != lastRow) {
-            destBlockStart->push_back({destRow, destHeight});
-        }
-        else {
-            // merge blocks
-            destBlockStart->back().second += destHeight;
-        }
-        lastRow = destRow + destHeight;
-    }
-}
-
 void CholeskyEliminationTree::simpleAtB(Block A, Block B, Block C, 
                                         size_t m, size_t k, size_t n, bool add) {
     if(add) {
@@ -3346,135 +1348,6 @@ void CholeskyEliminationTree::simpleAtB(Block A, Block B, Block C,
         }
     }
 }
-
-/*
-// subtract AtA from each column of the clique
-void CholeskyEliminationTree::prepareEditClique(sharedClique clique) {
-
-    assert(0);
-    auto m = workspace.matrix(clique->workspaceIndex);
-    const auto& blockInfo = workspace.getBlockInfo(clique->workspaceIndex);
-
-    unordered_map<Key, RowHeightPair> keyRowMap;
-
-    for(const auto& p : blockInfo.blockIndices) {
-        keyRowMap.insert(p);
-    }
-
-    for(sharedNode node : clique->nodes) {
-        // Find nodes that are relinearized and the lowest node in the factor
-        // must be in our clique
-        for(const FactorIndex factorIndex : node->factorIndices) {
-            // Factor must be relinearized
-            if(factorLinearizeStatus_[factorIndex] != RELINEARIZED) {
-                continue;
-            }
-
-            sharedFactor factor = factors_[factorIndex];
-
-            // Node must be lowest node in factor
-            // We need this to ensure there is an allocated entry in the workspace
-            // for this AtA bock
-            bool lowestKeyFlag = true;
-            for(const Key factorKey : factor->keys()) {
-                if(orderingLess(factorKey, node->key)) {
-                    lowestKeyFlag = false;
-                    break;
-                }
-            }
-            if(!lowestKeyFlag) {
-                continue;
-            }
-
-            factorLinearizeStatus_[factorIndex] = UNLINEARIZED;
-
-            // Copy the keys for sorting
-            auto factorKeys = factor->keys();
-            std::sort(factorKeys.begin(), factorKeys.end(), orderingLess);
-            factorKeys.push_back(-1);   // add last row to the back
-
-            for(size_t i = 0; i < factorKeys.size() - 1; i++) {
-                const Key lowerKey = factorKeys[i];
-                if(markedStatus_[lowerKey] != EDIT) {
-                    continue;
-                }
-                const auto& p1 = keyRowMap.at(lowerKey);
-                const size_t& destCol = p1.first;
-                const size_t& destWidth = p1.second;
-
-                for(const Key higherKey : factorKeys) {
-                    assert(higherKey == -1 || !orderingLess(higherKey, lowerKey));
-                    const auto& p2 = keyRowMap.at(higherKey);
-                    const size_t& destRow = p2.first;
-                    const size_t& destHeight = p2.second;
-
-                    // SUBTRACT AtA block (lastRow is included)
-                    block(m, destRow, destCol, destHeight, destWidth) 
-                        -= jacobian_.block(factorIndex, higherKey).transpose() 
-                            * jacobian_.block(factorIndex, lowerKey);
-                }
-            
-            }
-        }
-    }
-}
-*/
-
-/*
-// subtract AtA from each column of the clique
-void CholeskyEliminationTree::prepareEditClique(sharedClique clique) {
-    for(sharedNode node : clique->nodes) {
-        prepareEditColumn(node);
-    }
-}
-
-void CholeskyEliminationTree::prepareEditColumn(sharedNode node) {
-    const Key key = node->key;
-    // cout << "[CholeskyEliminationTree] prepareEditColumn. key = " << key << endl;
-    LowerTriangularColumnMatrix& column = cholesky_.column(key);
-
-    // Sort rows in order
-    map<Key, vector<FactorIndex>, OrderingLess> destIndices(orderingLess);
-
-    for(const FactorIndex factorIndex : node->factorIndices) {
-        // Unlinearized factors don't need to be reset
-        if(factorLinearizeStatus_[factorIndex] == RELINEARIZED) {
-            sharedFactor factor = factors_[factorIndex];
-            for(const Key otherKey : factor->keys()) {
-                // This key need to be added to AtA
-                if(!orderingLess(otherKey, key)) {
-                    destIndices[otherKey].push_back(factorIndex);
-                }
-            }
-
-            // Do Atb here since it only needs to be done once per factor
-            // SUBTRACT Atb for edits
-            column.lastRow()
-                -= jacobian_.block(factorIndex, -1).transpose() * jacobian_.block(factorIndex, key);
-        }
-    }
-
-    auto it = column.blockIndices().begin();
-    auto itEnd = column.blockIndices().end();
-
-    // Now subtract factors
-    for(auto& p : destIndices) {
-        Key otherKey = p.first;
-        while(it->first != otherKey) {
-            it++;
-            assert(it != itEnd);    // Our block index must already have allocated the block
-        }
-        const size_t& destRow = it->second.first;
-        const size_t& destHeight = it->second.second;
-
-        for(FactorIndex factorIndex : p.second) {
-            // SUBTRACT AtA block
-            column.blockRange(destRow, destHeight)
-                -= jacobian_.block(factorIndex, otherKey).transpose() * jacobian_.block(factorIndex, key);
-        }
-    }
-}
-*/
 
 void CholeskyEliminationTree::prepareEliminateClique(sharedClique clique, const Values& theta) {
 
@@ -3585,12 +1458,6 @@ void CholeskyEliminationTree::prepareEliminateClique(sharedClique clique, const 
                 Vector b(factor->dim());
                 factor->linearizeToMatrix(theta, &A, &b);
 
-                // for(int i = 0; i < factor->size(); i++) {
-                //     const Key factorKey = factor->keys()[i];
-                //     jacobian_.block(factorIndex, factorKey) = A[i];
-                // }
-                // jacobian_.block(factorIndex, -1) = b;
-
                 size_t curCol = 0;
                 for(int i = 0; i < factorBlockIndices.size() - 1; i++) {
                     Key key;
@@ -3647,183 +1514,9 @@ void CholeskyEliminationTree::prepareEliminateClique(sharedClique clique, const 
                     }
                 }
             }
-
-            // for(size_t i = 0; i < factorKeys.size() - 1; i++) {
-            //     const Key lowerKey = factorKeys[i];
-            //     if(factorLinearized && 
-            //             (markedStatus_[lowerKey] == EDIT || markedStatus_[lowerKey] == UNMARKED)) {
-            //         // Skip factor-node that is LINEARIZED-EDIT or LINEARIZE-UNMARKED
-            //         continue;
-            //     }
-            //     bool inClique = firstCliqueAncestor == -1 
-            //                         || orderingLess(lowerKey, firstCliqueAncestor);
-            //     const auto& p1 = keyRowMap.at(lowerKey);
-            //     const size_t& destCol = p1.first;
-            //     const size_t& destWidth = p1.second;
-
-            //     for(size_t j = i; j < factorKeys.size(); j++) {
-            //         const Key higherKey = factorKeys[j];
-            //         // cout << "AtA " << lowerKey << " " << higherKey << endl;
-            //         assert(higherKey == -1 || !orderingLess(higherKey, lowerKey));
-            //         const auto& p2 = keyRowMap.at(higherKey);
-            //         const size_t& destRow = p2.first;
-            //         const size_t& destHeight = p2.second;
-
-            //         if(inClique) {
-            //             // ADD AtA block (lastRow is included)
-            //             block(DB, destRow, destCol, destHeight, destWidth) 
-            //                 += jacobian_.block(factorIndex, higherKey).transpose() 
-            //                     * jacobian_.block(factorIndex, lowerKey);
-            //         }
-            //         else {
-            //             // ADD AtA block (lastRow is included)
-            //             block(C, destRow - diagWidth, destCol - diagWidth, destHeight, destWidth) 
-            //                 += jacobian_.block(factorIndex, higherKey).transpose() 
-            //                     * jacobian_.block(factorIndex, lowerKey);
-            //         }
-            //     }
-            // 
-            // }
         }
     }
 }
-
-/*
-void CholeskyEliminationTree::prepareEliminateClique(sharedClique clique, const Values& theta) {
-    for(sharedNode node : clique->nodes) {
-        prepareEliminateColumn(node, clique->is_reconstruct, theta);
-    }
-}
-
-void CholeskyEliminationTree::prepareEliminateColumn(sharedNode node, 
-        bool is_reconstruct, const Values& theta) {
-    // All factors of this node should be relinearized
-    const Key key = node->key;
-    LowerTriangularColumnMatrix& column = cholesky_.column(key);
-
-    unordered_map<Key, RowHeightPair> blockIndexMap;
-    for(auto& p : column.blockIndices()) {
-        blockIndexMap.insert(p);
-    }
-
-    for(const FactorIndex factorIndex : node->factorIndices) {
-        if(!is_reconstruct && factorLinearizeStatus_[factorIndex] == LINEARIZED) {
-            // Can skip factor if node is edit and factor has already been linearized
-            // But cannot skip if the factor is newly linearized, in that
-            // case we have to add AtA
-            continue;
-        }
-
-        sharedFactor factor = factors_[factorIndex];
-        if(factorLinearizeStatus_[factorIndex] != LINEARIZED 
-                && factorLinearizeStatus_[factorIndex] != NEWLINEARIZED) {
-            vector<Matrix> A;
-            Vector b(factor->dim());
-            factor->linearizeToMatrix(theta, &A, &b);
-            for(int i = 0; i < factor->size(); i++) {
-                const Key factorKey = factor->keys()[i];
-                jacobian_.block(factorIndex, factorKey) = A[i];
-            }
-            jacobian_.block(factorIndex, -1) = b;
-            factorLinearizeStatus_[factorIndex] = NEWLINEARIZED;
-        }
-        bool lastKeyFlag = true;
-        for(Key otherKey : factor->keys()) {
-            if(!orderingLess(otherKey, key)) {
-                auto& p = blockIndexMap.at(otherKey);
-                size_t& destRow = p.first;
-                size_t& destHeight = p.second;
-                column.blockRange(destRow, destHeight)
-                    += jacobian_.block(factorIndex, otherKey).transpose() * jacobian_.block(factorIndex, key);
-
-                if(key != otherKey) {
-                    lastKeyFlag = false;
-                }
-            }
-        }
-        // Atb row
-        column.lastRow()
-            += jacobian_.block(factorIndex, -1).transpose() * jacobian_.block(factorIndex, key);
-        if(lastKeyFlag) {
-            factorLinearizeStatus_[factorIndex] = LINEARIZED;
-        }
-    }
-}
-*/
-
-/*
-void CholeskyEliminationTree::prepareEliminateColumn(sharedNode node, 
-        bool is_reconstruct, const Values& theta) {
-    // All factors of this node should be relinearized
-    const Key key = node->key;
-    LowerTriangularColumnMatrix& column = cholesky_.column(key);
-
-    // Sort rows in order
-    map<Key, vector<FactorIndex>, OrderingLess> destIndices(orderingLess);
-
-    for(const FactorIndex factorIndex : node->factorIndices) {
-        if(!is_reconstruct && factorLinearizeStatus_[factorIndex] == LINEARIZED) {
-            // Can skip factor if node is edit and factor has already been linearized
-            // But cannot skip if the factor is newly linearized, in that
-            // case we have to add AtA
-            continue;
-        }
-        sharedFactor factor = factors_[factorIndex];
-
-        if(factorLinearizeStatus_[factorIndex] != LINEARIZED 
-                && factorLinearizeStatus_[factorIndex] != NEWLINEARIZED) {
-            vector<Matrix> A;
-            Vector b(factor->dim());
-            factor->linearizeToMatrix(theta, &A, &b);
-            for(int i = 0; i < factor->size(); i++) {
-                const Key factorKey = factor->keys()[i];
-                jacobian_.block(factorIndex, factorKey) = A[i];
-            }
-            jacobian_.block(factorIndex, -1) = b;
-            factorLinearizeStatus_[factorIndex] = NEWLINEARIZED;
-        }
-
-        bool lastKeyFlag = true;    // If this key is the last key in the factor
-        for(const Key otherKey : factor->keys()) {
-            // This key need to be added to AtA
-            if(!orderingLess(otherKey, key)) {
-                destIndices[otherKey].push_back(factorIndex);
-                if(otherKey != key) {
-                    // If there is a key higher order than this key
-                    lastKeyFlag = false;
-                }
-            }
-        }
-        if(lastKeyFlag) {
-            factorLinearizeStatus_[factorIndex] = LINEARIZED;
-        }
-
-        // Do Atb here since it only needs to be done once per factor
-        // ADD Atb
-        column.lastRow()
-            += jacobian_.block(factorIndex, -1).transpose() * jacobian_.block(factorIndex, key);
-    }
-
-    auto it = column.blockIndices().begin();
-    auto itEnd = column.blockIndices().end();
-
-    // Now ADD AtA blocks
-    for(auto& p : destIndices) {
-        Key otherKey = p.first;
-        while(it->first != otherKey) {
-            it++;
-            assert(it != itEnd);    // Our block index must already have allocated the block
-        }
-        const size_t& destRow = it->second.first;
-        const size_t& destHeight = it->second.second;
-
-        for(FactorIndex factorIndex : p.second) {
-            // ADD AtA block
-            column.blockRange(destRow, destHeight) += jacobian_.block(factorIndex, otherKey).transpose() * jacobian_.block(factorIndex, key);
-        }
-    }
-}
-*/
 
 void CholeskyEliminationTree::reorderClique(sharedClique clique) {
     // cout << "in reorder clique" << endl;
@@ -3883,84 +1576,6 @@ void CholeskyEliminationTree::reorderClique(sharedClique clique) {
     }
 }
 
-/*
-void CholeskyEliminationTree::reorderClique(sharedClique clique) {
-    // cout << "in reorder clique" << endl;
-    // This may not be true as we can have cliques that are newly marked
-    // not be part of the reordering
-    // assert(!clique->marked);
-
-    for(sharedNode node : clique->nodes) {
-        assert(node->ordering_version != ordering_version_);
-        node->ordering_version = ordering_version_;
-    }
-
-    // Find the keys that have been reordered and the lowest reordered key
-    auto& colStructure = clique->front()->colStructure; 
-    vector<Key> oldColStructure = clique->front()->colStructure; // make a copy to compare
-
-    std::sort(colStructure.begin(), colStructure.end(), orderingLess);
-
-    for(size_t i = 1; i < clique->nodes.size(); i++) {
-        sharedNode node = clique->nodes[i];
-        node->colStructure.clear();
-        node->colStructure.insert(node->colStructure.end(),
-                                  colStructure.begin() + i,
-                                  colStructure.end());
-    }
-
-    Key lowestReorderedIndex = -1;
-    vector<Key> reorderedKeys;
-    reorderedKeys.reserve(colStructure.size());
-
-    for(size_t i = 0; i < colStructure.size(); i++) {
-        if(lowestReorderedIndex == -1 && colStructure[i] != oldColStructure[i]) {
-            lowestReorderedIndex = i;
-        }
-        if(lowestReorderedIndex != -1) {
-            reorderedKeys.push_back(colStructure[i]);
-        }
-    }
-
-    if(lowestReorderedIndex != -1) {
-        // The reordered variables cannot be part of the clique otherwise it would've be reset
-        for(sharedNode node : clique->nodes) {
-            auto& column = cholesky_.column(node->key) ;
-
-            column.reorderBlocks(reorderedKeys, lowestReorderedIndex);
-
-            // Need to decrement this as the columns in the clique have decreasing number of blocks
-            lowestReorderedIndex--;
-        }
-
-        for(sharedNode node : clique->nodes) {
-            // Reorder factorColStructure only if we need to reorder colStructure
-            set<Key, OrderingLess> newFactorColStructure(orderingLess);
-            set<Key, OrderingLess> newChangedFactorColStructure(orderingLess);
-            for(Key k : node->factorColStructure) {
-                newFactorColStructure.insert(k);
-            }
-            node->factorColStructure = std::move(newFactorColStructure);
-            for(Key k : node->changedFactorColStructure) {
-                if(!orderingLess(k, node->key)) {
-                    newChangedFactorColStructure.insert(k);
-                }
-            }
-            node->changedFactorColStructure = std::move(newChangedFactorColStructure);
-        }
-    }
-
-    // cout << "reorderedKeys: ";
-    // for(const auto& p : reorderedKeys) {
-    //     cout << p << " ";
-    // }
-    // cout << endl;
-
-    assert(0);
-    // Rewrite this to reorder columns
-}
-*/
-
 void CholeskyEliminationTree::backwardSolve(VectorValues* delta_ptr, double tol) {
     // cout << "[CholeskyEliminationTree] backwardSolve()" << endl;
     // Do a pre-order traversal from top ot bottom
@@ -3976,12 +1591,6 @@ void CholeskyEliminationTree::backwardSolve(VectorValues* delta_ptr, double tol)
             if(clique->orderingVersion() != ordering_version_) {
                 reorderClique(clique);
             }
-
-            // cout << "Backsolve clique: ";
-            // for(sharedNode node : clique->nodes) {
-            //     cout << node->key << " ";
-            // }
-            // cout << endl;
 
             bool propagate = false;
             for(Key key : clique->back()->colStructure) {
@@ -3999,10 +1608,6 @@ void CholeskyEliminationTree::backwardSolve(VectorValues* delta_ptr, double tol)
                     stack.push_back({child, false});
                 }
             }
-            // else {
-            //     cout << "no propagate" << endl;
-            // }
-
         }
         else {
             stack.pop_back();
@@ -4085,125 +1690,7 @@ void CholeskyEliminationTree::backwardSolveClique(sharedClique clique,
         curRow += width;
     }
 
-    /*
-    size_t curRow = 0;
-    for(size_t i = 0; i < keys.size(); i++) {
-        Key key = keys[i];
-        size_t width = widths[i];
-        delta_ptr->at(key) = delta.block(curRow, 0, width, 1);
-        for(size_t j = 0; j < width; j++) {
-            double diff = delta(curRow + j, 0) - oldDelta(curRow + j, 0);
-            // cout << "abs(diff) = " << abs(diff) << endl;
-            if(abs(diff) >= tol) {
-                backSolveKeys_[key] = true;
-                break;
-            }
-        }
-        curRow += width;
-    }
-    */
-
-    /*
-    assert(0);
-
-    // First gather all the columns
-    const Key firstKey = clique->front()->key;
-    size_t totalWidth = 0;
-    size_t totalHeight = 0;
-    vector<Key> keys;
-    vector<size_t> widths;
-    vector<size_t> heights;
-    BlockIndexVector blockStartVec;
-    vector<LowerTriangularColumnMatrix*> columns;
-
-    ColMajorMatrix m;
-
-    bool gathered = gatherColumns(clique, &m, &totalWidth, &totalHeight, 
-                                  &keys, &widths, &heights, &blockStartVec, &columns);
-    assert(gathered);
-
-    // Copy over L^-1 Atb row
-    // Eigen::VectorXd delta = m.block(totalHeight - 1, 0, 1, totalWidth).transpose();
-    size_t firstRow = delta_.blockStartMap().at(firstKey).first;
-    Eigen::VectorXd oldDelta = delta_.blockRange(firstRow, totalWidth);
-    Block delta = delta_.blockRange(firstRow, totalWidth);
-    delta = m.block(totalHeight - 1, 0, 1, totalWidth).transpose();
-    // delta_.blockRange(firstRow, totalWidth) 
-    //     = m.block(totalHeight - 1, 0, 1, totalWidth).transpose();
-
-    if(totalHeight - 1 > totalWidth) {
-        // Disregard b row
-        const size_t remainingHeight = totalHeight - 1 - totalWidth;
-        Eigen::VectorXd gatherX(remainingHeight);
-        size_t curRow = 0;
-        for(size_t i = 1; i < blockStartVec.size() - 1; i++) {
-            // Do not need to gather last row
-            size_t otherKey = blockStartVec[i].first;
-            size_t otherHeight = blockStartVec[i].second.second;
-            gatherX.block(curRow, 0, otherHeight, 1) = delta_.block(otherKey);
-            curRow += otherHeight;
-        }
-        auto B = m.block(totalWidth, 0, remainingHeight, totalWidth); // below diagonal blocks
-        // delta_.blockRange(firstRow, totalWidth) -= B.transpose() * gatherX;
-        delta -= B.transpose() * gatherX;
-        // cout << "B.T = " << endl << B.transpose() << endl;
-        // cout << "gathered X = " << gatherX.transpose() << endl;
-    }
-
-    // Solve diagonal
-    auto D = m.block(0, 0, totalWidth, totalWidth);
-    auto LT = D.transpose().triangularView<Eigen::Upper>();
-    // LT.solveInPlace(delta_.blockRange(firstRow, totalWidth));
-    LT.solveInPlace(delta);
-
-    size_t curRow = 0;
-    for(size_t i = 0; i < keys.size(); i++) {
-        Key key = keys[i];
-        size_t width = widths[i];
-        delta_ptr->at(key) = delta.block(curRow, 0, width, 1);
-        for(size_t j = 0; j < width; j++) {
-            double diff = delta(curRow + j, 0) - oldDelta(curRow + j, 0);
-            // cout << "abs(diff) = " << abs(diff) << endl;
-            if(abs(diff) >= tol) {
-                backSolveKeys_[key] = true;
-                break;
-            }
-        }
-        curRow += width;
-    }
-    */
-
 }
-
-
-/*
-void CholeskyEliminationTree::backwardSolveNode(sharedNode node) {
-    const Key key = node->key;
-    const LowerTriangularColumnMatrix& column = cholesky_.column(key);
-    delta_.block(key) = y_.block(key);
-    if(column.hasBelowDiagonalBlocks()) {
-        const size_t remainingHeight = column.height() - column.width();
-        Eigen::VectorXd gatherX(remainingHeight);
-        const auto& blockStartVec = column.blockStartVec();
-        size_t curRow = 0;
-        for(size_t i = 1; i < blockStartVec.size(); i++) {
-            size_t otherKey = blockStartVec[i].first;
-            size_t otherHeight = blockStartVec[i].second.second;
-            gatherX.block(curRow, 0, otherHeight, 1) = delta_.block(otherKey);
-            curRow += otherHeight;
-        }
-        const constBlock B = column.belowDiagonalBlocks();
-        delta_.block(key) -= B.transpose() * gatherX;
-    }
-
-    // Solve diagonal
-    const constBlock D = column.diagonalBlock();
-    auto LT = D.transpose().triangularView<Eigen::Upper>();
-    LT.solveInPlace(delta_.block(key));
-
-    // cout << "BackSolve. Delta " << key << endl << delta_.block(key) << endl;
-}
-*/
 
 void CholeskyEliminationTree::updateDelta(VectorValues* delta_ptr) const {
     // cout << "[CholeskyEliminationTree] updateDelta()" << endl;
@@ -4211,7 +1698,6 @@ void CholeskyEliminationTree::updateDelta(VectorValues* delta_ptr) const {
     for(size_t k = 0; k < delta_ptr->size(); k++) {
         delta_ptr->at(k) = delta_.block(k);
     }
-    // delta_ptr->print();
 }
 
 bool CholeskyEliminationTree::sorted_no_duplicates(const vector<Key>& v) const {
@@ -4283,8 +1769,6 @@ void CholeskyEliminationTree::checkInvariant_afterSymbolic() const {
     for(sharedNode node : nodes_) {
         if(node->ordering_version == ordering_version_) {
             assert(sorted_no_duplicates(node->colStructure));
-            // assert(sorted_no_duplicates(descendants_.at(node->key)));
-            // assert(sorted_no_duplicates(changedDescendants_.at(node->key)));
         }
     }
     assert(root_ != nullptr);
@@ -4351,13 +1835,6 @@ void CholeskyEliminationTree::checkInvariant_afterCholesky() const {
         assert(p.second.second == delta_.blockStartMap().at(k).second);
     }
 
-
-    // for(const auto& m : descendantStatus) {
-    //     for(auto p : m) {
-    //         assert(p.second == DONE);
-    //     }
-    // }
-
     vector<sharedClique> stack(1, root_);
     vector<bool> node_reached(nodes_.size(), false);
     while(!stack.empty()) {
@@ -4382,18 +1859,6 @@ void CholeskyEliminationTree::checkInvariant_afterCholesky() const {
             assert(!node->is_reordered);
             assert(!node->relinearize);
             assert(*node->colStructure.begin() == node->key);
-
-            // for(Key k : descendants_.at(key)) {
-            //     assert(!orderingLess(node->key, k));
-            //     bool found = false;
-            //     for(Key k : nodes_.at(k)->colStructure) {
-            //         if(node->key == k) {
-            //             found = true;
-            //             break;
-            //         }
-            //     }
-            //     assert(found);
-            // }
 
             auto it = node->factorColStructure.find(node->key);
             while(it != node->factorColStructure.end()) {
@@ -4455,361 +1920,3 @@ void CholeskyEliminationTree::checkInvariant_afterBackSolve() const {
 
 
 } // namespace gtsam
-
-// void CholeskyEliminationTree::updateFactorsAndMarkAffectedKeys(
-//                                       const NonlinearFactorGraph& nonlinearFactors,
-//                                       const FactorIndices& newFactorIndices, 
-//                                       const FactorIndices& removeFactorIndices,
-//                                       const std::optional<FastList<Key>>& extraKeys,
-//                                       KeySet& affectedKeys) {
-//     // std::cout << "[CholeskyEliminationTree] updateFactorsAndMarkAffectedKeys()" << std::endl;
-//     for(const FactorIndex factorIndex : removeFactorIndices) {
-//         sharedFactor factor = nonlinearFactors[factorIndex];
-// 
-//         for(const Key& key : factor->keys()) {
-//             sharedNode node = nodes_[key];
-//             node->factorIndexSet.erase(factorIndex);
-//             for(const Key& otherKey : factor->keys()) {
-//                 assert(node->keyFactorCount[otherKey] > 0);
-//                 node->keyFactorCount[otherKey]--;
-//             }
-//             affectedKeys.insert(key);
-//         }
-//     }
-//     for(const FactorIndex factorIndex : newFactorIndices) {
-// 
-//         sharedFactor factor = nonlinearFactors[factorIndex];
-//         factorLinearizeStatus_[factorIndex] = false;
-// 
-//         // std::cout << "Factor " << factorIndex << ": ";
-//         for(const Key& key : factor->keys()) {
-//             assert(key < nodes_.size());
-//             // std::cout << key << " ";
-//             sharedNode node = nodes_[key];
-//             node->factorIndexSet.insert(factorIndex);
-// 
-//             // Count number of times a node interacts with another node
-//             // Only in raw factors
-//             for(const Key& otherKey : factor->keys()) {
-//                 auto iterPair = node->keyFactorCount.insert({otherKey, 0});
-//                 iterPair.first->second++;
-//                 hessian_.preallocateOrInitialize(key, otherKey, false);
-//             }
-//             affectedKeys.insert(key);
-// 
-//         }
-//     }
-//     // std::cout << std::endl;
-//     if(extraKeys) {
-//         for(const Key key : *extraKeys) {
-//             affectedKeys.insert(key);
-//         }
-//     }
-//     // exit(1);
-//     // TODO:
-//     // We need to deal with the smart factor business.
-// }
-// 
-// // TODO: Do not allocate here. Allocate in symbolic elimination
-// void CholeskyEliminationTree::markRelinKeys(const KeySet& relinKeys) {
-//     // std::cout << "[CholeskyEliminationTree] markRelinKeys()" << std::endl;
-//     for(const Key key : relinKeys) {
-//         nodes_[key]->relinearized = false;
-//         hessian_.resetColumn(key);
-//         cholesky_.resetColumn(key);
-//     }
-// }
-// 
-// void CholeskyEliminationTree::markAllAffectedKeys(const KeySet& observedKeys, 
-//                          const KeySet& relinKeys,
-//                          KeySet* markedKeys,
-//                          KeyVector* orphanKeys) {
-//     // std::cout << "[CholeskyEliminationTree] markAllAffectedKeys()" << std::endl;
-//     markedKeys->clear();
-//     orphanKeys->clear();
-//     for(const Key key : relinKeys) {
-//         markNode(nodes_[key], markedKeys);
-//         // Mark all keys that have a factor with this key, and mark all their ancestors
-//         sharedNode node = nodes_[key];
-//         markNode(node);
-//         for(const auto& keyCountPair : node->keyFactorCount) {
-//             assert(keyCountPair.second > 0);
-//             const Key otherKey = keyCountPair.first;
-//             markNode(nodes_[otherKey]);
-//             // Only reset selected Hessian
-//             // Cholesky can be reset in markNode
-//             hessian_.preallocateOrInitialize(key, otherKey, true);
-//             cholesky_.preallocateOrInitialize(key, otherKey, true);
-//             hessian_.preallocateOrInitialize(key, otherKey, true);
-//             cholesky_.preallocateOrInitialize(key, otherKey, true);
-//         }
-//         // Reset corresponding matrices
-//     }
-// 
-//     for(const Key key : observedKeys) {
-//         markNode(nodes_[key], markedKeys);
-//         // TODO: allocate matrices
-//         // All connections with a higher order than this node needs to be 
-//         // reset
-//         for(const Key otherKey : fillInKeys) {
-//             
-//         }
-//     }
-// 
-//     // TODO: Mark orphans
-//     for(const Key key : *markedKeys) {
-//         orphanChildren(nodes_[key], orphanKeys);
-//     }
-//     // std::cout << "orphan key: ";
-//     // for(const Key k : *orphanKeys) {
-//     //     std::cout << k << " ";
-//     // }
-//     // std::cout << std::endl;
-// }
-// 
-// void CholeskyEliminationTree::symbolicElimination(const Ordering& ordering, 
-//                                                   const KeyVector& orphanKeys) {
-//     // std::cout << "[CholeskyEliminationTree] symbolicElimination()" << std::endl;
-//     // ordering.print();
-//     // Map from key to ordering for convenience
-//     std::unordered_map<Key, size_t> keyToOrdering(ordering.size());
-//     size_t i = 0;   // for some reason the ordering class doesn't like random access
-//     for(const Key key : ordering) {
-//         // TODO: Remove this check. Currently we do this because the set of 
-//         // affected keys are different from ISAM
-//         if(nodes_[key]->marked) {
-//             keyToOrdering.insert({key, i});
-//             i++;
-//         }
-//     }
-//     
-//     // Need to reparent first to make sure the orphan's fillins get propagated correctly
-//     // Orphans reParent
-//     for(const Key key : orphanKeys) {
-//         sharedNode node = nodes_[key];
-//         reParentOrphan(node, keyToOrdering);
-//     }
-// 
-// 
-//     size_t myOrder = 0;
-//     for(const Key key : ordering) {
-//         sharedNode node = nodes_[key];
-//         // TODO: Remove this check. Currently we do this because the set of 
-//         // affected keys are different from ISAM
-//         if(!node->marked) {
-// 
-//             // assert(node->parent == nullptr);    // Ordering includes child conditionals
-//             // std::cout << "Skipping " << key << std::endl;
-//             continue;
-//         }
-//         assert(node->parent == nullptr);
-//         assert(node->marked);
-//         // std::cout << "sym elim node " << key << std::endl;
-// 
-//         symbolicEliminateNode(node, myOrder, keyToOrdering);
-//         myOrder++;
-//     }
-// 
-//     root_ = nodes_[ordering.back()];   // set the root of the tree to the last node in the ordering
-// 
-//     validateTree();
-// }
-// 
-// 
-// void CholeskyEliminationTree::symbolicEliminateNode(
-//         sharedNode node,
-//         size_t myOrder,
-//         const std::unordered_map<Key, size_t>& keyToOrdering) {
-//     node->fillInKeys.clear();
-// 
-//     // First check all our keyFactorCount for keys that we interact with
-//     // Then check our children's fillInKeys
-//     // If keys are greater than self in terms of ordering, set own fillInKey
-//     for(const auto keyCountPair : node->keyFactorCount) {
-//         const Key otherKey = keyCountPair.first;
-//         // First check if other key is in ordering
-//         // if not, then we can assume that it is our descendant and is not marked
-//         auto iter = keyToOrdering.find(otherKey);
-//         if(iter == keyToOrdering.end()) {
-//             // std::cout << "Not found in ordering. Key = " << otherKey << std::endl;
-//             assert(nodes_[otherKey]->marked == false);
-//             continue;
-//         }
-//         // if connected Factor is equal or larger than us, 
-//         // there is a nonzero block in the R
-//         // matrix. Allocate and initialize
-//         size_t otherOrder = iter->second;
-//         if(otherOrder < myOrder) { continue; }
-// 
-//         node->fillInKeys.insert(otherKey);
-//     }
-// 
-//     // now look at all children's fillInKeys
-//     for(const sharedNode childNode : node->children) {
-//         for(const Key otherKey : childNode->fillInKeys) {
-//             // Other key has to be equal to or greater than our key
-//             // Other key also has to be in ordering
-//             // << " ordering = " << keyToOrdering.at(otherKey) << std::endl;
-//             if(otherKey != childNode->key) {
-//                 const size_t otherOrder = keyToOrdering.at(otherKey);
-//                 assert(otherOrder >= myOrder);
-//                 node->fillInKeys.insert(otherKey);
-//             }
-//         }
-//         // TODO: we can use an unordered_map::insert(range) for this
-//         // then take out the child key
-//     }
-// 
-//     // Allocate cholesky and contribution matrices
-//     // And find parent for node
-//     size_t parentOrder = keyToOrdering.size();
-//     assert(node->parent == nullptr);
-//     for(const Key otherKey : node->fillInKeys) {
-//         cholesky_.preallocateOrInitialize(node->key, otherKey, true);
-//         // Re-parent here
-//         const size_t otherOrder = keyToOrdering.at(otherKey);
-//         assert(otherOrder >= myOrder);
-//         if(otherOrder > myOrder && otherOrder < parentOrder) {
-//             parentOrder = otherOrder;
-//             node->parent = nodes_[otherKey];
-//         }
-//     }
-// 
-//     if(node->parent) {
-//         // connect child to parent
-//         node->parent->children.insert(node);
-//     }
-// 
-// }
-// 
-// void CholeskyEliminationTree::reParentOrphan(
-//         sharedNode node, 
-//         const std::unordered_map<Key, size_t>& keyToOrdering) {
-//     assert(node->parent == nullptr);
-//     assert(keyToOrdering.find(node->key) == keyToOrdering.end());
-//     size_t parentOrder = keyToOrdering.size();
-//     for(const Key otherKey : node->fillInKeys) {
-//         if(otherKey == node->key) {
-//             continue;
-//         }
-//         const size_t otherOrder = keyToOrdering.at(otherKey);
-//         if(otherOrder < parentOrder) {
-//             parentOrder = otherOrder;
-//             node->parent = nodes_[otherKey];
-//         }
-//     }
-//     // connect child to parent
-//     assert(node->parent != nullptr);
-//     node->parent->children.insert(node);
-// }
-// 
-// void CholeskyEliminationTree::resolveAllocate() {
-//     hessian_.resolveAllocate();
-//     cholesky_.resolveAllocate();
-// }
-// 
-// 
-// void CholeskyEliminationTree::choleskyElimination() {
-//     // std::cout << "[CholeskyEliminationTree] choleskyElimination()" << std::endl;
-//     std::vector<std::pair<sharedNode, bool>> stack(1, {root_, false});
-//     while(!stack.empty()) {
-//         auto& curPair = stack.back();
-//         sharedNode curNode = curPair.first;
-//         bool& expanded = curPair.second;
-//         if(!expanded) {
-//             expanded = true;
-//             for(sharedNode child : curNode->children) {
-//                 if(child->marked) {
-//                     stack.push_back(std::pair<sharedNode, bool>(child, false));
-//                 }
-//             }
-//         }
-//         else {
-//             choleskyEliminateNode(curNode);
-//             curNode->marked = false;
-//             // std::cout << "Unmark node " << curNode->key << std::endl;
-//             stack.pop_back();
-//         }
-//     }
-// }
-// 
-// void CholeskyEliminationTree::printTreeStructure(std::ostream& os) {
-//     std::vector<sharedNode> stack(1, root_);
-//     while(!stack.empty()) {
-//         sharedNode curNode = stack.back();
-//         stack.pop_back();
-//         os << "Node: " << curNode->key << ", Children: ";
-//         for(sharedNode child : curNode->children) {
-//             os << child->key << " ";
-//             stack.push_back(child);
-//         }
-//         os << std::endl;
-//     }
-// }
-// 
-// void CholeskyEliminationTree::markNode(sharedNode node, KeySet* markedKeys) {
-//     // std::cout << "Mark node " << node->key;
-//     node->marked = true;
-//     markedKeys->insert(node->key);
-// 
-//     sharedNode parent = node->parent;
-//     node->parent = nullptr;
-// 
-//     if(!parent) { return; }
-// 
-//     // detach node from parent. This will prevent future children nodes from repeating work
-//     assert(parent->children.find(node) != parent->children.end());
-//     parent->children.erase(node);
-// 
-//     // Recursively mark parent. This should be tail recursive
-//     markNode(parent, markedKeys);
-// } 
-// 
-// 
-// void CholeskyEliminationTree::orphanChildren(sharedNode node, KeyVector* orphanKeys) {
-//     assert(node->marked); 
-//     for(sharedNode child : node->children) {
-//         assert(child->parent != nullptr);
-//         orphanKeys->push_back(child->key);
-//         child->parent = nullptr;
-//     }
-//     node->children.clear();
-// }
-// 
-// void CholeskyEliminationTree::choleskyEliminateNode(sharedNode node) {
-//     // Relinearize       
-//     for(const FactorIndex factorIndex : node->factorIndexSet) {
-//         
-//     }
-// }
-// 
-// void CholeskyEliminationTree::addFillInKey(sharedNode node, const Key otherKey) {
-//     const Key key = node->key;
-//     sharedNode otherNode = nodes_[otherKey];
-// 
-//     assert(otherNode->fillInKeys.find(key) == otherNode->fillInKeys.end());
-//     assert(node->conditionalKeys.find(key) == node->conditionalKeys.end());
-// 
-//     node->fillInKeys.insert(otherKey);
-//     nodes_[otherKey]->conditionalKeys.insert(node->key);
-// }
-// 
-// void CholeskyEliminationTree::validateTree() {
-//     for(sharedNode node : nodes_) {
-//         sharedNode parent = node->parent;
-//         if(node->parent) {
-//             for(Key key : node->fillInKeys) {
-//                 if(key == node->key) {
-//                     continue;
-//                 }
-//                 if(parent->fillInKeys.find(key) == parent->fillInKeys.end()) {
-//                     std::cout << "Tree is invalid! Node " << node->key << " fill-in " 
-//                               << key << " is not in parent " << parent->key << std::endl;
-//                     exit(1);
-//                 }
-//             }
-//         }
-//     }
-// }
-// 
-// }

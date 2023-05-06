@@ -49,6 +49,7 @@ int main(int argc, char *argv[]) {
     double epsilon = 0.01;
     double d_error = 0.001;
     int max_iter = 10;
+    int num_steps = 1000000;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -59,6 +60,7 @@ int main(int argc, char *argv[]) {
         {"d_error", required_argument, 0, 'd'},
         {"relinearize_skip", required_argument, 0, 's'},
         {"print_frequency", required_argument, 0, 'p'},
+        {"num_steps", required_argument, 0, 't'},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -84,6 +86,9 @@ int main(int argc, char *argv[]) {
                 break;
             case 'p':
                 print_frequency = atoi(optarg);
+                break;
+            case 't':
+                num_steps = atoi(optarg);
                 break;
             default:
                 cerr << "Unrecognized option" << endl;
@@ -205,12 +210,12 @@ int main(int argc, char *argv[]) {
             auto calc_end = chrono::high_resolution_clock::now();
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
-            if(step % 100 == 0) {
+            if(step % print_frequency == 0) {
                 cout << "step = " << step << endl;
             }
-            // if(step >= 5) {
-            //     exit(0);
-            // }
+            if(step >= num_steps) {
+                break;;
+            }
 
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;

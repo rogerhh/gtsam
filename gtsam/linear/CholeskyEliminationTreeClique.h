@@ -74,12 +74,6 @@ public:
     // add node to clique
     void addNode(sharedNode node);
 
-    // detach all nodes after the target node into their own cliques
-    // Until the first node. The new cliques do not have parent clique
-    // The last node (node) will be the parent to this clique
-    // The nodes will keep track of the new cliques
-    void detachNode(sharedNode node);
-
     // Mark clique starting from lowest key. Detach all nodes from this clique
     // and add into their own cliques. Children cliques of this clique
     // are kept in this clique. Detach parent and return it
