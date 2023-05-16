@@ -146,6 +146,12 @@ int main(int argc, char *argv[]) {
             if(BetweenFactor<Pose>::shared_ptr measurement =
                     std::dynamic_pointer_cast<BetweenFactor<Pose> >(measurementf))
             {
+                cout << "Measurement: ";
+                measurement->measured().print();
+                measurement->measured().inverse().print();
+                cout << endl;
+                char t;
+                cin >> t;
 
                 // Stop collecting measurements that are for future steps
                 if(measurement->key1() > step || measurement->key2() > step)

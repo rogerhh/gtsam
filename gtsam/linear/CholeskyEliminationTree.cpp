@@ -1128,9 +1128,9 @@ void CholeskyEliminationTree::editOrReconstructFromClique(
     bool processGrouped = true;
     size_t destSize = destCols.size();
     size_t totalSize = blockIndices.size() - 1;
-    // if(destSize * 2 < totalSize) {
-    //     processGrouped = false;
-    // }
+    if(destSize * 1.5 < totalSize) {
+        processGrouped = false;
+    }
 
     if(processGrouped) {
 
