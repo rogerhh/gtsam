@@ -125,6 +125,8 @@ def Pose2SLAM_ISAM2_example():
     odometry_measurements = [np.random.multivariate_normal(true_odom, ODOMETRY_NOISE.covariance())
                                 for true_odom in true_odometry]
 
+    print("true_odom = ", odometry_measurements)
+
     # Add the prior factor to the factor graph, and poorly initialize the prior pose to demonstrate
     # iSAM2 incremental optimization.
     graph.push_back(gtsam.PriorFactorPose2(1, gtsam.Pose2(0, 0, 0), PRIOR_NOISE))
