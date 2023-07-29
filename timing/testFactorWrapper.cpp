@@ -216,6 +216,7 @@ int main(int argc, char *argv[]) {
 }
 
 void CholeskyEliminationTree::testFactorWrapper(const Values& theta) {
+  /*
   BlockIndexVector blockIndices;
   vector<tuple<Key, size_t>> keyWidthPairs({{2, 3}, {0, 3}, {4, 3}, {1, 3}});
   size_t curCol = 0;
@@ -250,5 +251,7 @@ void CholeskyEliminationTree::testFactorWrapper(const Values& theta) {
   }
 
   cout << "m = \n" << m << endl;
+  */
+  assert(0);
 }
 
