@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
     double epsilon = 0.01;
     double d_error = 0.001;
     int max_iter = 10;
+    int num_steps = 1000000;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -60,6 +61,7 @@ int main(int argc, char *argv[]) {
         {"d_error", required_argument, 0, 'd'},
         {"relinearize_skip", required_argument, 0, 's'},
         {"print_frequency", required_argument, 0, 'p'},
+        {"num_steps", required_argument, 0, 't'},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -86,8 +88,11 @@ int main(int argc, char *argv[]) {
             case 'p':
                 print_frequency = atoi(optarg);
                 break;
+            case 't':
+                num_steps = atoi(optarg);
+                break;
             default:
-                cerr << "Unrecognized option: " << opt << endl;
+                cerr << "Unrecognized option" << endl;
                 exit(1);
         }
     }
@@ -128,7 +133,6 @@ int main(int argc, char *argv[]) {
     Values newVariables;
     NonlinearFactorGraph newFactors;
     for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
-
 
         // Collect measurements and new variables for the current step
         if(step == 1) {
@@ -196,6 +200,10 @@ int main(int argc, char *argv[]) {
         // Update iSAM2
         int d1 = 0, d2 = 0;
         if(K_count == K || nextMeasurement == measurements.size()) {
+            if(step % print_frequency == 0) {
+                cout << "step = " << step << endl;
+            }
+
             ISAM2UpdateParams params;
             params.force_relinearize = true;
             K_count = 0;
@@ -208,12 +216,14 @@ int main(int argc, char *argv[]) {
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
 
-            if(step % 20 == 0) {
-                cout << "step = " << step << endl;
+            if(step % print_frequency == 0) {
+                // estimate = isam2.calculateEstimate();
+                // cout << "Theta = " << endl;
+                // estimate.print();
             }
-            // if(step >= 60) {
-            //     exit(0);
-            // }
+            if(step >= num_steps) {
+                break;
+            }
 
             // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             // print_count++;
@@ -222,44 +232,45 @@ int main(int argc, char *argv[]) {
             //          << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
             // }
 
-            if(K > 1) {
-                NonlinearFactorGraph dummy_nfg;
-                Values dummy_vals;
-                int iter = 0;
-                while(1) {
-                    if(last_chi2 <= epsilon) {
-                        break;
-                    }
-                    auto start = chrono::high_resolution_clock::now();
-                    isam2.update(dummy_nfg, dummy_vals);
-                    auto update_end = chrono::high_resolution_clock::now();
-                    estimate = isam2.calculateEstimate();
-                    auto calc_end = chrono::high_resolution_clock::now();
-                    d1 += chrono::duration_cast<chrono::microseconds>
-                                (update_end - start).count();
-                    d2 += chrono::duration_cast<chrono::microseconds>
-                                (calc_end - update_end).count();
+            // if(K > 1) {
+            //     NonlinearFactorGraph dummy_nfg;
+            //     Values dummy_vals;
+            //     int iter = 0;
 
-                    double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
-                    if(print_frequency != 0 && print_count % print_frequency == 0) {
+            //     while(1) {
+            //         if(last_chi2 <= epsilon) {
+            //             break;
+            //         }
+            //         auto start = chrono::high_resolution_clock::now();
+            //         isam2.update(dummy_nfg, dummy_vals);
+            //         auto update_end = chrono::high_resolution_clock::now();
+            //         estimate = isam2.calculateEstimate();
+            //         auto calc_end = chrono::high_resolution_clock::now();
+            //         d1 += chrono::duration_cast<chrono::microseconds>
+            //                     (update_end - start).count();
+            //         d2 += chrono::duration_cast<chrono::microseconds>
+            //                     (calc_end - update_end).count();
 
-                        cout << "step = " << step << ", Chi2 = " << chi2
-                             << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
-                    }
+            //         double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
 
-                    if(abs(last_chi2 - chi2) < d_error) {
-                        break;
-                    }
+            //         if(print_frequency != 0 && print_count % print_frequency == 0) {
+            //             cout << "step = " << step << ", Chi2 = " << last_chi2 
+            //                 << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
+            //         }
 
-                    last_chi2 = chi2;
-                    iter++;
-                    if(iter >= max_iter) {
-                        cout << "Nonlinear optimization exceed max iterations: " 
-                             << iter << " >= " << max_iter << ", chi2 = " << chi2 << endl;
-                        break;
-                    }
-                }
-            }
+            //         if(abs(last_chi2 - chi2) < d_error) {
+            //             break;
+            //         }
+
+            //         last_chi2 = chi2;
+            //         iter++;
+            //         if(iter >= max_iter) {
+            //             cout << "Nonlinear optimization exceed max iterations: " 
+            //                  << iter << " >= " << max_iter << ", chi2 = " << chi2 << endl;
+            //             break;
+            //         }
+            //     }
+            // }
             newVariables.clear();
             newFactors = NonlinearFactorGraph();
         }
@@ -282,7 +293,5 @@ int main(int argc, char *argv[]) {
     estimate.print();
 
     tictoc_print2_();
-
-
 
 }

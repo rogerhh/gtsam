@@ -54,6 +54,17 @@ void CholeskyEliminationTree::addVariables(const Values& newTheta) {
   }
 } 
 
+// 07/31/2023: Profile rank change per step
+static bool print_header = true;
+static ofstream profile_fout("rank_change.out");
+static size_t step;
+static size_t numRelinAffectedKeys;
+static size_t numNewFactorsAffectedKeys;
+static size_t depth; // Highest observed key - lowest observed key
+static size_t numRelinKeys;
+static size_t numAffectedKeys;
+static size_t numMarkedKeys;
+
 // Mark directly changed keys and keys that we explicitly want to update (extraKeys)
 // observedKeys are the keys associated with the new factors
 void CholeskyEliminationTree::markAffectedKeys(
@@ -67,6 +78,13 @@ void CholeskyEliminationTree::markAffectedKeys(
   // cout << "[CholeskyEliminationTree] markAffectedKeys()" << endl;
   affectedKeys->clear();
   observedKeys->clear();
+
+  // 07/31/2023: Profile rank change per step
+  if(print_header) {
+    profile_fout << "Step, Total affected keys, Total marked keys, Relinearize keys, Relinearize affected keys, New factors affected keys, Depth" << endl;
+    print_header = false;
+  }
+  // End
 
   // RelinKeys should be processed before we add in factors because we only need to
   // relinearize old factors
@@ -87,6 +105,11 @@ void CholeskyEliminationTree::markAffectedKeys(
       }
     }
   }
+
+  // 07/31/2023: Profile rank change per step
+  numRelinAffectedKeys = affectedKeys->size() > 0? affectedKeys->size() - 1 : 0;
+  numRelinKeys = relinKeys.size();
+  // End
   
   for(const FactorIndex newFactorIndex : newFactorIndices) {
     // newFactorIndex starts from 0, and does not necessarily correspond to total factor index
@@ -122,7 +145,15 @@ void CholeskyEliminationTree::markAffectedKeys(
 
     factorWrapper->markAffectedKeys(affectedKeys);
     factorWrapper->markAffectedKeys(observedKeys);
+
   }
+
+  // 07/31/2023: Profile rank change per step
+  numNewFactorsAffectedKeys = observedKeys->size() - 1;
+  depth = *(observedKeys->rbegin()) - *(++observedKeys->begin());
+  numAffectedKeys = affectedKeys->size() - 1;
+  step = unmapKey(*observedKeys->rbegin());
+  // End
   
   for(const FactorIndex removeFactorIndex : updateParams.removeFactorIndices) {
     // Removing factors remove the old factor indices, disregarding all the marginal
@@ -161,6 +192,8 @@ void CholeskyEliminationTree::markAffectedKeys(
       factors_[factorIndex]->markAffectedKeys(observedKeys);
     }
   }
+
+
 
   // DEBUG
   for(RemappedKey key : *affectedKeys) {
@@ -203,6 +236,16 @@ void CholeskyEliminationTree::markAncestors(
   for(Key k : *markedKeys) {  // marked keys are always backsolved
     nodes_[k]->backsolve = true;
   }
+  
+  // 07/31/2023: Profile rank change per step
+  numMarkedKeys = markedKeys->size() - 1;
+  profile_fout << step << ", " 
+               << numMarkedKeys << ", "
+               << numAffectedKeys << ", " << numRelinKeys 
+               << ", " << numRelinAffectedKeys << ", " 
+               << numNewFactorsAffectedKeys << ", " << depth << endl;
+  // END
+
 }
 
 void CholeskyEliminationTree::markKey(const RemappedKey key, RemappedKeySet* markedKeys) {
