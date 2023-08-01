@@ -75,8 +75,10 @@ class IterativeSolver:
 
         # Permute M and y
         P = self.P
-        PM = M.toarray()[P[:, np.newaxis], P[np.newaxis, :]]
+        PM = M[P[:, np.newaxis], P[np.newaxis, :]]
         Py = y[P]
+        assert(np.allclose(PM, M))
+        assert(np.allclose(Py, y))
 
         # conditioned_M = self.apply_preconditioner(PM, L)
         # conditioned_y = self.apply_preconditioner(Py, L)
@@ -93,7 +95,7 @@ class IterativeSolver:
         cg_count = 0
         # print("condition number before conditioning: ", np.linalg.cond(PM))
         # print("condition number after conditioning: ", np.linalg.cond((inv(L @ L.T) @ PM)))
-        Px, info = cg(PM, Py, x0=x0, M=inv(L @ L.T), callback=cg_count_increment, tol=self.cg_tol)
+        Px, info = cg(PM, Py, x0=x0, callback=cg_count_increment, tol=self.cg_tol)
         # Px, info = cg(PM, Py, x0=x0, callback=cg_count_increment, tol=self.cg_tol)
 
         print("cg iterations: ", cg_count, info)

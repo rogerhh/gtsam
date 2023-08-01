@@ -41,7 +41,7 @@ def fillPreconditionerAndPermutation(L, P, A):
     new_L = np.zeros((width, width))
     new_L[:old_width, :old_width] = L
     for i in range(old_width, width):
-        new_L[i, i] = np.linalg.norm(A[:, i])
+        new_L[i, i] = np.linalg.norm(A[i, :])
     
     assert(np.allclose(new_L, np.tril(new_L)))
     return new_L, P
@@ -110,7 +110,7 @@ if __name__ == "__main__":
     estimate = gtsam.Values()
 
     # Only loop through subsampled steps that incremental Cholesky doesn't do well
-    for pg_step, end_problem_step in [(800, 804)]:
+    for pg_step, end_problem_step in [(20, 24), (800, 804)]:
         # Get optimized problem and solution
         pg_theta, pg_delta, _ = pgen.getThetaAtStep(pg_step, estimate, 1000)
         # Get A and b from optimized solution
@@ -119,7 +119,7 @@ if __name__ == "__main__":
         Atb = A.T * b
         Lamb = A.T @ A
 
-        ridge = 0.0001
+        ridge = 0.5
         # chol_factor = cholesky_AAt(A.T)
         # L = chol_factor.L()
         # P = chol_factor.P()
@@ -135,7 +135,7 @@ if __name__ == "__main__":
         if solver_type == "direct":
             solver = DirectSolver()
         elif solver_type == "iterative":
-            solver = IterativeSolver(L, P, tol=1e-10)
+            solver = IterativeSolver(L, P, tol=1e-6)
         else:
             raise NotImplementedError
 

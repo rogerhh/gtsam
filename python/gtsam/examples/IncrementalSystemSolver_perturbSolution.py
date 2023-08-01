@@ -25,7 +25,7 @@ from utils.convergence_checker import ConvergenceChecker
 from copy import deepcopy
 
 from utils.direct_solver import DirectSolver
-from utils.iterative_solver import IterativeSolver
+from utils.iterative_solver_simple import IterativeSolver
 from utils.utils import *
 
 def fillPreconditionerAndPermutation(L, P, A):
@@ -42,7 +42,7 @@ def fillPreconditionerAndPermutation(L, P, A):
     new_L[:old_width, :old_width] = L
     for i in range(old_width, width):
         new_L[i, i] = np.linalg.norm(A[:, i])
-    
+
     assert(np.allclose(new_L, np.tril(new_L)))
     return new_L, P
 
@@ -50,6 +50,13 @@ def fillPreconditionerAndPermutation(L, P, A):
 def applyPreconditioner(A, R):
     A = A.toarray()
     print(R)
+    RAT = spsolve_triangular(R, A.T, lower=True)
+    RTRAT = spsolve_triangular(R.T, RAT, lower=False)
+    ARTR = RTRAT.T
+    return ARTR
+
+# R should be lower triangular
+def applyPreconditionerDense(A, R):
     RAT = spsolve_triangular(R, A.T, lower=True)
     RTRAT = spsolve_triangular(R.T, RAT, lower=False)
     ARTR = RTRAT.T
@@ -119,7 +126,7 @@ if __name__ == "__main__":
         Atb = A.T * b
         Lamb = A.T @ A
 
-        ridge = 0.0001
+        ridge = 0
         # chol_factor = cholesky_AAt(A.T)
         # L = chol_factor.L()
         # P = chol_factor.P()
@@ -135,7 +142,9 @@ if __name__ == "__main__":
         if solver_type == "direct":
             solver = DirectSolver()
         elif solver_type == "iterative":
-            solver = IterativeSolver(L, P, tol=1e-10)
+            default_L = scipy.sparse.eye(Lamb.shape[0])
+            default_P = np.array(np.arange(P.shape[0]))
+            solver = IterativeSolver(default_L, default_P, tol=1e-10)
         else:
             raise NotImplementedError
 
@@ -185,101 +194,65 @@ if __name__ == "__main__":
                         delta_vec = solver.solve(new_Lamb + ridge * scipy.sparse.eye(new_Lamb.shape[0]), new_Atb)
 
                     elif solver_type == "iterative":
-                        print("condition number orig = ", np.linalg.cond(new_Lamb.toarray()))
-                        print("condition number ridge = ", np.linalg.cond((new_Lamb + ridge * scipy.sparse.eye(new_Lamb.shape[0]).toarray())))
+                        new_L, new_P = fillPreconditionerAndPermutation(L.toarray(), P, new_A)
+                        permuted_new_Lamb = new_Lamb.toarray()[new_P[:, np.newaxis], new_P[np.newaxis, :]]
+                        conditioned_Lamb = applyPreconditionerDense(permuted_new_Lamb, new_L)
+
+                        # print("condition number orig = ", np.linalg.cond(new_Lamb.toarray()))
+                        # print("condition number permuted = ", np.linalg.cond(permuted_new_Lamb))
+                        # print("condition number conditioned = ", np.linalg.cond(conditioned_Lamb))
+
+                        permuted_A = new_A.toarray()[:, new_P]
+                        conditioned_A = scipy.linalg.solve_triangular(new_L, permuted_A.T, lower=True).T
+                        assert(np.allclose(conditioned_A @ new_L.T, permuted_A))
+                        A_Lamb = permuted_A.T @ permuted_A
+                        cond_A_Lamb = conditioned_A.T @ conditioned_A
+
+                        # fig = plt.figure()
+                        # ax = fig.add_subplot(1, 1, 1)
+                        # ax.set_yscale('log')
+                        s, v1, dt = np.linalg.svd(permuted_A)
+                        s, v2, dt = np.linalg.svd(conditioned_A)
+                        perturb_vec = (dt.T)[:, -1].reshape((-1, 1))
+                        perturb_vec = scipy.linalg.solve_triangular(new_L.T, perturb_vec, lower=False)
+                        # print(v1[-1], perturb_vec.shape)
+                        print(v1[-1], perturb_vec.shape)
+
+                        # plt.plot(np.arange(v1.shape[0]), v1)
+                        # plt.plot(np.arange(v2.shape[0]), v2)
+                        # plt.show()
+                        # exit()
+
+                        print("condition number orig A = ", np.linalg.cond(permuted_A))
+                        print("condition number conditioned A = ", np.linalg.cond(conditioned_A))
+                        print("condition number A to Lamb = ", np.linalg.cond(A_Lamb))
+                        print("condition number conditioned A to Lamb = ", np.linalg.cond(cond_A_Lamb))
                         new_Atb = new_Atb.toarray()
                         x0 = deepcopy(delta.vector())
                         _, new_A_width = new_A.shape
                         x0.resize((new_A_width, ))
-                        # delta_vec = solver.solve(new_Lamb, new_Atb, x0=x0)
-                        delta_vec = solver.solve(new_Lamb + ridge * scipy.sparse.eye(new_Lamb.shape[0]), new_Atb, x0=x0)
+                        Py = new_Atb[new_P]
+                        # print("Solving original")
+                        # P_delta_vec = solver.solve(A_Lamb, Py, x0=x0)
+                        # print("Solving conditioned no initial")
+                        # P_delta_vec = solver.solve(cond_A_Lamb, Py)
+                        print("Solving conditioned")
+                        LPy = scipy.linalg.solve_triangular(new_L, Py, lower=True)
+                        # LP_delta_vec = solver.solve(cond_A_Lamb, LPy, x0=x0)
+                        LP_delta_vec, info = cg(cond_A_Lamb, LPy, callback=cg_increment)
+                        P_delta_vec = scipy.linalg.solve_triangular(new_L.T, LP_delta_vec, lower=False)
+                        # print("Solving conditioned 2")
+                        # conda_A_Lamb = scipy.linalg.solve_triangular(new_L, A_Lamb, lower=True)
+                        # conda_A_Lamb = scipy.linalg.solve_triangular(new_L.T, cond_A_Lamb, lower=False).T
+                        # LPy = scipy.linalg.solve_triangular(new_L, Py, lower=True)
+                        # LP_delta_vec = solver.solve(cond_A_Lamb, LPy, x0=x0)
+                        # P_delta_vec = scipy.linalg.solve_triangular(new_L.T, LP_delta_vec, lower=False)
+                        scale = 10
+                        P_delta_vec += scale * perturb_vec
+                        delta_vec = np.zeros_like(P_delta_vec)
+                        delta_vec[new_P] = P_delta_vec
+                        
                     
-                elif problem_type == "iter-refine":
-                    # Solve A'tA' d = \nu - \Omega x
-                    Lamb.resize(new_Lamb.shape)
-                    Lamb_diff = new_Lamb - Lamb
-
-                    # DEBUG Start
-                    permuted_old_Lamb = L @ L.T
-                    permuted_new_Lamb = new_Lamb.toarray()[P[:, np.newaxis], P[np.newaxis, :]]
-                    permuted_old_Lamb.resize(permuted_new_Lamb.shape)
-                    old_lamb_diff = permuted_new_Lamb - permuted_old_Lamb
-
-                    # print("Rank of new Lambda: ", np.linalg.matrix_rank(new_Lamb.toarray()))
-                    # print("Rank of Omega: ", np.linalg.matrix_rank(Lamb_diff.toarray()))
-                    # print("Rank of Omega compared to old Lambda: ", np.linalg.matrix_rank(old_lamb_diff))
-                    # DEBUG End
-
-                    Atb.resize(new_Atb.shape)
-                    Atb_diff = new_Atb - Atb
-
-                    delta_vec = deepcopy(delta_vec)
-                    delta_vec.resize(Atb.shape)
-
-                    # need to transform rhs to csc matrix
-                    rhs = np.squeeze(Atb_diff.toarray() - (Lamb_diff @ delta_vec))
-                    row_indices = range(len(rhs))
-                    col_indices = [0 for _ in row_indices]
-                    rhs_csc = csc_matrix((rhs, (row_indices, col_indices)))
-
-                    if solver_type == "direct":
-                        d = solver.solve(new_Lamb, rhs_csc)
-                        delta_vec += d
-
-                        Lamb = new_Lamb
-                        Atb = new_Atb
-
-                    elif solver_type == "iterative":
-
-                        # DEBUG Start
-                        new_L, new_P = fillPreconditionerAndPermutation(L.toarray(), P, new_A)
-                        permuted_new_Lamb = new_Lamb.toarray()[new_P[:, np.newaxis], new_P[np.newaxis, :]]
-                        permuted_old_Lamb.resize(permuted_new_Lamb.shape)
-                        old_lamb_diff = permuted_new_Lamb - permuted_old_Lamb
-                        # s, v, d = np.linalg.svd(np.linalg.inv(new_L @ new_L.T) @ old_lamb_diff)
-                        assert(np.all(np.isreal(np.linalg.inv(new_L @ new_L.T) @ permuted_new_Lamb)))
-                        print("Computing svd")
-                        s, v0, d = np.linalg.svd(permuted_new_Lamb, hermitian=True)
-                        s, v1, d = np.linalg.svd(np.linalg.inv(new_L @ new_L.T) @ permuted_new_Lamb, hermitian=True)
-                        assert(np.allclose(permuted_new_Lamb, permuted_new_Lamb.T))
-                        w, v = np.linalg.eigh(permuted_new_Lamb)
-                        print("Done computing svd")
-
-                        ridge = 0.0
-                        print("condition number ridge = ", np.linalg.cond(np.linalg.inv(new_L @ new_L.T) @ permuted_new_Lamb + ridge * np.eye(new_L.shape[0])))
-                        ridge = 0.0001
-                        print("condition number ridge = ", np.linalg.cond(np.linalg.inv(new_L @ new_L.T) @ (permuted_new_Lamb) + ridge * np.eye(new_L.shape[0])))
-
-                        s1 = np.zeros_like(v[:, 0])
-                        s1[new_P] = v[:, 0]
-                        print("w = ", w)
-                        # print("s1 = ", s1)
-                        # print("v0 = ", v[:, 0])
-                        # print("w0 v0 = ", w[0] * v[:, 0])
-                        # print("A v0 = ", np.linalg.inv(new_L @ new_L.T) @ permuted_new_Lamb @ v[:, 0])
-                        s1 = s1.reshape((-1, 1))
-
-                        # Get number of distinct singular values
-                        v_set = set()
-                        for v in v1:
-                            v_set.add(round(v, 4))
-                        print(f"Number of distinct singular values: {len(v_set)}")
-
-                        # DEBUG End
-
-                        # d = solver.solve(new_Lamb, rhs, x0=delta_vec, old_M=Lamb)
-                        d = solver.solve(new_Lamb, rhs, x0=None, old_M=Lamb)
-                        # ridge_const = 0.1
-                        # d = solver.solve(new_Lamb + ridge_const * scipy.sparse.eye(new_Lamb.shape[0]), rhs, x0=None, old_M=Lamb)
-                        delta_vec += d
-                        # print(np.squeeze(new_A.T @ new_A @ delta_vec))
-                        # scale = 5
-                        # delta_vec += scale * s1
-                        # print(np.squeeze(new_A.T @ new_A @ delta_vec))
-
-                        Lamb = new_Lamb
-                        Atb = new_Atb
-
                 else:
                     raise NotImplementedError
 
@@ -307,14 +280,16 @@ if __name__ == "__main__":
                 theta = theta.retract(theta_update)
 
                 print("relin keys = ", relin_keys)
-                print("relin factors = ", relin_factors)
+                # print("relin factors = ", relin_factors)
                 spls.linearizeSet(relin_factors, theta)
 
                 estimate = theta.retract(delta)
-                # plot_poses2d(estimate, f"poses_{pg_step}_{scale}.png")
                 converged, chi2_graph = convergence_checker.check_convergence(padv.graph, estimate, padv.factor_dim)
 
                 print("post update chi2_graph = ", chi2_graph)
+
+                # plot_poses2d(estimate, f"output/poses_{pg_step}_{scale}.png", step=pg_step, error=chi2_graph, scale=scale)
+                print("Done")
 
                 input()
 

@@ -32,7 +32,6 @@ class ProblemAdvancer:
         if self.cur_step == 0:
             prev_pose = gtsam.Pose2()
         else:
-            print(f"estimate size = {estimate.size()}")
             assert(estimate.exists(self.cur_step - 1), f"{self.cur_step, estimate.size()}")
             prev_pose = estimate.atPose2(self.cur_step - 1)
 

@@ -67,7 +67,6 @@ class PreconditionerGenerator:
                 estimate = self.isam2.calculateBestEstimate()
                 graph = self.isam2.getFactorsUnsafe()
                 chi_graph = chi2_red(graph, estimate, self.factor_dim)
-                print(chi_graph)
                 self.isam2.update()
 
             estimate = self.isam2.calculateBestEstimate()

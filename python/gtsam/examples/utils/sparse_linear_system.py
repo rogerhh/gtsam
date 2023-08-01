@@ -122,9 +122,9 @@ class SparseLinearSystem:
     # Return A matrix and b vector obtained at step and with linearization point theta
     # Adding all the measurements until step
     def getSystem(self):
-        A = csc_matrix((self.A_data, (self.A_rows, self.A_cols)))
+        A = csr_matrix((self.A_data, (self.A_rows, self.A_cols)))
         b_rows = range(len(self.b_data))
         b_cols = [0 for _ in b_rows]
-        b = csc_matrix((self.b_data, (b_rows, b_cols)))
+        b = csr_matrix((self.b_data, (b_rows, b_cols)))
         # b = np.array(self.b_data).reshape((-1, 1))
         return A, b
