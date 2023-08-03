@@ -111,7 +111,7 @@ def Pose2SLAM_ISAM2_example():
     # update calls are required to perform the relinearization.
     parameters = gtsam.ISAM2Params()
     parameters.setRelinearizeThreshold(0.1)
-    parameters.setRelinearizeSkip(1)
+    parameters.relinearizeSkip = 1
     isam = gtsam.ISAM2(parameters)
 
     # Create the ground truth odometry measurements of the robot during the trajectory.
@@ -124,6 +124,8 @@ def Pose2SLAM_ISAM2_example():
     # Corrupt the odometry measurements with gaussian noise to create noisy odometry measurements.
     odometry_measurements = [np.random.multivariate_normal(true_odom, ODOMETRY_NOISE.covariance())
                                 for true_odom in true_odometry]
+
+    print("true_odom = ", odometry_measurements)
 
     # Add the prior factor to the factor graph, and poorly initialize the prior pose to demonstrate
     # iSAM2 incremental optimization.
