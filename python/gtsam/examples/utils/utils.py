@@ -30,10 +30,17 @@ def chi2_red(nfg: gtsam.NonlinearFactorGraph, config: gtsam.Values, factor_dim) 
 
 
 cg_count = 0
+def reset_cg_count():
+    global cg_count
+    cg_count = 0
+
 def cg_increment(x):
     global cg_count
     cg_count += 1
-    print(cg_count)
+
+def print_cg_count():
+    global cg_count
+    print(f"cg_count = {cg_count}")
 
 def plot_poses2d(poses, filename=None, params={}, plot=True, save=False):
     # plt.figure()
@@ -130,6 +137,14 @@ def applyRidge(A, b, ridge_constant=0):
 
     return A_copy, b_copy
 
+def permute(L, P):
+    return L[P[:, np.newaxis], P[np.newaxis, :]]
+
+def unpermute(L, P):
+    L_copy = deepcopy(L)
+    L_copy[P[:, np.newaxis], P[np.newaxis, :]] = L
+    return L_copy
+
 def augmentPermutation(A, P):
     width = A.shape[1]
     old_width = P.shape[0]
@@ -171,14 +186,13 @@ def applyPreconditioner(A, b, L, P):
     print(A_permuted.shape)
     print(L.shape)
     A_conditioned = scipy.sparse.linalg.spsolve_triangular(L, A_permuted.T, lower=True).T
-    Lamb_conditioned = A_conditioned.T @ A_conditioned
 
     w_conditioned = A_conditioned.T @ b
 
-    print("orig A cond = ", np.linalg.cond(A_permuted))
-    print("conditioned A cond = ", np.linalg.cond(A_conditioned))
+    # print("orig A cond = ", np.linalg.cond(A_permuted))
+    # print("conditioned A cond = ", np.linalg.cond(A_conditioned))
 
-    return Lamb_conditioned, w_conditioned
+    return A_conditioned, w_conditioned
 
 def readLCSteps(filename):
     lc_steps = []

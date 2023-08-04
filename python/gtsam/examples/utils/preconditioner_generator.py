@@ -18,7 +18,7 @@ class PreconditionerGenerator:
                        relinearize_skip=1, relin_threshold=0.001):
         self.parameters = gtsam.ISAM2Params()
         self.parameters.setRelinearizeThreshold(relin_threshold)
-        self.parameters.relinearizeSkip = relinearize_skip
+        self.parameters.setRelinearizeSkip(relinearize_skip)
         self.isam2 = gtsam.ISAM2(self.parameters)
 
         self.padv = padv

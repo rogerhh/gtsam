@@ -40,6 +40,7 @@ class SparseLinearSystem:
         self.measurements = measurements
         self.measurement_index = 0
 
+    # FIXME: Make width flexible
     def addVariables(self, new_theta):
         # Only need to add dimension of new theta here
         # Currently only works for Pose2
