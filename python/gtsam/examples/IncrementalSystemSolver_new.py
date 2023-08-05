@@ -25,7 +25,7 @@ from utils.cholesky_generator import CholeskyGenerator
 
 from copy import deepcopy
 
-from utils.preconditioner_update import ExtendedDiagonalPreconditionerUpdater
+from utils.preconditioner_update import *
 from utils.direct_solver import DirectSolver
 from utils.iterative_solver import IterativeSolver
 from utils.utils import *
@@ -79,6 +79,8 @@ if __name__ == "__main__":
                       default="", help="File listing all the loop closure steps.")
     parser.add_option("--lc_lookahead", dest="lc_lookahead",
                       default="1", help="How many steps before the LC step to run factorization.")
+    parser.add_option("--preconditioner_type", dest="pu_type",
+                      default="identity", help="What type of preconditioner updater to use.")
 
     (option, args) = parser.parse_args()
     dataset = option.dataset
@@ -113,9 +115,20 @@ if __name__ == "__main__":
 
     solver_type = option.solver_type
 
+    pu_type = option.pu_type
+    if pu_type == "identity":
+        pu = IdentityPreconditionerUpdater()
+    elif pu_type == "extdiag":
+        pu = ExtendedDiagonalPreconditionerUpdater()
+    elif pu_type == "incomplcholdiag":
+        pu = IncompleteCholeskyOnDiagPreconditionerUpdater()
+    else:
+        raise NotImplementedError
+
+
     estimate = gtsam.Values()
 
-    print(f"dataset: {dataset}\nlc_lookahead: {lc_lookahead}\n")
+    print(f"dataset: {dataset}\npreconditioner type: {pu_type}\nlc_lookahead: {lc_lookahead}\n")
 
     # Only loop through subsampled steps that incremental Cholesky doesn't do well
     for lc_step in lc_steps:
@@ -144,20 +157,24 @@ if __name__ == "__main__":
         estimate = theta.retract(delta)
         spls.linearizeAll(lc_theta)
         A_new, b_new = spls.getSystem()
-        # Profiling only relin updates
-        A_new = A_new[:A_old.shape[0],:A_old.shape[1]]
-        b_new = b_new[:b_old.shape[0]]
-        # End Profiling only relin updates
         Atb_new = A_new.T * b_new
         Lamb_new = A_new.T * A_new
 
+        height_old, width_old = A_old.shape
+        height_new, width_new = A_new.shape
+        A_prime = A_new[height_old:height_new,:]
+        A_tilde = A_new[:height_old,:width_old]
+
+        print("Old A shape: ", A_old.shape)
+        print("New A shape: ", A_new.shape)
         print("Matrix size: ", Lamb_new.shape)
-        print("Update rank: ", np.linalg.matrix_rank((Lamb_new - Lamb_old).A))
+        print("Relin rank: ", np.linalg.matrix_rank(A_tilde.A))
+        print("Observe rank: ", np.linalg.matrix_rank(A_prime.A))
 
         P_new = augmentPermutation(A_new, P_old)
 
-        pu = ExtendedDiagonalPreconditionerUpdater()
-        L_new = pu.updatePreconditioner(L_old, Lamb_old, Lamb_new)
+        L_new = pu.updatePreconditioner(L_old=L_old, P_old=P_old, Lamb_old=Lamb_old, Lamb_new=Lamb_new, \
+                                        A_old=A_old, A_prime=A_prime, A_tilde=A_tilde)
 
         if solver_type == "direct":
             assert(0)
@@ -184,82 +201,5 @@ if __name__ == "__main__":
         else:
             raise NotImplementedError
 
-        input()
         continue
-
-
-        last_measurement_index = spls.measurement_index
-
-        # Get new theta by adding new variables based on current best estimates
-        new_nfg, new_theta, new_measurement_index = padv.advanceToStep(lc_step, estimate)
-        pgen.update_isam(new_nfg, new_theta)
-
-        theta.insert(new_theta)
-        estimate.insert(new_theta)
-        spls.addVariables(new_theta)
-        spls.addFactors(new_measurement_index)
-        spls.linearizeNew(last_measurement_index, new_measurement_index, theta)
-
-        delta_vec.resize(theta.dim())
-
-        convergence_checker = ConvergenceChecker(max_iter=10, atol=0.0017, rtol=1e-4)
-
-        problem_step_iter = -1
-
-        while True:
-
-            problem_step_iter += 1
-
-            # theta, delta should be updated to account for relin
-            theta, delta, relin_keys, relin_factors = updateThetaRelin(theta, delta_vec, spls, padv, relin_threshold)
-            print("Relin keys: ", relin_keys)
-            # Get new A and b from theta
-            spls.linearizeSet(relin_factors, theta)
-            A_new, b_new = spls.getSystem()
-
-            A_resize, A_tilde, A_prime, A_prime_raw, b_resize, b_tilde, b_prime, b_prime_raw = splitUpdate(A, A_new, b, b_new)
-            
-            preupdate_error = chi2_red(padv.graph, estimate, padv.factor_dim)
-            print("pre update chi2_graph = ", preupdate_error)
-
-            # sqrt of ridge because we're applying to 
-            A_new, b_new = applyRidge(A_new, b_new, math.sqrt(ridge))
-
-            # Solve AtA delta = Atb 
-            if solver_type == "direct":
-                print("condition number of A orig = ", np.linalg.cond(A_new.A))
-                new_Lamb = A_new.T @ A_new
-                new_Atb = A_new.T @ b_new
-
-                delta_vec = solver.solve(new_Lamb, new_Atb)
-
-            elif solver_type == "iterative":
-                P_new = augmentPermutation(A_new, P)
-                L_new = generatePreconditioner(A_prime, L, P_new, ridge)
-                Lamb_conditioned, w_conditioned = applyPreconditioner(A_new, b_new, L_new, P_new)
-                
-                LP_delta_vec, info = cg(Lamb_conditioned, w_conditioned, callback=cg_increment, tol=1e-10)
-
-                # global cg_count
-                # cg_count = 0
-                P_delta_vec = scipy.sparse.linalg.spsolve_triangular(L_new.T, LP_delta_vec, lower=False)
-                delta_vec = np.zeros_like(P_delta_vec)
-                delta_vec[P_new] = P_delta_vec
-            
-            # assert(np.allclose((A_new.T @ A_new @ delta_vec), (A_new.T @ b_new).toarray(), atol=1e-3))
-
-            delta = getDelta(delta_vec, spls)
-            estimate = theta.retract(delta)
-
-            converged, chi2_graph = convergence_checker.check_convergence(padv.graph, estimate, padv.factor_dim)
-
-            print("post update chi2_graph = ", chi2_graph)
-            # plot_poses2d(estimate, plot=True, params={"step": lc_step, "ridge_constant": ridge})
-
-            input()
-
-            if converged:
-                break
-            
-
 
