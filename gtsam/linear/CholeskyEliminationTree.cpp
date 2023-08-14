@@ -1308,7 +1308,9 @@ void CholeskyEliminationTree::backsolve(VectorValues* delta_ptr, double tol) {
   // For each node, first process the belowDiagonalBlocks, then do solve on the transpose of the diagonal
   vector<pair<sharedClique, bool>> stack(1, {root_, false});
   // Already solved delta. Used to avoid VectorValues.at(key)
-  vector<Vector> cachedDelta(nodes_.size());
+  vector<double> cachedDelta;
+  vector<size_t> keyToDeltaPos(nodes_.size(), 0);
+
   while(!stack.empty()) {
     auto& curPair = stack.back();
     sharedClique clique = curPair.first;
@@ -1324,7 +1326,7 @@ void CholeskyEliminationTree::backsolve(VectorValues* delta_ptr, double tol) {
 
       if(backsolve) {
 
-        backsolveClique(clique, delta_ptr, tol);
+        backsolveClique(clique, delta_ptr, tol, &cachedDelta, &keyToDeltaPos);
 
         for(sharedClique child : clique->children) {
           stack.push_back({child, false});
@@ -1348,7 +1350,9 @@ void CholeskyEliminationTree::backsolve(VectorValues* delta_ptr, double tol) {
 void CholeskyEliminationTree::backsolveClique(
     sharedClique clique, 
     VectorValues* delta_ptr, 
-    double tol) {
+    double tol,
+    vector<double>* cachedDelta,
+    vector<size_t>* keyToDeltaPos) {
   if(clique->isLastRow()) { return; }
 
   // cout << "CholeskyEliminationTree::backsolveClique(): " << *clique << endl;
@@ -1375,7 +1379,7 @@ void CholeskyEliminationTree::backsolveClique(
 
       row -= diagWidth;
 
-      const double* deltaStart = &delta_[keyToDeltaPos_[key]];
+      const double* deltaStart = cachedDelta->data() + (*keyToDeltaPos)[key];
       gatherX.block(row, 0, height, 1) = Eigen::Map<const Matrix>(deltaStart, height, 1);
 
       // Key unmappedKey = unmapKey(key);
@@ -1399,7 +1403,9 @@ void CholeskyEliminationTree::backsolveClique(
     Vector delta_diff = delta.block(row, 0, height, 1) - delta_ptr->at(unmappedKey);
     delta_ptr->at(unmappedKey) = delta.block(row, 0, height, 1);
 
-    double* deltaStart = &delta_[keyToDeltaPos_[key]];
+    (*keyToDeltaPos)[key] = cachedDelta->size();
+    cachedDelta->resize(cachedDelta->size() + height);
+    double* deltaStart = cachedDelta->data() + (*keyToDeltaPos)[key];
     Eigen::Map<Matrix>(deltaStart, height, 1) = delta.block(row, 0, height, 1);
 
     if(valuesChanged(delta_diff, tol)) {
@@ -1690,9 +1696,6 @@ void CholeskyEliminationTree::addNewNode(const RemappedKey key, const size_t wid
   newClique->addNode(newNode);
 
   assert(newNode->clique() == newClique);
-
-  keyToDeltaPos_.push_back(delta_.size());
-  delta_.resize(delta_.size() + width);
 }
 
 size_t CholeskyEliminationTree::colWidth(const RemappedKey key) const {
