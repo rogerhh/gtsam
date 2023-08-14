@@ -8,13 +8,11 @@ from scipy.sparse.linalg import cg, spsolve_triangular, inv
 class PreconditionedHessian(LinearOperator):
     def __init__(self, A, L, P):
         super().__init__(shape=L.shape, dtype="double")
-        print(L.shape)
         self.L = L
         self.P = P
         self.A = A[:, P]
 
     def _matvec(self, v):
-        print(v.shape)
         v1 = spsolve_triangular(self.L.T, v, lower=False)
         v2 = self.A @ v1
         v3 = self.A.T @ v2

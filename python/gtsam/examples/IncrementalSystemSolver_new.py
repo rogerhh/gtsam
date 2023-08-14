@@ -117,12 +117,20 @@ if __name__ == "__main__":
     solver_type = option.solver_type
 
     pu_type = option.pu_type
-    if pu_type == "identity":
+    if pu_type == "trueidentity":
+        pu = TrueIdentityPreconditionerUpdater()
+    elif pu_type == "identity":
         pu = IdentityPreconditionerUpdater()
     elif pu_type == "extdiag":
         pu = ExtendedDiagonalPreconditionerUpdater()
     elif pu_type == "incomplcholdiag":
         pu = IncompleteCholeskyOnDiagPreconditionerUpdater()
+    elif pu_type == "cholnewblock":
+        pu = CholeskyOnNewBlockPreconditionerUpdater()
+    elif pu_type == "incompletechol":
+        pu = IncompleteCholeskyPreconditionerUpdater()
+    elif pu_type == "incompletecholrelin":
+        pu = IncompleteCholeskyWithRelinLambdaPreconditionerUpdater()
     else:
         raise NotImplementedError
 
@@ -164,18 +172,19 @@ if __name__ == "__main__":
         height_old, width_old = A_old.shape
         height_new, width_new = A_new.shape
         A_prime = A_new[height_old:height_new,:]
-        A_tilde = A_new[:height_old,:width_old]
+        A_tilde = A_new[:height_old,:width_old] - A_old
 
 
         print("Old A shape: ", A_old.shape)
         print("New A shape: ", A_new.shape)
         print("Matrix size: ", Lamb_new.shape)
-        print("Relin rank: ", np.linalg.matrix_rank(A_tilde.A))
+        print("Relin rank: ", np.linalg.matrix_rank((A_tilde.T @ A_tilde).A))
         print("Observe rank: ", np.linalg.matrix_rank(A_prime.A))
 
         P_new = augmentPermutation(A_new, P_old)
 
-        L_new = pu.updatePreconditioner(L_old=L_old, P_old=P_old, Lamb_old=Lamb_old, Lamb_new=Lamb_new, \
+        L_new = pu.updatePreconditioner(L_old=L_old, P_old=P_old, P_new=P_new, \
+                                        Lamb_old=Lamb_old, Lamb_new=Lamb_new, \
                                         A_old=A_old, A_prime=A_prime, A_tilde=A_tilde)
 
         if solver_type == "direct":
@@ -201,7 +210,7 @@ if __name__ == "__main__":
             linOps = PreconditionedHessian(A_new, L_new, P_new)
 
             reset_cg_count()
-            LP_delta_vec, info = cg(linOps, w_cond, callback=cg_increment, tol=1e-10)
+            LP_delta_vec, info = cg(linOps, w_cond, callback=cg_increment, tol=1e-10, maxiter=height_new)
             print_cg_count()
 
         else:
