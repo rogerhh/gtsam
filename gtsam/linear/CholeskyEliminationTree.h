@@ -57,6 +57,10 @@ private:
     std::vector<RemappedKey> keyToOrdering_; // Key to index
     std::vector<size_t> orderingToKey_;         // Index to key
 
+    // Convenience vectors for backsolve
+    std::vector<size_t> keyToDeltaPos_;
+    std::vector<double> delta_;
+
     size_t orderingVersion_ = 0;
 
     struct OrderingLess {
@@ -77,7 +81,6 @@ private:
     Workspace workspace_;
 
     bool postOrder_ = false;
-    size_t totalDeltaDim_ = 0;
     
     // TODO: Remove DEBUG
     std::vector<std::vector<RemappedKey>> descendants_;

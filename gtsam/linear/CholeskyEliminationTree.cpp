@@ -1372,11 +1372,14 @@ void CholeskyEliminationTree::backsolveClique(
     // Gather deltas this clique depends on, don't need last row
     for(int i = cliqueSize; i < blockIndices.size() - 1; i++) {
       auto[key, row, height] = blockIndices[i];
-      Key unmappedKey = unmapKey(key);
 
       row -= diagWidth;
 
-      gatherX.block(row, 0, height, 1) = delta_ptr->at(unmappedKey);
+      const double* deltaStart = &delta_[keyToDeltaPos_[key]];
+      gatherX.block(row, 0, height, 1) = Eigen::Map<const Matrix>(deltaStart, height, 1);
+
+      // Key unmappedKey = unmapKey(key);
+      // gatherX.block(row, 0, height, 1) = delta_ptr->at(unmappedKey);
     }
 
     auto B = block(m, diagWidth, 0, subdiagHeight - 1, diagWidth); // sub-diagonal blocks
@@ -1395,6 +1398,9 @@ void CholeskyEliminationTree::backsolveClique(
 
     Vector delta_diff = delta.block(row, 0, height, 1) - delta_ptr->at(unmappedKey);
     delta_ptr->at(unmappedKey) = delta.block(row, 0, height, 1);
+
+    double* deltaStart = &delta_[keyToDeltaPos_[key]];
+    Eigen::Map<Matrix>(deltaStart, height, 1) = delta.block(row, 0, height, 1);
 
     if(valuesChanged(delta_diff, tol)) {
       nodes_.at(key)->backsolve = true;
@@ -1685,7 +1691,8 @@ void CholeskyEliminationTree::addNewNode(const RemappedKey key, const size_t wid
 
   assert(newNode->clique() == newClique);
 
-  totalDeltaDim_ += width;
+  keyToDeltaPos_.push_back(delta_.size());
+  delta_.resize(delta_.size() + width);
 }
 
 size_t CholeskyEliminationTree::colWidth(const RemappedKey key) const {
