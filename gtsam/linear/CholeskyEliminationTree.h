@@ -57,6 +57,10 @@ private:
     std::vector<RemappedKey> keyToOrdering_; // Key to index
     std::vector<size_t> orderingToKey_;         // Index to key
 
+    // convenience vectors for backsolve
+    std::vector<size_t> keyToDeltaPos_;
+    std::vector<double> delta_;
+
     size_t orderingVersion_ = 0;
 
     struct OrderingLess {

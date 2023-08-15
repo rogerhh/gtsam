@@ -1395,18 +1395,32 @@ void CholeskyEliminationTree::backsolveClique(
   auto LT = D.transpose().triangularView<Eigen::Upper>();
   LT.solveInPlace(delta);
 
+  // TODO: use an old vector and a new vector
+  size_t oldCachedDeltaSize = cachedDelta->size();
+  cachedDelta->resize(cachedDelta->size() + diagWidth);
+  double* deltaStart = cachedDelta->data() + oldCachedDeltaSize;
+  Eigen::Map<Matrix>(deltaStart, diagWidth, 1) = delta;
+
   // Copy delta back into delta_ptr
   for(int i = 0; i < cliqueSize; i++) {
     auto[key, row, height] = blockIndices[i];
     Key unmappedKey = unmapKey(key);
 
-    Vector delta_diff = delta.block(row, 0, height, 1) - delta_ptr->at(unmappedKey);
-    delta_ptr->at(unmappedKey) = delta.block(row, 0, height, 1);
+    (*keyToDeltaPos)[key] = oldCachedDeltaSize;
+    oldCachedDeltaSize += height;
 
-    (*keyToDeltaPos)[key] = cachedDelta->size();
-    cachedDelta->resize(cachedDelta->size() + height);
-    double* deltaStart = cachedDelta->data() + (*keyToDeltaPos)[key];
-    Eigen::Map<Matrix>(deltaStart, height, 1) = delta.block(row, 0, height, 1);
+    double* oldDeltaStart = delta_.data() + keyToDeltaPos_[key];
+    auto oldDelta = Eigen::Map<Matrix>(oldDeltaStart, height, 1);
+    Vector delta_diff = delta.block(row, 0, height, 1) - oldDelta;
+    oldDelta = delta.block(row, 0, height, 1);
+    delta_ptr->at(unmappedKey) = oldDelta;
+
+    // // Vector delta_diff = delta.block(row, 0, height, 1) - delta_ptr->at(unmappedKey);
+
+    // (*keyToDeltaPos)[key] = cachedDelta->size();
+    // cachedDelta->resize(cachedDelta->size() + height);
+    // double* deltaStart = cachedDelta->data() + (*keyToDeltaPos)[key];
+    // Eigen::Map<Matrix>(deltaStart, height, 1) = delta.block(row, 0, height, 1);
 
     if(valuesChanged(delta_diff, tol)) {
       nodes_.at(key)->backsolve = true;
@@ -1696,6 +1710,9 @@ void CholeskyEliminationTree::addNewNode(const RemappedKey key, const size_t wid
   newClique->addNode(newNode);
 
   assert(newNode->clique() == newClique);
+
+  delta_.resize(delta_.size() + width);
+  keyToDeltaPos_.push_back(0);
 }
 
 size_t CholeskyEliminationTree::colWidth(const RemappedKey key) const {
