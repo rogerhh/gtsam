@@ -157,3 +157,90 @@ class IncompleteCholeskyWithRelinLambdaPreconditionerUpdater:
                 L_new[r, c] = (subdiag_val - contri_val) / diag_val
 
         return L_new
+
+class CholeskyUpdatePreconditionerUpdater:
+    def updatePreconditioner(self, L_old=None, P_old=None, P_new=None, \
+                                   Lamb_old=None, Lamb_new=None, \
+                                   A_old=None, A_prime=None, A_tilde=None):
+        height_old, width_old = Lamb_old.shape
+        height_new, width_new = Lamb_new.shape
+        L_new = deepcopy(L_old)
+        L_new.resize(Lamb_new.shape)
+
+        Lamb_prime = deepcopy(Lamb_old)
+        Lamb_prime.resize(Lamb_new.shape)
+        Lamb_prime += A_prime.T @ A_prime
+
+        Lamb_prime_permuted = permute(Lamb_prime, P_new)
+        L_new = cholesky(Lamb_prime_permuted, ordering_method="natural").L()
+
+        return L_new
+
+class SelectiveCholeskyUpdatePreconditionerUpdater:
+    def updatePreconditioner(self, L_old=None, P_old=None, P_new=None, \
+                                   Lamb_old=None, Lamb_new=None, \
+                                   A_old=None, A_prime=None, A_tilde=None):
+
+        A_prime_height, A_prime_width = A_prime.shape
+        A_tilde_height, A_tilde_width = A_tilde.shape
+
+        sel_thresh = 0.1
+        factor_dim = 6
+        high_rows = np.where(abs(A_tilde.A) > sel_thresh)[0]
+        high_rows = np.unique(high_rows)
+
+        print("length of A_tilde_high = ", A_tilde[high_rows].shape)
+        A_tilde_low = deepcopy(A_tilde)
+        A_tilde_low[high_rows] = 0
+        A_tilde_high = A_tilde - A_tilde_low
+
+        height_old, width_old = Lamb_old.shape
+        height_new, width_new = Lamb_new.shape
+
+        A_prime_tilde_high = deepcopy(A_old)
+        A_prime_tilde_high.resize((A_tilde_height + A_prime_height, A_prime_width))
+
+        A_prime_tilde_high[:A_tilde_height, :A_tilde_width] += A_tilde_high
+        A_prime_tilde_high[A_tilde_height:, :] += A_prime
+        Lamb_prime = A_prime_tilde_high.T @ A_prime_tilde_high
+
+        Lamb_prime_permuted = permute(Lamb_prime, P_new)
+        L_new = cholesky(Lamb_prime_permuted, ordering_method="natural").L()
+
+        return L_new
+
+class SelectiveCholeskyUpdatePreconditionerUpdater2:
+    def updatePreconditioner(self, L_old=None, P_old=None, P_new=None, \
+                                   Lamb_old=None, Lamb_new=None, \
+                                   A_old=None, A_prime=None, A_tilde=None):
+
+        A_prime_height, A_prime_width = A_prime.shape
+        A_tilde_height, A_tilde_width = A_tilde.shape
+
+        sel_thresh = 0.1
+        factor_dim = 6
+        high_factors = np.where(abs(A_tilde.A) > sel_thresh)[0] // factor_dim
+        high_factors = np.unique(high_factors)
+        high_rows = []
+        for factor in high_factors:
+            high_rows.extend(range(factor * factor_dim, (factor + 1) * factor_dim))
+
+        print("length of A_tilde_high = ", A_tilde[high_rows].shape)
+        A_tilde_low = deepcopy(A_tilde)
+        A_tilde_low[high_rows] = 0
+        A_tilde_high = A_tilde - A_tilde_low
+
+        height_old, width_old = Lamb_old.shape
+        height_new, width_new = Lamb_new.shape
+
+        A_prime_tilde_high = deepcopy(A_old)
+        A_prime_tilde_high.resize((A_tilde_height + A_prime_height, A_prime_width))
+
+        A_prime_tilde_high[:A_tilde_height, :A_tilde_width] += A_tilde_high
+        A_prime_tilde_high[A_tilde_height:, :] += A_prime
+        Lamb_prime = A_prime_tilde_high.T @ A_prime_tilde_high
+
+        Lamb_prime_permuted = permute(Lamb_prime, P_new)
+        L_new = cholesky(Lamb_prime_permuted, ordering_method="natural").L()
+
+        return L_new

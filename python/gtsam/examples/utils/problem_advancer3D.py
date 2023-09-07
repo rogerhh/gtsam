@@ -1,5 +1,5 @@
 """
-problem_advancer.py: Given an initial_estimate, advance the problem until some given step, adding all the measurements to a nonlinear factor graph and all new variables to a vector of values. Does not support retracting measurements. This is because we want to simulate an optimized solution at the preconditioner step
+problem_advancer3D.py: Given an initial_estimate, advance the problem until some given step, adding all the measurements to a nonlinear factor graph and all new variables to a vector of values. Does not support retracting measurements. This is because we want to simulate an optimized solution at the preconditioner step
 """
 
 import gtsam
@@ -30,18 +30,18 @@ class ProblemAdvancer:
         new_theta = gtsam.Values()
 
         if self.cur_step == 0:
-            prev_pose = gtsam.Pose2()
+            prev_pose = gtsam.Pose3()
         else:
             assert(estimate.exists(self.cur_step - 1), f"{self.cur_step, estimate.size()}")
-            prev_pose = estimate.atPose2(self.cur_step - 1)
+            prev_pose = estimate.atPose3(self.cur_step - 1)
 
         for step in range(self.cur_step , end_step + 1):
-            new_theta.insert(step, gtsam.Pose2())
+            new_theta.insert(step, gtsam.Pose3())
 
             while self.measurement_index < self.measurements.size():
                 measurementf = self.measurements.at(self.measurement_index)
 
-                if isinstance(measurementf, gtsam.BetweenFactorPose2):
+                if isinstance(measurementf, gtsam.BetweenFactorPose3):
                     measurement = measurementf
                     key1, key2 = tuple(measurement.keys())
 
@@ -72,17 +72,11 @@ class ProblemAdvancer:
                         new_theta.update(step, new_pose)
                         prev_pose = new_pose
 
-                elif isinstance(measurementf, gtsam.PriorFactorPose2):
+                elif isinstance(measurementf, gtsam.PriorFactorPose3):
                     measurement = measurementf
                     self.add_factor(new_nfg, measurement)
 
-                elif isinstance(measurementf, gtsam.BearingRangeFactor2D):
-                    measurement = measurementf
-                    print(measurement)
-                    raise NotImplementedError
-
                 else:
-                    print("Unknown factor type: ", type(measurementf))
                     raise NotImplementedError
 
                 self.measurement_index += 1
