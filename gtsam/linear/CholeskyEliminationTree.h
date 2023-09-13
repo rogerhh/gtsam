@@ -18,6 +18,10 @@
 #include <iostream>
 #include <boost/optional.hpp>
 
+extern "C" {
+#include "igo.h"
+}
+
 namespace gtsam {
 
 class GTSAM_EXPORT CholeskyEliminationTree {
@@ -54,6 +58,10 @@ private:
     // unmappedKeys transforms the sequential remappedKeys back to unmapped keys
     std::vector<Key> unmappedKeys_;
 
+    // Representing A as A^T for igo, so keys represent rows and factors columns
+    std::vector<size_t> keyToRows_;
+    std::vector<size_t> factorToCols_;
+
     std::vector<RemappedKey> keyToOrdering_; // Key to index
     std::vector<size_t> orderingToKey_;         // Index to key
 
@@ -83,10 +91,31 @@ private:
     std::vector<std::vector<RemappedKey>> descendants_;
     std::vector<std::vector<RemappedKey>> changedDescendants_;
 
+    igo_common* igo_cm;
+    igo_sparse* A_tilde;
+    igo_sparse* b_tilde;
+    igo_sparse* A_hat;
+    igo_sparse* b_hat;
+
 public:
   CholeskyEliminationTree();
+  ~CholeskyEliminationTree();
+
+  // Get 2 augmented matrices corresponding to [A_tilde, b_tilde], [A_hat, b_hat]
+  void getLinearSystem(const NonlinearFactorGraph& nonlinearFactors, 
+                       const FactorIndices& newFactorIndices,
+                       const KeySet& relinKeys,
+                       const ISAM2UpdateParams& updateParams,
+                       const Values& theta, 
+                       igo_sparse* A_tilde,
+                       igo_sparse* b_tilde,
+                       igo_sparse* A_hat,
+                       igo_sparse* b_hat);
 
   void addVariables(const Values& newTheta);
+
+  // Set the transpose of the Jacobian factor into a column A
+  void setSparseMatrices(size_t col, sharedFactorWrapper factorWrapper, cholmod_triplet* A, cholmod_triplet* b);
   
   // Mark directly changed keys and keys that we explicitly want to update (extraKeys)
   // observedKeys are the keys associated with the new factors

@@ -38,10 +38,22 @@ CholeskyEliminationTree::CholeskyEliminationTree() : orderingLess_(this) {
   RemappedKey key = addRemapKey(-1);
   assert(key == 0);
   addNewNode(key, 1); 
+
+  igo_cm = (igo_common*) malloc(sizeof(igo_common));
+  igo_init(igo_cm);
+
+  factorToCols_.push_back(0);
+  keyToRows_.push_back(0);
+}
+
+CholeskyEliminationTree::~CholeskyEliminationTree() {
+  igo_finish(igo_cm);
+  igo_cm = nullptr;
 }
 
 void CholeskyEliminationTree::addVariables(const Values& newTheta) {
   // cout << "[CholeskyEliminationTree] addVariables() " << newTheta.size() << endl;
+
   for(const auto& keyValPair : newTheta) {
     const Key& unmappedKey = keyValPair.key;
     const Value& val = keyValPair.value;
@@ -50,9 +62,174 @@ void CholeskyEliminationTree::addVariables(const Values& newTheta) {
     // First remap the key to start from 1
     RemappedKey key = addRemapKey(unmappedKey);
     addNewNode(key, dim);
-    
+
+    keyToRows_.push_back(keyToRows_.back() + dim);
   }
 } 
+
+void CholeskyEliminationTree::getLinearSystem(
+  const NonlinearFactorGraph& nonlinearFactors, 
+  const FactorIndices& newFactorIndices,
+  const KeySet& relinKeys,
+  const ISAM2UpdateParams& updateParams,
+  const Values& theta, 
+  igo_sparse* A_tilde,
+  igo_sparse* b_tilde,
+  igo_sparse* A_hat,
+  igo_sparse* b_hat) {
+
+  // RelinKeys should be processed before we add in factors because we only need to
+  // relinearize old factors
+
+  // Copy all jacobian factors into A_tilde and b_tilde
+  assert(A_tilde == NULL);
+  assert(b_tilde == NULL);
+  assert(A_hat == NULL);
+  assert(b_hat == NULL);
+  A_tilde = igo_allocate_sparse(0, 0, 0, igo_cm);
+  b_tilde = igo_allocate_sparse(0, 0, 0, igo_cm);
+  A_hat = igo_allocate_sparse(0, 0, 0, igo_cm);
+  b_hat = igo_allocate_sparse(0, 0, 0, igo_cm);
+
+  for(const Key unmappedRelinKey : relinKeys) {
+    RemappedKey relinKey = getRemapKey(unmappedRelinKey);
+    sharedNode relinNode = nodes_[relinKey];
+    assert(relinNode->status() != NEW);
+
+    // Ignore all relin nodes that are MARGINALIZED (fixed)
+    if(relinNode->status() == MARGINALIZED) {
+      continue;
+    }
+
+    for(auto factorWrapper : relinNode->factors) {
+      factorWrapper->linearizeIfNeeded(theta);
+
+      if(const JacobianFactor* jf = factorWrapper->toJacobianFactor()) {
+        // Copy jf matrix into 
+        size_t A_ncol_old = A_hat->A->ncol;
+        // igo_resize_sparse(A_hat)
+      }
+      else {
+        throw runtime_error("Only Jacobian factors are supported");
+      }
+    }
+  }
+
+  size_t numNewCols = 0;
+  size_t numNonzeros = 0;
+
+  vector<size_t> newFactors;
+  
+  for(const FactorIndex newFactorIndex : newFactorIndices) {
+    // newFactorIndex starts from 0, and does not necessarily correspond to total factor index
+    BlockIndexVector blockIndices;
+    sharedFactor factor = nonlinearFactors[newFactorIndex];
+    size_t factorIndex = factors_.size();
+    newFactors.push_back(factorIndex);
+    sharedFactorWrapper factorWrapper = std::make_shared<FactorWrapper>(
+                                          factorIndex, factor, nullptr, this);
+
+    // Remap old factorIndex to real factor index
+    // Removing factors uses old factorIndex
+    if(newFactorIndex >= factorIndexTransformMap_.size()) {
+      for(size_t i = factorIndexTransformMap_.size(); i <= newFactorIndex; i++) {
+        factorIndexTransformMap_.push_back(-1);
+      }
+    }
+    factorIndexTransformMap_[newFactorIndex] = factorIndex;
+
+    // If factor involves variables that are marginalized, ignore factor
+    if(factorWrapper->hasMarginalizedKeys()) {
+      assert(0);
+    }
+
+    factors_.push_back(factorWrapper);
+
+    for(RemappedKey k : factorWrapper->remappedKeys()) {
+      // k is in every factor, we shouldn't have to store it
+      if(k != 0) {
+        sharedNode node = nodes_[k];
+        node->addFactor(factorWrapper);
+      }
+    }
+
+    factorWrapper->linearizeIfNeeded(theta);
+
+    const JacobianFactor* jf = factorWrapper->toJacobianFactor();
+    if(!jf) { 
+      throw runtime_error("Only Jacobian factors are supported");
+    }
+
+    size_t factorHeight = jf->matrixObject().matrix().rows();
+    size_t factorWidth = jf->matrixObject().matrix().cols();
+
+    numNewCols += factorHeight;
+    numNonzeros += factorHeight * (factorWidth - 1);
+
+  }
+
+  for(const size_t newFactorIndex : newFactors) {
+    sharedFactorWrapper factorWrapper = factors_
+
+    if(const JacobianFactor* jf = factorWrapper->toJacobianFactor()) {
+      size_t factorDim = jf->matrixObject().matrix().rows();
+      size_t factorCol = factorToCols_.back();
+      factorToCols_.push_back(factorCol + factorDim);
+
+      cholmod_triplet* A_hat_tri = cholmod_allocate_triplet(
+        keyToRows_.back(), factorToCols_.back(), factorDim * 7, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+      cholmod_triplet* b_hat_tri = cholmod_allocate_triplet(
+        factorToCols_.back(), 1, factorToCols_.back(), 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+      cout << "before set sparse matrices" << endl;
+      setSparseMatrices(factorCol, factorWrapper, A_hat_tri, b_hat_tri);
+      
+    }
+    cout << "exit here" << endl;
+  }
+}
+
+// Set the transpose of the Jacobian factor into a column A
+void CholeskyEliminationTree::setSparseMatrices(
+  size_t col, sharedFactorWrapper factorWrapper, cholmod_triplet* A, cholmod_triplet* b) {
+
+  const JacobianFactor* jf = factorWrapper->toJacobianFactor();
+  if(!jf) {
+      throw runtime_error("Only Jacobian factors are supported");
+  }
+
+  // Copy jf matrix into 
+  const Matrix& Ab = jf->matrixObject().matrix();
+  size_t factorDim = Ab.rows();
+  const auto& blockIndices = factorWrapper->blockIndices();
+  A->nnz = 0;
+  int* Ai = (int*) A->i;
+  int* Aj = (int*) A->j;
+  double* Ax = (double*) A->x;
+  for(size_t b = 0; b < blockIndices.size() - 1; b++) {
+    const auto&[key, c, w] = blockIndices.at(b);
+    for(size_t j = 0; j < factorDim; j++) {
+      for(size_t i = 0; i < w; i++) {
+        Ai[A->nnz] = i;
+        Aj[A->nnz] = j;
+        Ax[A->nnz] = Ab(j, i);
+        A->nnz++;
+      }
+    }
+  }
+
+  // Set b
+  size_t factorCols = Ab.cols();
+  int* bi = (int*) b->i;
+  int* bj = (int*) b->j;
+  double* bx = (double*) b->x;
+  b->nnz = 0;
+  for(size_t i = 0; i < factorDim; i++) {
+    bi[i] = i;
+    bj[i] = 0;
+    bx[i] = Ab(i, factorCols - 1);
+    b->nnz++;
+  }
+}
 
 // Mark directly changed keys and keys that we explicitly want to update (extraKeys)
 // observedKeys are the keys associated with the new factors

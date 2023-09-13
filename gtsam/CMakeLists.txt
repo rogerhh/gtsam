@@ -107,6 +107,16 @@ add_library(gtsam ${gtsam_srcs})
 target_link_libraries(gtsam PUBLIC ${GTSAM_BOOST_LIBRARIES})
 target_link_libraries(gtsam PUBLIC ${GTSAM_ADDITIONAL_LIBRARIES})
 
+
+# 09/05/2023: Add igo library
+target_include_directories(gtsam PUBLIC ${CHOLMOD_INCLUDE_DIR})
+target_include_directories(gtsam PUBLIC "/scratch/roger_hsiao/igo/src")
+target_link_libraries(gtsam PUBLIC ${CHOLMOD_LIBRARY})
+add_library(igo SHARED IMPORTED GLOBAL)
+set_target_properties(igo PROPERTIES IMPORTED_LOCATION "/scratch/roger_hsiao/igo/build/src/libigo.so")
+target_link_libraries(gtsam PUBLIC igo)
+
+
 # Apply build flags:
 gtsam_apply_build_flags(gtsam)
 

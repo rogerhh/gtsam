@@ -18,3 +18,4 @@
 CMakeLists.txt.user*
 xcode/
 .cache/
+*.un~
