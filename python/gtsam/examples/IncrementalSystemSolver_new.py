@@ -107,6 +107,8 @@ if __name__ == "__main__":
     (dataset_measurements, initial) = gtsam.load2D(dataset_name)
     measurements.push_back(dataset_measurements)
 
+    remapMeasurements(measurements)
+
     padv = ProblemAdvancer(measurements)
     spls = SparseLinearSystem(measurements)
 
@@ -131,6 +133,12 @@ if __name__ == "__main__":
         pu = IncompleteCholeskyPreconditionerUpdater()
     elif pu_type == "incompletecholrelin":
         pu = IncompleteCholeskyWithRelinLambdaPreconditionerUpdater()
+    elif pu_type == "cholupdate":
+        pu = CholeskyUpdatePreconditionerUpdater()
+    elif pu_type == "selcholupdate":
+        pu = SelectiveCholeskyUpdatePreconditionerUpdater()
+    elif pu_type == "selcholupdate2":
+        pu = SelectiveCholeskyUpdatePreconditionerUpdater2()
     else:
         raise NotImplementedError
 
@@ -199,12 +207,7 @@ if __name__ == "__main__":
 
             print("Condition num before conditioning: ", np.linalg.cond(A_new.A))
             print("Condition num after conditioning: ", np.linalg.cond(A_cond))
-            # u, d, vt = np.linalg.svd(A_cond)
-            # fig = plt.figure()
-            # ax = fig.add_subplot(1, 1, 1)
-            # ax.set_yscale('log')
-            # ax.plot(range(len(d)), d)
-            # plt.show()
+
             Lamb_cond = A_cond.T @ A_cond
 
             linOps = PreconditionedHessian(A_new, L_new, P_new)

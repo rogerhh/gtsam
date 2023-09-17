@@ -205,14 +205,9 @@ if __name__ == "__main__":
         elif solver_type == "iterative":
             A_cond, w_cond = applyPreconditioner(A_new, b_new, L_new, P_new) 
 
+
             print("Condition num before conditioning: ", np.linalg.cond(A_new.A))
             print("Condition num after conditioning: ", np.linalg.cond(A_cond))
-            # u, d, vt = np.linalg.svd(A_cond)
-            # fig = plt.figure()
-            # ax = fig.add_subplot(1, 1, 1)
-            # ax.set_yscale('log')
-            # ax.plot(range(len(d)), d)
-            # plt.show()
             Lamb_cond = A_cond.T @ A_cond
 
             linOps = PreconditionedHessian(A_new, L_new, P_new)

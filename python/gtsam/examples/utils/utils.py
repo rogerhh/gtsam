@@ -14,6 +14,7 @@ from sksparse.cholmod import cholesky, cholesky_AAt
 from scipy.sparse import csc_matrix, csr_matrix
 from scipy.sparse.linalg import cg, spsolve_triangular, inv
 import scipy
+import re
 
 import gtsam
 
@@ -60,6 +61,60 @@ def plot_poses2d(poses, filename=None, params={}, plot=True, save=False):
     if save:
         asserT(filename is not None)
         plt.savefig(filename)
+
+def plot_poses_and_landmarks2d(estimates, highlighted=set(), is_pgo=False, connections=set(), highlighted_connections=set(), filename=None, title="", params={}, plot=True, save=False):
+    # plt.figure()
+    x = []
+    y = []
+    poses = set()
+    lm = set()
+    types = [(estimates.atPose2, 0), (estimates.atPoint2, 1)]
+    for i in range(estimates.size()):
+        for var_type, type_index in types:
+            try:
+                var = var_type(i)
+                if type_index == 0:
+                    x.append(var.x())
+                    y.append(var.y())
+                    poses.add(i)
+                elif type_index == 1:
+                    x.append(var[0])
+                    y.append(var[1])
+                    lm.add(i)
+                else:
+                    raise NotImplementedError
+
+                break
+            except RuntimeError:
+                pass
+
+    for key, item in params.items():
+        title += f"{key}={item} "
+    plt.title(title)
+    plt.plot([x[i] for i in poses], [y[i] for i in poses], '-', alpha=0.3, color="black")
+
+    for c in connections:
+        highlight = c in highlighted_connections
+        alpha = 0.2
+        color = "red" if highlight else "grey"
+        plt.plot([x[i] for i in c], [y[i] for i in c], lw=1, alpha=alpha, color=color)
+
+    for i in range(estimates.size()):
+        highlight = (i in highlighted)
+        is_pose = (i in poses)
+        marker = "o" if is_pose else "^"
+        markercolor = "red" if highlight else "green" if not is_pose else "red" if is_pgo else "blue"
+        alpha = 0.2 if is_pose else 0.8
+        markersize = 1.5 if is_pose else 4
+        plt.plot(x[i], y[i], lw=0, markersize=markersize, \
+                                   alpha=alpha, marker=marker, \
+                                   markerfacecolor=markercolor, markeredgecolor=markercolor)
+    
+    if save:
+        assert(filename is not None)
+        plt.savefig(filename)
+    if plot:
+        plt.show()
 
 
 # Update delta and theta based on relin threshold
@@ -212,6 +267,27 @@ def readLCSteps(filename):
                     lc_steps.append(int(arr[i]))
 
     return lc_steps
+
+def getRawKey(key):
+    key_str = gtsam.DefaultKeyFormatter(key)
+    key = int(re.search("[0-9]+", key_str).group())
+    return key
                     
+def remapMeasurements(measurements):
+    for i in range(measurements.size()):
+        measurement = measurements.at(i)
+        if isinstance(measurement, gtsam.BearingRangeFactor2D):
+            key1, key2 = tuple(measurement.keys())
+
+            # Remap landmark key to be some sane value
+            key1, key2 = getRawKey(key1), getRawKey(key2)
+
+            measured_bearing = measurement.measured().bearing()
+            measured_range = measurement.measured().range()
+            noise_model = measurement.noiseModel()
+
+            new_measurement = gtsam.BearingRangeFactor2D(key1, key2, measured_bearing, measured_range, noise_model)
+            measurements.replace(i, new_measurement)
+
                 
 

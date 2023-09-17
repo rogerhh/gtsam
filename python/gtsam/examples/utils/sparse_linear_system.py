@@ -45,10 +45,21 @@ class SparseLinearSystem:
         # Only need to add dimension of new theta here
         # Currently only works for Pose2
         for key in new_theta.keys():
-            value = new_theta.atPose2(key)
-            assert(key == len(self.key_to_col))
-            self.key_to_col.append((self.max_cols, 3))
-            self.max_cols += 3
+
+            types = [(new_theta.atPose2, 3), (new_theta.atPoint2, 2)]
+            flag = False
+
+            for var_type, var_len in types:
+                try:
+                    value = var_type(key)
+                    self.key_to_col.append((self.max_cols, var_len))
+                    self.max_cols += var_len
+                    flag = True
+                    break
+                except RuntimeError:
+                    pass
+
+            assert(flag)
 
     def addFactor(self, factor):
         self.factors.append(factor)

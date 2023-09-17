@@ -76,7 +76,7 @@ if __name__ == "__main__":
                       default="direct", help="Delta norm to relinearize variable")
     parser.add_option("--ridge", dest="ridge",
                       default="0", help="Delta norm to relinearize variable")
-    parser.add_option("--lc_steps_file", dest="lc_steps_file",
+    parser.add_option("--lc_step", dest="lc_step",
                       default="", help="File listing all the loop closure steps.")
     parser.add_option("--lc_lookahead", dest="lc_lookahead",
                       default="1", help="How many steps before the LC step to run factorization.")
@@ -94,8 +94,7 @@ if __name__ == "__main__":
     num_steps = int(option.num_steps)
     relin_threshold = float(option.relin_threshold)
     ridge = float(option.ridge)
-    lc_steps_file = option.lc_steps_file
-    lc_steps = readLCSteps(lc_steps_file)
+    lc_step = int(option.lc_step)
     lc_lookahead = int(option.lc_lookahead)
 
     dataset_name = gtsam.findExampleDataFile(dataset)
@@ -106,6 +105,8 @@ if __name__ == "__main__":
     measurements.push_back(zero_prior)
     (dataset_measurements, initial) = gtsam.load2D(dataset_name)
     measurements.push_back(dataset_measurements)
+
+    remapMeasurements(measurements)
 
     padv = ProblemAdvancer(measurements)
     spls = SparseLinearSystem(measurements)
@@ -131,6 +132,12 @@ if __name__ == "__main__":
         pu = IncompleteCholeskyPreconditionerUpdater()
     elif pu_type == "incompletecholrelin":
         pu = IncompleteCholeskyWithRelinLambdaPreconditionerUpdater()
+    elif pu_type == "cholupdate":
+        pu = CholeskyUpdatePreconditionerUpdater()
+    elif pu_type == "selcholupdate":
+        pu = SelectiveCholeskyUpdatePreconditionerUpdater()
+    elif pu_type == "selcholupdate2":
+        pu = SelectiveCholeskyUpdatePreconditionerUpdater2()
     else:
         raise NotImplementedError
 
@@ -139,82 +146,160 @@ if __name__ == "__main__":
 
     print(f"dataset: {dataset}\npreconditioner type: {pu_type}\nlc_lookahead: {lc_lookahead}\n")
 
-    # Only loop through subsampled steps that incremental Cholesky doesn't do well
-    for lc_step in lc_steps:
+    lookahead_step = lc_step - lc_lookahead
+    # for pg_step, end_problem_step in [(start_step, start_step + 4)]:
 
-        if lc_step > 1000:
+    # Get optimized problem and solution
+    lookahead_theta, lookahead_delta, lookahead_estimate = pgen.getThetaAtStep(lookahead_step, estimate, 1000)
+    # Get A and b from optimized solution
+    spls.linearizeAll(lookahead_theta)
+    A_old, b_old = spls.getSystem()
+    Atb_old = A_old.T * b_old
+    Lamb_old = A_old.T @ A_old
+
+    plt.spy(A_old.A)
+    plt.savefig("victoria_park_A.png")
+    exit(0)
+
+    L_old, P_old = cholgen.cholesky(Lamb_old, 0)
+
+    lc_theta, lc_delta, lc_estimate = pgen.getThetaAtStep(lc_step, lookahead_estimate, 1)
+
+    set_diff = set()
+    for i in range(lc_estimate.size()):
+        if not lookahead_estimate.exists(i) and lc_estimate.exists(i):
+            set_diff.add(i)
+
+    once_removed = set()
+    twice_removed = set()
+    highlighted = set()
+    max_key = lc_estimate.size() - 1
+
+    connections = set()
+    highlighted_connections = set()
+    for i in range(measurements.size()):
+        measurement = measurements.at(i)
+
+        end_flag = False
+        for k in measurement.keys():
+            if k > max_key:
+                end_flag = True
+                break
+        if end_flag:
             break
 
-        lookahead_step = lc_step - lc_lookahead
-        # for pg_step, end_problem_step in [(start_step, start_step + 4)]:
+        if not isinstance(measurement, gtsam.BearingRangeFactor2D):
+            continue
 
-        # Get optimized problem and solution
-        lookahead_theta, lookahead_delta, lookahead_estimate = pgen.getThetaAtStep(lookahead_step, estimate, 1000)
-        # Get A and b from optimized solution
-        spls.linearizeAll(lookahead_theta)
-        A_old, b_old = spls.getSystem()
-        Atb_old = A_old.T * b_old
-        Lamb_old = A_old.T @ A_old
+        connections.add(tuple(measurement.keys()))
 
-        L_old, P_old = cholgen.cholesky(Lamb_old, 0)
+    """
+    # Full BA
+    highlighted.update(range(max_key + 1))
+    highlighted_connections = connections
+    """
 
-        lc_theta, lc_delta, _ = pgen.getThetaAtStep(lc_step, lookahead_estimate, 1)
+    """
+    # Local BA
+    last_pose = lc_estimate.atPose2(max_key)
+    last_x, last_y = last_pose.x(), last_pose.y()
+    types = [(lc_estimate.atPose2, 0), (lc_estimate.atPoint2, 1)]
+    thresh = 4
+    for i in range(lc_estimate.size()):
+        for var_type, type_index in types:
+            try:
+                var = var_type(i)
+                if type_index == 0:
+                    x, y = var.x(), var.y()
+                elif type_index == 1:
+                    x, y = var[0], var[1]
+                if math.sqrt((x - last_x) ** 2 + (y - last_y) ** 2) <= thresh:
+                    highlighted.add(i)
 
-        theta = lc_theta
-        delta = lc_delta
-        delta_vec = deepcopy(delta.vector())
-        estimate = theta.retract(delta)
-        spls.linearizeAll(lc_theta)
-        A_new, b_new = spls.getSystem()
-        Atb_new = A_new.T * b_new
-        Lamb_new = A_new.T * A_new
+                break
+            except RuntimeError:
+                pass
 
-        height_old, width_old = A_old.shape
-        height_new, width_new = A_new.shape
-        A_prime = A_new[height_old:height_new,:]
-        A_tilde = A_new[:height_old,:width_old] - A_old
+    highlighted.update(set_diff)
+
+    for i in range(measurements.size()):
+        measurement = measurements.at(i)
+        if isinstance(measurement, gtsam.BearingRangeFactor2D):
+            if measurement.keys()[0] in set_diff:
+                highlighted.add(measurement.keys()[1])
+
+    for c in connections:
+        if c[0] in highlighted and c[1] in highlighted:
+            highlighted_connections.add(c)
+    """
+    
+    """
+    # VIO
+    highlighted.update(set_diff)
+    for c in connections:
+        if c[0] in highlighted and c[1] in highlighted:
+            highlighted_connections.add(c)
+    """
+
+    # plot_poses_and_landmarks2d(lc_estimate, highlighted=highlighted, connections=connections, \
+    #                            highlighted_connections=highlighted_connections, is_pgo=False, \
+    #                            filename="victoria_park_fg.png", title="Factor Graph (Victoria Park)", save=True, plot=True)
+
+    theta = lc_theta
+    delta = lc_delta
+    delta_vec = deepcopy(delta.vector())
+    estimate = theta.retract(delta)
+    spls.linearizeAll(lc_theta)
+    A_new, b_new = spls.getSystem()
+    Atb_new = A_new.T * b_new
+    Lamb_new = A_new.T * A_new
+
+    height_old, width_old = A_old.shape
+    height_new, width_new = A_new.shape
+    A_prime = A_new[height_old:height_new,:]
+    A_tilde = A_new[:height_old,:width_old] - A_old
 
 
-        print("Old A shape: ", A_old.shape)
-        print("New A shape: ", A_new.shape)
-        print("Matrix size: ", Lamb_new.shape)
-        print("Relin rank: ", np.linalg.matrix_rank((A_tilde.T @ A_tilde).A))
-        print("Observe rank: ", np.linalg.matrix_rank(A_prime.A))
+    print("Old A shape: ", A_old.shape)
+    print("New A shape: ", A_new.shape)
+    print("Matrix size: ", Lamb_new.shape)
+    print("Relin rank: ", np.linalg.matrix_rank((A_tilde.T @ A_tilde).A))
+    print("Observe rank: ", np.linalg.matrix_rank(A_prime.A))
 
-        P_new = augmentPermutation(A_new, P_old)
+    P_new = augmentPermutation(A_new, P_old)
 
-        L_new = pu.updatePreconditioner(L_old=L_old, P_old=P_old, P_new=P_new, \
-                                        Lamb_old=Lamb_old, Lamb_new=Lamb_new, \
-                                        A_old=A_old, A_prime=A_prime, A_tilde=A_tilde)
+    L_new = pu.updatePreconditioner(L_old=L_old, P_old=P_old, P_new=P_new, \
+                                    Lamb_old=Lamb_old, Lamb_new=Lamb_new, \
+                                    A_old=A_old, A_prime=A_prime, A_tilde=A_tilde)
 
-        if solver_type == "direct":
-            assert(0)
-            solver = DirectSolver()
-            new_Lamb = A_new.T @ A_new
-            new_Atb = A_new.T @ b_new
-            delta_vec = solver.solve(new_Lamb, new_Atb)
+    if solver_type == "direct":
+        assert(0)
+        solver = DirectSolver()
+        new_Lamb = A_new.T @ A_new
+        new_Atb = A_new.T @ b_new
+        delta_vec = solver.solve(new_Lamb, new_Atb)
 
-        elif solver_type == "iterative":
-            A_cond, w_cond = applyPreconditioner(A_new, b_new, L_new, P_new) 
+    elif solver_type == "iterative":
+        A_cond, w_cond = applyPreconditioner(A_new, b_new, L_new, P_new) 
 
-            print("Condition num before conditioning: ", np.linalg.cond(A_new.A))
-            print("Condition num after conditioning: ", np.linalg.cond(A_cond))
-            # u, d, vt = np.linalg.svd(A_cond)
-            # fig = plt.figure()
-            # ax = fig.add_subplot(1, 1, 1)
-            # ax.set_yscale('log')
-            # ax.plot(range(len(d)), d)
-            # plt.show()
-            Lamb_cond = A_cond.T @ A_cond
+        print("Condition num before conditioning: ", np.linalg.cond(A_new.A))
+        print("Condition num after conditioning: ", np.linalg.cond(A_cond))
+        # u, d, vt = np.linalg.svd(A_cond)
+        # fig = plt.figure()
+        # ax = fig.add_subplot(1, 1, 1)
+        # ax.set_yscale('log')
+        # ax.plot(range(len(d)), d)
+        # plt.show()
+        Lamb_cond = A_cond.T @ A_cond
 
-            linOps = PreconditionedHessian(A_new, L_new, P_new)
+        linOps = PreconditionedHessian(A_new, L_new, P_new)
 
-            reset_cg_count()
-            LP_delta_vec, info = cg(linOps, w_cond, callback=cg_increment, tol=1e-10, maxiter=height_new)
-            print_cg_count()
+        reset_cg_count()
+        LP_delta_vec, info = cg(linOps, w_cond, callback=cg_increment, tol=1e-10, maxiter=height_new)
+        print_cg_count()
 
-        else:
-            raise NotImplementedError
 
-        continue
+    else:
+        raise NotImplementedError
+
 
