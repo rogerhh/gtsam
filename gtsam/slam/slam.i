@@ -242,9 +242,17 @@ bool writeBAL(string filename, gtsam::SfmData& data);
 gtsam::Values initialCamerasEstimate(const gtsam::SfmData& db);
 gtsam::Values initialCamerasAndPointsEstimate(const gtsam::SfmData& db);
 
-pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(
+enum NoiseFormat {
+  NoiseFormatG2O, ///< Information matrix I11, I12, I13, I22, I23, I33
+  NoiseFormatTORO, ///< Information matrix, but inf_ff inf_fs inf_ss inf_rr inf_fr inf_sr
+  NoiseFormatGRAPH, ///< default: toro-style order, but covariance matrix !
+  NoiseFormatCOV, ///< Covariance matrix C11, C12, C13, C22, C23, C33
+  NoiseFormatAUTO  ///< Try to guess covariance matrix layout
+};
+
+/*pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(
     string filename, gtsam::noiseModel::Diagonal* model, int maxIndex,
-    bool addNoise, bool smart);
+    bool addNoise, bool smart);*/
 pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(
     string filename, gtsam::noiseModel::Diagonal* model, int maxIndex,
     bool addNoise);
@@ -253,6 +261,9 @@ pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(
 pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(
     string filename, gtsam::noiseModel::Diagonal* model);
 pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(string filename);
+pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D(
+    string filename, gtsam::SharedNoiseModel model = gtsam::SharedNoiseModel(), int maxIndex= 0,
+    bool addNoise = false, bool smart = true, gtsam::NoiseFormat noiseFormat = gtsam::NoiseFormatAUTO);
 pair<gtsam::NonlinearFactorGraph*, gtsam::Values*> load2D_robust(
     string filename, gtsam::noiseModel::Base* model, int maxIndex);
 void save2D(const gtsam::NonlinearFactorGraph& graph,

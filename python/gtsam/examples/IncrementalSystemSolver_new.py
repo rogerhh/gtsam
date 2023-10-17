@@ -63,6 +63,8 @@ if __name__ == "__main__":
     parser.add_option("-d", "--d_error", dest="d_error",
                       default="0.001", help="If error does not reduce more than d_error, \
                                              we consider it converged")
+    parser.add_option("-n", "--noise_format", dest="noise_format",
+                      default="auto", help="Noise format for load2D()")
     parser.add_option("--relinearize_skip", dest="relinearize_skip",
                       default="1", help="Number of steps between relinearization of variable")
     parser.add_option("--print_frequency", dest="print_frequency",
@@ -97,6 +99,7 @@ if __name__ == "__main__":
     lc_steps_file = option.lc_steps_file
     lc_steps = readLCSteps(lc_steps_file)
     lc_lookahead = int(option.lc_lookahead)
+    noise_format = option.noise_format
 
     dataset_name = gtsam.findExampleDataFile(dataset)
     measurements = gtsam.NonlinearFactorGraph()
@@ -104,7 +107,13 @@ if __name__ == "__main__":
     zero_prior = gtsam.PriorFactorPose2(0, gtsam.Pose2(0, 0, 0), \
                                         gtsam.noiseModel.Unit.Create(3))
     measurements.push_back(zero_prior)
-    (dataset_measurements, initial) = gtsam.load2D(dataset_name)
+
+    if noise_format == "auto":
+        (dataset_measurements, initial) = gtsam.load2D(filename=dataset_name, noiseFormat=gtsam.NoiseFormat.NoiseFormatAUTO)
+    else:
+        (dataset_measurements, initial) = gtsam.load2D(filename=dataset_name, noiseFormat=gtsam.NoiseFormat.NoiseFormatG2O)
+
+    #(dataset_measurements, initial) = gtsam.load2D(filename=dataset_name)
     measurements.push_back(dataset_measurements)
 
     remapMeasurements(measurements)
