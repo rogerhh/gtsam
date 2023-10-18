@@ -206,8 +206,8 @@ if __name__ == "__main__":
             A_cond, w_cond = applyPreconditioner(A_new, b_new, L_new, P_new) 
 
 
-            print("Condition num before conditioning: ", np.linalg.cond(A_new.A))
-            print("Condition num after conditioning: ", np.linalg.cond(A_cond))
+            # print("Condition num before conditioning: ", np.linalg.cond(A_new.A))
+            # print("Condition num after conditioning: ", np.linalg.cond(A_cond))
             Lamb_cond = A_cond.T @ A_cond
 
             linOps = PreconditionedHessian(A_new, L_new, P_new)
@@ -215,8 +215,6 @@ if __name__ == "__main__":
             reset_cg_count()
             LP_delta_vec, info = cg(linOps, w_cond, callback=cg_increment, tol=1e-10, maxiter=height_new)
             print_cg_count()
-
-            input()
 
         else:
             raise NotImplementedError

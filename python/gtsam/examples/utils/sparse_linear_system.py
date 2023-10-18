@@ -110,6 +110,10 @@ class SparseLinearSystem:
 
                     self.A_data[A_index] = matrixA[i, col_start + j]
 
+                    # 2023/09/29: Add this to prevent csr_matrix from removing nonzero entry
+                    if self.A_data[A_index] == 0:
+                        self.A_data[A_index] = 1e-12
+
                     A_index += 1
 
             col_start += width

@@ -131,6 +131,8 @@ if __name__ == "__main__":
         pu = CholeskyOnNewBlockPreconditionerUpdater()
     elif pu_type == "incompletechol":
         pu = IncompleteCholeskyPreconditionerUpdater()
+    elif pu_type == "fullincompletechol":
+        pu = FullIncompleteCholeskyPreconditionerUpdater()
     elif pu_type == "incompletecholrelin":
         pu = IncompleteCholeskyWithRelinLambdaPreconditionerUpdater()
     elif pu_type == "cholupdate":
