@@ -157,10 +157,6 @@ if __name__ == "__main__":
     Atb_old = A_old.T * b_old
     Lamb_old = A_old.T @ A_old
 
-    plt.spy(A_old.A)
-    plt.savefig("victoria_park_A.png")
-    exit(0)
-
     L_old, P_old = cholgen.cholesky(Lamb_old, 0)
 
     lc_theta, lc_delta, lc_estimate = pgen.getThetaAtStep(lc_step, lookahead_estimate, 1)
@@ -241,9 +237,11 @@ if __name__ == "__main__":
             highlighted_connections.add(c)
     """
 
-    # plot_poses_and_landmarks2d(lc_estimate, highlighted=highlighted, connections=connections, \
-    #                            highlighted_connections=highlighted_connections, is_pgo=False, \
-    #                            filename="victoria_park_fg.png", title="Factor Graph (Victoria Park)", save=True, plot=True)
+    plot_poses_and_landmarks2d(lc_estimate, highlighted=highlighted, connections=connections, \
+                               highlighted_connections=highlighted_connections, is_pgo=False, \
+                               filename="victoria_park_fg.png", title="Factor Graph (Victoria Park)", save=True, plot=True)
+
+    exit(0)
 
     theta = lc_theta
     delta = lc_delta

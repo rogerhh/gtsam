@@ -39,6 +39,9 @@ class PreconditionerGenerator:
     # Add variables until max_step, then optimize until convergence
     def getThetaAtStep(self, max_step, estimate: gtsam.Values, update_period=1000):
 
+        # DEBUG
+        initial_theta = None
+
         new_nfg = gtsam.NonlinearFactorGraph()
         new_theta = gtsam.Values()
 
@@ -58,6 +61,9 @@ class PreconditionerGenerator:
             self.spls.addVariables(new_theta)
             self.spls.addFactors(max_measurement_index)
 
+            # DEBUG
+            initial_theta = new_theta
+
             print(f"preconditioner_generator, step = {step}")
             self.isam2.update(new_nfg, new_theta)
             new_nfg = gtsam.NonlinearFactorGraph()
@@ -75,6 +81,14 @@ class PreconditionerGenerator:
             graph = self.isam2.getFactorsUnsafe()
             chi_graph = chi2_red(graph, estimate, self.factor_dim)
             print(chi_graph)
+
+            # DEBUG
+            best_theta = estimate
+            plot_poses_and_landmarks2d(initial_theta, plot=True, save=False)
+            plot_poses_and_landmarks2d(best_theta, plot=True, save=False)
+            exit(1)
+            
+
 
 
         self.start_step = max_step
