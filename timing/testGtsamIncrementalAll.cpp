@@ -8,6 +8,7 @@
 #include <gtsam/base/timing.h>
 
 #include <fstream>
+#include <type_traits>
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/serialization/export.hpp>
@@ -21,11 +22,22 @@ using namespace std;
 using namespace gtsam;
 using namespace gtsam::symbol_shorthand;
 
-typedef Pose2 Pose;
+//typedef Pose2 Pose;
 
-typedef NoiseModelFactor1<Pose> NM1;
-typedef NoiseModelFactor2<Pose,Pose> NM2;
-typedef BearingRangeFactor<Pose,Point2> BR;
+//typedef NoiseModelFactor1<Pose> NM1;
+//typedef NoiseModelFactor2<Pose,Pose> NM2;
+//typedef BearingRangeFactor<Pose,Point2> BR;
+
+string dataset_name;
+int K_arg = 1;
+int relinearize_skip = 4;
+int print_frequency = 100;
+double epsilon = 0.01;
+double d_error = 0.001;
+int max_iter = 10;
+int num_steps = 1000000;
+int dim = 2;
+NoiseFormat noise_format = NoiseFormatAUTO;
 
 double chi2_red(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& config) {
     // Compute degrees of freedom (observations - variables)
@@ -40,88 +52,8 @@ double chi2_red(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& c
     return 2. * graph.error(config) / dof; // kaess: added factor 2, graph.error returns half of actual error
 }
 
-int main(int argc, char *argv[]) {
-
-    string dataset_name;
-    int K = 1;
-    int relinearize_skip = 4;
-    int print_frequency = 100;
-    double epsilon = 0.01;
-    double d_error = 0.001;
-    int max_iter = 10;
-    int num_steps = 1000000;
-    NoiseFormat noise_format = NoiseFormatAUTO;
-
-    // Get experiment setup
-    static struct option long_options[] = {
-        {"dataset", required_argument, 0, 'f'},
-        {"K", required_argument, 0, 'k'},
-        {"epsilon", required_argument, 0, 'e'},
-        {"max_iter", required_argument, 0, 'm'},
-        {"d_error", required_argument, 0, 'd'},
-        {"relinearize_skip", required_argument, 0, 's'},
-        {"print_frequency", required_argument, 0, 'p'},
-        {"num_steps", required_argument, 0, 't'},
-        {"noise_format", required_argument, 0, 'n'},
-        {0, 0, 0, 0}
-    };
-    int opt, option_index;
-    while((opt = getopt_long(argc, argv, "f:k:e:m:d:n:", long_options, &option_index)) != -1) {
-        switch(opt) {
-            case 'f':
-                dataset_name = string(optarg);
-                break;
-            case 'k':
-                K = atoi(optarg);
-                break;
-            case 'e':
-                epsilon = atof(optarg);
-                break;
-            case 'm':
-                max_iter = atoi(optarg);
-                break;
-            case 'd':
-                d_error = atof(optarg);
-                break;
-            case 's':
-                relinearize_skip = atoi(optarg);
-                break;
-            case 'p':
-                print_frequency = atoi(optarg);
-                break;
-            case 't':
-                num_steps = atoi(optarg);
-                break;
-            case 'n':
-                noise_format = (string(optarg) == "G2O") ? NoiseFormatG2O : NoiseFormatAUTO;
-                break;
-            default:
-                cerr << "Unrecognized option" << endl;
-                exit(1);
-        }
-    }
-
-    cout << "Incremental optimization" << endl
-         << "Loading " << dataset_name << endl
-         << "Parameters: K = " << K << ", epsilon = " << epsilon 
-         << ", max_optimization_iter = " << max_iter 
-         << ", opt_stop_cond = " << d_error 
-         << ", relinearize_skip = " << relinearize_skip 
-         << ", print_frequency = " << print_frequency 
-         << endl;
-
-    string datasetFile = findExampleDataFile(dataset_name);
-    // string datasetFile = findExampleDataFile("victoria_park");
-    std::pair<NonlinearFactorGraph::shared_ptr, Values::shared_ptr> data =
-        load2D(datasetFile, SharedNoiseModel(), 0, false, true, noise_format);
-
-    NonlinearFactorGraph measurements = *data.first;
-    Values initial = *data.second;
-
-    cout << "measurements.size() = " << measurements.size() << endl;
-    cout << "values.size() = " << initial.size() << " ";
-
-    cout << "Playing forward time steps..." << endl;
+template <typename Pose, typename Point>
+void run(NonlinearFactorGraph& measurements, Values& initial) {
 
     ISAM2Params isam2params;
     isam2params.relinearizeSkip = relinearize_skip;
@@ -142,14 +74,16 @@ int main(int argc, char *argv[]) {
         if(step == 1) {
             newVariables.insert(0, Pose());
             // Add prior
+          if (std::is_same<Pose, gtsam::Pose2>::value)
             newFactors.addPrior(0, Pose(), noiseModel::Unit::Create(3));
+          else
+            newFactors.addPrior(0, Pose(), noiseModel::Unit::Create(6));
         }
         while(nextMeasurement < measurements.size()) {
 
             NonlinearFactor::shared_ptr measurementf = measurements[nextMeasurement];
             cout << typeid(*measurementf).name() << endl;
-
-            if(BetweenFactor<Pose>::shared_ptr measurement =
+            if(typename BetweenFactor<Pose>::shared_ptr measurement =
                     boost::dynamic_pointer_cast<BetweenFactor<Pose> >(measurementf))
             {
                 cout << "f " << step << ": " << measurement->key1() << " " << measurement->key2() << endl;
@@ -214,8 +148,8 @@ int main(int argc, char *argv[]) {
                     prevPose = newPose;
                 }*/
             }
-            else if(BearingRangeFactor<Pose, Point2>::shared_ptr measurement =
-              boost::dynamic_pointer_cast<BearingRangeFactor<Pose, Point2> >(measurementf))
+            else if(typename BearingRangeFactor<Pose, Point>::shared_ptr measurement =
+              boost::dynamic_pointer_cast<BearingRangeFactor<Pose, Point> >(measurementf))
             {
                 Key poseKey = measurement->keys()[0], lmKey = measurement->keys()[1];
                 cout << step << ": " << poseKey << " " << lmKey << " " << measurement->keys().size() <<  endl;
@@ -234,10 +168,15 @@ int main(int argc, char *argv[]) {
                   if(isam2.valueExists(poseKey)) {
                     pose = isam2.calculateEstimate<Pose>(poseKey);
                   }
-                  Rot2 measuredBearing = measurement->measured().bearing();
-                  double measuredRange = measurement->measured().range();
-                  newVariables.insert(lmKey,
-                    pose.transformFrom(measuredBearing.rotate(Point2(measuredRange, 0.0))));
+                  // constexpr gets evaluated at compile time, so we avoid errors. Kinda hacky?
+                  if constexpr (std::is_same<Pose, gtsam::Pose2>::value) {
+                      Rot2 measuredBearing = measurement->measured().bearing();
+                      double measuredRange = measurement->measured().range();
+                      newVariables.insert(lmKey,
+                        pose.transformFrom(measuredBearing.rotate(Point(measuredRange, 0.0)))); // This might break for 3D
+                  } else {
+
+                  }
                 }
             }
             else {
@@ -248,7 +187,7 @@ int main(int argc, char *argv[]) {
 
         // Update iSAM2
         int d1 = 0, d2 = 0;
-        if(K_count == K || nextMeasurement == measurements.size()) {
+        if(K_count == K_arg || nextMeasurement == measurements.size()) {
             //if(step % print_frequency == 0) {
                 cout << "step = " << step << endl;
             //}
@@ -342,5 +281,95 @@ int main(int argc, char *argv[]) {
     estimate.print();
 
     tictoc_print2_();
+
+}
+
+int main(int argc, char *argv[]) {
+
+
+    // Get experiment setup
+    static struct option long_options[] = {
+        {"dataset", required_argument, 0, 'f'},
+        {"K", required_argument, 0, 'k'},
+        {"epsilon", required_argument, 0, 'e'},
+        {"max_iter", required_argument, 0, 'm'},
+        {"d_error", required_argument, 0, 'd'},
+        {"relinearize_skip", required_argument, 0, 's'},
+        {"print_frequency", required_argument, 0, 'p'},
+        {"num_steps", required_argument, 0, 't'},
+        {"noise_format", required_argument, 0, 'n'},
+        {"2d", required_argument, 0, 'o'},
+        {0, 0, 0, 0}
+    };
+    int opt, option_index;
+    while((opt = getopt_long(argc, argv, "f:k:e:m:d:n:o:", long_options, &option_index)) != -1) {
+        switch(opt) {
+            case 'f':
+                dataset_name = string(optarg);
+                break;
+            case 'k':
+                K_arg = atoi(optarg);
+                break;
+            case 'e':
+                epsilon = atof(optarg);
+                break;
+            case 'm':
+                max_iter = atoi(optarg);
+                break;
+            case 'd':
+                d_error = atof(optarg);
+                break;
+            case 's':
+                relinearize_skip = atoi(optarg);
+                break;
+            case 'p':
+                print_frequency = atoi(optarg);
+                break;
+            case 't':
+                num_steps = atoi(optarg);
+                break;
+            case 'n':
+                noise_format = (string(optarg) == "G2O") ? NoiseFormatG2O : NoiseFormatAUTO;
+                break;
+            case 'o':
+                dim = atoi(optarg);
+                break;
+            default:
+                cerr << "Unrecognized option" << endl;
+                exit(1);
+        }
+    }
+
+    cout << "Incremental optimization" << endl
+         << "Loading " << dataset_name << endl
+         << "Parameters: K = " << K_arg << ", epsilon = " << epsilon 
+         << ", max_optimization_iter = " << max_iter 
+         << ", opt_stop_cond = " << d_error 
+         << ", relinearize_skip = " << relinearize_skip 
+         << ", print_frequency = " << print_frequency 
+         << endl;
+
+    string datasetFile = findExampleDataFile(dataset_name);
+    // string datasetFile = findExampleDataFile("victoria_park");
+    std::pair<NonlinearFactorGraph::shared_ptr, Values::shared_ptr> data;
+
+    if (dim == 2)
+        data = load2D(datasetFile, SharedNoiseModel(), 0, false, true, noise_format);
+    else
+        data = readG2o(datasetFile, true);
+
+    NonlinearFactorGraph measurements = *data.first;
+    Values initial = *data.second;
+
+    cout << "measurements.size() = " << measurements.size() << endl;
+    cout << "values.size() = " << initial.size() << " ";
+
+    cout << "Playing forward time steps..." << endl;
+
+    if (dim == 2)
+        run<Pose2, Point2> (measurements, initial);
+    else 
+        run<Pose3, Point3> (measurements, initial);
+
 
 }
