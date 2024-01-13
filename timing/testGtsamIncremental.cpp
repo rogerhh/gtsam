@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
     double d_error = 0.001;
     int max_iter = 10;
     int num_steps = 1000000;
+    string node_dist_outfile;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -60,6 +61,7 @@ int main(int argc, char *argv[]) {
         {"d_error", required_argument, 0, 'd'},
         {"relinearize_skip", required_argument, 0, 's'},
         {"print_frequency", required_argument, 0, 'p'},
+        {"node_dist_file", required_argument, 0, 1},
         {"num_steps", required_argument, 0, 't'},
         {0, 0, 0, 0}
     };
@@ -89,6 +91,9 @@ int main(int argc, char *argv[]) {
                 break;
             case 't':
                 num_steps = atoi(optarg);
+                break;
+            case 1:
+                node_dist_outfile = string(optarg);
                 break;
             default:
                 cerr << "Unrecognized option" << endl;
@@ -292,5 +297,13 @@ int main(int argc, char *argv[]) {
     estimate.print();
 
     tictoc_print2_();
+
+    ofstream node_dist_fout(node_dist_outfile);
+    if(!node_dist_fout.is_open()) {
+      cout << "Error opening: " << node_dist_outfile << endl;
+      exit(1);
+    }
+    isam2.printEtreeCollectedNodeInfo(node_dist_fout);
+
 
 }

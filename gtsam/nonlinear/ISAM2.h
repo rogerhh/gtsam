@@ -288,6 +288,10 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
   VectorValues gradientAtZero() const;
 
   /// @}
+  
+  void printEtreeCollectedNodeInfo(std::ostream& os) const {
+    eTree_.printCollectedNodeInfo(os);
+  }
 
  protected:
   /// Remove marked top and either recalculate in batch or incrementally.

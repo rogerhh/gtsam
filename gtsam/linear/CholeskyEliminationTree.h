@@ -83,6 +83,16 @@ private:
     std::vector<std::vector<RemappedKey>> descendants_;
     std::vector<std::vector<RemappedKey>> changedDescendants_;
 
+    // Node info collected
+    // https://www.reddit.com/r/cpp_questions/comments/us3nyb/why_doesnt_c_have_a_default_pairint_int_hash/
+    template<class A, class B>
+    struct hash {
+        size_t operator() (const std::pair<A,B>& p) const {
+          return (std::hash<A>{}(p.first) << 1) ^ std::hash<B>{}(p.second);
+        }
+    };
+    std::unordered_map<std::pair<int, int>, int, hash<int, int>> node_size_distribution_;
+
 public:
   CholeskyEliminationTree();
 
@@ -132,6 +142,9 @@ public:
 
   // Number of all factors, including deleted factors, marginal factors, and linear factors
   size_t numFactors() const { return factors_.size(); }
+
+  void collectNodeInfo();
+  void printCollectedNodeInfo(std::ostream& os) const;
 
   sharedFactor nonlinearFactorAt(FactorIndex factorIndex);
 

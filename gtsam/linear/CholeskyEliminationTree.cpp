@@ -1790,4 +1790,30 @@ void CholeskyEliminationTree::checkInvariant_afterMarginalize() const {
   }
 }
 
+void CholeskyEliminationTree::collectNodeInfo() {
+  vector<sharedClique> stack(1, root_);
+
+  while(!stack.empty()) {
+    sharedClique curClique = stack.back();
+    stack.pop_back();
+
+    int width = curClique->diagonalHeight();
+    int height = curClique->diagonalHeight() + curClique->subdiagonalHeight();
+
+    node_size_distribution_[{width, height}]++;
+
+    for(sharedClique child : curClique->children) {
+      assert(child->status() == UNMARKED);
+      stack.push_back(child);
+    }
+  }
+}
+
+void CholeskyEliminationTree::printCollectedNodeInfo(ostream& os) const {
+  os << "width,height,count" << endl; 
+  for(const auto p : node_size_distribution_) {
+    os << p.first.first << "," << p.first.second << "," << p.second << endl;
+  }
+}
+
 } // namespace gtsam
