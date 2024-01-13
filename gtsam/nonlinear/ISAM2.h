@@ -123,6 +123,8 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
     return eTree_;
   }
 
+  void getAffectedDescendants(const KeyVector& marginalizableKeys, std::set<Key>* additionalKeys);
+
   /**
    * Add new factors, updating the solution and relinearizing as needed.
    *

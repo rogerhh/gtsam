@@ -16,6 +16,7 @@
 
 #include <unistd.h>
 #include <getopt.h>
+#include <cstdlib>
 
 #include <unordered_set>
 
@@ -120,6 +121,7 @@ int main(int argc, char *argv[]) {
     int max_iter = 10;
     int num_steps = 1000000;
     bool is_new = true;
+    int seed = 0;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -134,6 +136,7 @@ int main(int argc, char *argv[]) {
         {"marginalize_test_inputs", required_argument, 0, 1},
         {"new", no_argument, 0, 2},
         {"old", no_argument, 0, 3},
+        {"seed", required_argument, 0, 4},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -171,6 +174,10 @@ int main(int argc, char *argv[]) {
                 break;
             case 3:
                 is_new = false;
+                break;
+            case 4:
+                seed = atoi(optarg);
+                srand(seed);
                 break;
             default:
                 cerr << "Unrecognized option" << endl;
@@ -269,12 +276,24 @@ int main(int argc, char *argv[]) {
     Values newVariables;
     NonlinearFactorGraph newFactors;
 
-    set<Key> activeKeys;
+    set<RemappedKey> activeKeys;
     activeKeys.insert(0);
 
-    for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
+    map<Key, RemappedKey> keyTransformMap;
+    map<Key, RemappedKey> keyUntransformMap;
 
-        activeKeys.insert(step);
+    for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
+      
+      RemappedKey var;
+      bool inserted;
+      do {
+        var = rand() % 100000;
+        inserted = keyUntransformMap.insert({var, step}).second;
+      } while(!inserted);
+
+      keyTransformMap.insert({step, var});
+
+        activeKeys.insert(var);
 
         // Collect measurements and new variables for the current step
         if(step == 1) {
@@ -311,7 +330,12 @@ int main(int argc, char *argv[]) {
                 }
                 else {
                   int real_factor_index;
-                  real_factor_index = isam2.getFactorsUnsafe().size() + newFactors.size();
+                  if(is_new) {
+                    real_factor_index = isam2.getCholeskyEliminationTree().numFactors() + newFactors.size();
+                  }
+                  else {
+                    real_factor_index = isam2.getFactorsUnsafe().size() + newFactors.size();
+                  }
                   real_factor_indices.insert({nextMeasurement, real_factor_index});
 
                   newFactors.push_back(measurement);
@@ -445,5 +469,8 @@ int main(int argc, char *argv[]) {
 
     Values estimate(isam2.calculateEstimate());
     estimate.print();
+
+    isam2.getCholeskyEliminationTree().printOrderingUnmapped(cout);
+    isam2.getCholeskyEliminationTree().printOrderingRemapped(cout);
 
 }

@@ -6,6 +6,7 @@
 */
 
 #include "gtsam/nonlinear/NonlinearFactor.h"
+#include <gtsam/base/types.h>
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
 #include <gtsam/linear/CholeskyEliminationTreeNode.h>
@@ -95,6 +96,15 @@ void CholeskyEliminationTree::markAffectedKeys(
     sharedFactorWrapper factorWrapper = std::make_shared<FactorWrapper>(
                                           factorIndex, factor, nullptr, this);
 
+    // Remap old factorIndex to real factor index
+    // Removing factors uses old factorIndex
+    if(newFactorIndex >= factorIndexTransformMap_.size()) {
+      for(size_t i = factorIndexTransformMap_.size(); i <= newFactorIndex; i++) {
+        factorIndexTransformMap_.push_back(-1);
+      }
+    }
+    factorIndexTransformMap_[newFactorIndex] = factorIndex;
+
     // If factor involves variables that are marginalized, ignore factor
     if(factorWrapper->hasMarginalizedKeys()) {
       assert(0);
@@ -115,7 +125,10 @@ void CholeskyEliminationTree::markAffectedKeys(
   }
   
   for(const FactorIndex removeFactorIndex : updateParams.removeFactorIndices) {
-    sharedFactorWrapper factorWrapper = factors_.at(removeFactorIndex);
+    // Removing factors remove the old factor indices, disregarding all the marginal
+    // and linear factors we add in
+    size_t realFactorIndex = factorIndexTransformMap_[removeFactorIndex];
+    sharedFactorWrapper factorWrapper = factors_.at(realFactorIndex);
     
     // If factor involves variables that are marginalized, it cannot be removed
     if(factorWrapper->hasMarginalizedKeys()) {
@@ -328,43 +341,6 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
     }
     root_ = clique;
   }
-
-  /*
-  // Set ancestors' descendants
-  for(size_t i = 1; i < colStructure.size(); i++) {
-      // Don't need to count self
-      size_t changeAmount = colStructure.size() - i;
-      Key& ancestorKey = colStructure[i];
-      auto& changedDescendants = changedDescendants_.at(ancestorKey);
-      assert(changedDescendants.empty()
-              || orderingLess_(changedDescendants.back(), node->key));
-      changedDescendants.push_back(node->key);
-  }
-
-  // Merge changed descendants with descendants
-  auto& changedDescendants = changedDescendants_.at(node->key);
-  // assert(sorted_no_duplicates(changedDescendants));
-  if(!changedDescendants.empty()) {
-      size_t i = 0;
-      auto& descendants = descendants_.at(node->key);
-      for(; i < descendants.size(); i++) {
-          // Find the index in descendants that is the same as the 
-          // first element in changed descendants. If not found,
-          // i will be set to the end of descendants
-          if(!orderingLess_(descendants[i], changedDescendants[0])) {
-              break;
-          }
-          else {
-              assert(orderingLess_(descendants[i], changedDescendants[0]));
-          }
-      }
-      // At this point we just need to insert changedDescendants into descendants
-      descendants.resize(i + changedDescendants.size());
-      for(size_t j = 0; j < changedDescendants.size(); j++) {
-          descendants[i + j] = changedDescendants[j];
-      }
-  }
-  */
 }
 
 void CholeskyEliminationTree::remapConstrainedKeys(
@@ -727,7 +703,7 @@ void CholeskyEliminationTree::allocateStackRegular() {
         assert(clique->status() == UNMARKED);
 
         // If we reordered this iteration, then set everything to RECONSTRUCT 
-        for(size_t i = clique->cliqueSize(); i < clique->blockIndices.size(); i++) {
+        for(size_t i = clique->cliqueSize(); i < clique->blockIndices.size() - 1; i++) {
           // For any marked clique, if any of its decendants is unmarked, set to EDIT
           const auto&[key, row, height] = clique->blockIndices[i];
           assert(nodes_[key]->clique()->marked());
@@ -1205,7 +1181,6 @@ void CholeskyEliminationTree::constructLambdaClique(sharedClique clique, const V
         info.construct(factorWrapper->remappedKeys(), infoMap);
 
         factorWrapper->updateHessian(m, -1, info, CheckEdits());
-
       }
 
       if(factorStatus == REMOVING) { 
@@ -1640,7 +1615,7 @@ void CholeskyEliminationTree::marginalizeClique(
 void CholeskyEliminationTree::printOrderingUnmapped(std::ostream& os) const {
   os << "Unmapped Ordering: ";
   for(RemappedKey key : orderingToKey_) {
-    os << (int) unmapKey(key) << " ";
+    os << (Key) unmapKey(key) << " ";
   }
   os << endl;
 }
@@ -1653,11 +1628,13 @@ void CholeskyEliminationTree::printOrderingRemapped(std::ostream& os) const {
   os << endl;
 }
 
-NonlinearFactor::shared_ptr CholeskyEliminationTree::nonlinearFactorAt(size_t i) { 
-    return factors_[i]->nonlinearFactor(); 
+NonlinearFactor::shared_ptr CholeskyEliminationTree::nonlinearFactorAt(FactorIndex factorIndex) { 
+  size_t realFactorIndex = factorIndexTransformMap_[factorIndex];
+  return factors_[realFactorIndex]->nonlinearFactor(); 
 }
 
 RemappedKey CholeskyEliminationTree::addRemapKey(const Key unmappedKey) {
+
   // Remap regular keys to start from 1, 0 is for last row (unmappedKey -1)
   RemappedKey remappedKey = keyTransformMap_.size();
 

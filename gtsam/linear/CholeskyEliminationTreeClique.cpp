@@ -358,10 +358,11 @@ void CholeskyEliminationTree::Clique::checkEditOrReconstruct(
   destCols->clear();
   destCols->reserve(blockIndices.size());
 
-  for(size_t i = cliqueSize(); i < blockIndices.size(); i++) { 
-    // Start from subdiagonal keys
+  for(size_t i = cliqueSize(); i < blockIndices.size() - 1; i++) { 
+    // Start from subdiagonal keys and ignore last row
     RemappedKey key = get<BLOCK_INDEX_KEY>(blockIndices[i]);
-    if(key != 0 && etree->nodes_[key]->clique()->status() == mode) {
+    assert(key != 0);
+    if(etree->nodes_[key]->clique()->status() == mode) {
       // ignore last row
       destCols->push_back(key);
       assert(etree->nodes_[key]->clique()->marked());

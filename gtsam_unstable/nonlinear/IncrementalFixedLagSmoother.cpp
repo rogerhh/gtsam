@@ -25,27 +25,26 @@
 namespace gtsam {
 
 /* ************************************************************************* */
+void recursiveMarkAffectedKeys(const Key& key,
+    const ISAM2Clique::shared_ptr& clique, std::set<Key>& additionalKeys) {
 
-// void recursiveMarkAffectedKeys(const Key& key,
-//     const ISAM2Clique::shared_ptr& clique, std::set<Key>& additionalKeys) {
-// 
-//   // Check if the separator keys of the current clique contain the specified key
-//   if (std::find(clique->conditional()->beginParents(),
-//       clique->conditional()->endParents(), key)
-//       != clique->conditional()->endParents()) {
-// 
-//     // Mark the frontal keys of the current clique
-//     for(Key i: clique->conditional()->frontals()) {
-//       additionalKeys.insert(i);
-//     }
-// 
-//     // Recursively mark all of the children
-//     for(const ISAM2Clique::shared_ptr& child: clique->children) {
-//       recursiveMarkAffectedKeys(key, child, additionalKeys);
-//     }
-//   }
-//   // If the key was not found in the separator/parents, then none of its children can have it either
-// }
+  // Check if the separator keys of the current clique contain the specified key
+  if (std::find(clique->conditional()->beginParents(),
+      clique->conditional()->endParents(), key)
+      != clique->conditional()->endParents()) {
+
+    // Mark the frontal keys of the current clique
+    for(Key i: clique->conditional()->frontals()) {
+      additionalKeys.insert(i);
+    }
+
+    // Recursively mark all of the children
+    for(const ISAM2Clique::shared_ptr& child: clique->children) {
+      recursiveMarkAffectedKeys(key, child, additionalKeys);
+    }
+  }
+  // If the key was not found in the separator/parents, then none of its children can have it either
+}
 
 /* ************************************************************************* */
 void IncrementalFixedLagSmoother::print(const std::string& s,
@@ -115,27 +114,27 @@ FixedLagSmoother::Result IncrementalFixedLagSmoother::update(
     std::cout << std::endl;
   }
 
-  // FIXME: No longer using ISAM2 Clique
   // Mark additional keys between the marginalized keys and the leaves
   std::set<Key> additionalKeys;
-  for(Key key: marginalizableKeys) {
-    isam_.getCholeskyEliminationTree().getAffectedKeys(key, additionalKeys);
-  }
-  std::cout << "marginalizable keys: " << std::endl;
-  for(Key key : marginalizableKeys) {
-    std::cout << key << " ";
-  }
-  std::cout << std::endl;
-  std::cout << "additional keys: " << std::endl;
-  for(Key key : additionalKeys) {
-    std::cout << key << " ";
-  }
-  std::cout << std::endl;
+  /*for(Key key: marginalizableKeys) {
+    ISAM2Clique::shared_ptr clique = isam_[key];
+    for(const ISAM2Clique::shared_ptr& child: clique->children) {
+      recursiveMarkAffectedKeys(key, child, additionalKeys);
+    }
+  }*/
+  isam_.getAffectedDescendants(marginalizableKeys, &additionalKeys);
+
   KeyList additionalMarkedKeys(additionalKeys.begin(), additionalKeys.end());
+
+  // std::cout << "[Roger DEBUG] Before isam update" << std::endl;
 
   // Update iSAM2
   isamResult_ = isam_.update(newFactors, newTheta,
       factorsToRemove, constrainedKeys, boost::none, additionalMarkedKeys);
+
+  // std::cout << "[Roger DEBUG] IncrementalFixedLagSmoother after marginalization" << std::endl;
+  // isam_.getCholeskyEliminationTree().printOrderingRemapped(std::cout);
+  // isam_.getCholeskyEliminationTree().printOrderingUnmapped(std::cout);
 
   if (debug) {
     PrintSymbolicTree(isam_,
@@ -143,18 +142,12 @@ FixedLagSmoother::Result IncrementalFixedLagSmoother::update(
     std::cout << "END" << std::endl;
   }
 
-  std::cout << "IncrementalFixedLagSmoother before marginalization" << std::endl;
-  isam_.getCholeskyEliminationTree().printOrderingRemapped(std::cout);
-  isam_.getCholeskyEliminationTree().printOrderingUnmapped(std::cout);
-
   // Marginalize out any needed variables
   if (marginalizableKeys.size() > 0) {
     FastList<Key> leafKeys(marginalizableKeys.begin(),
         marginalizableKeys.end());
     isam_.marginalizeLeaves(leafKeys);
   }
-
-  std::cout << "IncrementalFixedLagSmoother after marginalization" << std::endl;
 
   // Remove marginalized keys from the KeyTimestampMap
   eraseKeyTimestampMap(marginalizableKeys);

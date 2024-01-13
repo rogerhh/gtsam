@@ -16,6 +16,7 @@
  * @author  Michael Kaess, Richard Roberts, Frank Dellaert
  */
 
+#include "gtsam/inference/Key.h"
 #include <gtsam/nonlinear/ISAM2-impl.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/ISAM2Result.h>
@@ -515,6 +516,12 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // cout << endl;
 
   return result;
+}
+
+void ISAM2::getAffectedDescendants(const KeyVector& marginalizableKeys, set<Key>* additionalKeys) {
+  for(Key key : marginalizableKeys) {
+    eTree_.getAffectedDescendantKeys(key, *additionalKeys);
+  }
 }
 
 /* ************************************************************************* */

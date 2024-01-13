@@ -72,6 +72,7 @@ private:
     OrderingLess orderingLess_;
 
     std::vector<sharedFactorWrapper> factors_;
+    std::vector<size_t> factorIndexTransformMap_;
 
     Workspace workspace_;
 
@@ -129,10 +130,10 @@ public:
   void printOrderingUnmapped(std::ostream& os) const;
   void printOrderingRemapped(std::ostream& os) const;
 
-  // Number of all factors, including deleted factors
+  // Number of all factors, including deleted factors, marginal factors, and linear factors
   size_t numFactors() const { return factors_.size(); }
 
-  sharedFactor nonlinearFactorAt(size_t i);
+  sharedFactor nonlinearFactorAt(FactorIndex factorIndex);
 
 private:
   // Add new unmapped Key to transform map and return the mapped key, 
