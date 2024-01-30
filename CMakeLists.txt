@@ -44,7 +44,7 @@ include(cmake/HandleGeneralOptions.cmake)   # CMake build options
 include_directories(${CMAKE_INSTALL_PREFIX})
 
 # 09/05/2023: Add igo
-find_package(CHOLMOD REQUIRED)
+find_package(CHOLMOD EXACT REQUIRED PATHS "/home/ubuntu/SuiteSparse/lib/cmake/CHOLMOD" NO_DEFAULT_PATH)
 
 # Libraries:
 include(cmake/HandleBoost.cmake)            # Boost

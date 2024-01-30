@@ -91,13 +91,15 @@ private:
     std::vector<std::vector<RemappedKey>> descendants_;
     std::vector<std::vector<RemappedKey>> changedDescendants_;
 
-    igo_common* igo_cm;
     igo_sparse* A_tilde;
     igo_sparse* b_tilde;
     igo_sparse* A_hat;
     igo_sparse* b_hat;
 
 public:
+
+  igo_common* igo_cm;
+
   CholeskyEliminationTree();
   ~CholeskyEliminationTree();
 
@@ -107,10 +109,12 @@ public:
                        const KeySet& relinKeys,
                        const ISAM2UpdateParams& updateParams,
                        const Values& theta, 
-                       igo_sparse* A_tilde,
-                       igo_sparse* b_tilde,
-                       igo_sparse* A_hat,
-                       igo_sparse* b_hat);
+                       igo_sparse*& A_tilde,
+                       igo_sparse*& b_tilde,
+                       igo_sparse*& A_hat,
+                       igo_sparse*& b_hat);
+
+  void updateDelta(VectorValues* delta_ptr);
 
   void addVariables(const Values& newTheta);
 

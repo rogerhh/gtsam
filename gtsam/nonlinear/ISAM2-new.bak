@@ -16,7 +16,6 @@
  * @author  Michael Kaess, Richard Roberts, Frank Dellaert
  */
 
-#include "gtsam/inference/Key.h"
 #include <gtsam/nonlinear/ISAM2-impl.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/ISAM2Result.h>
@@ -464,7 +463,10 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // Get A_tilde, b_tilde, A_hat, b_hat
   // Compute Atb_tilde, Atb_hat
   // igo_incremental_opt
-  igo_sparse *A_tilde, *b_tilde, *A_hat, *b_hat;
+  igo_sparse* A_tilde; 
+  igo_sparse* b_tilde;
+  igo_sparse* A_hat;
+  igo_sparse* b_hat;
   eTree_.getLinearSystem(nonlinearFactors_,
                          result.newFactorsIndices,
                          relinKeys,
@@ -475,54 +477,19 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                          A_hat,
                          b_hat);
 
+  // cout << "after getlinearsystem" << endl;
+  // igo_print_sparse(3, "A_tilde", A_tilde, eTree_.igo_cm);
+  // igo_print_sparse(3, "b_tilde", b_tilde, eTree_.igo_cm);
+  // igo_print_sparse(3, "A_hat", A_hat, eTree_.igo_cm);
+  // igo_print_sparse(3, "b_hat", b_hat, eTree_.igo_cm);
 
-  eTree_.markAffectedKeys(nonlinearFactors_,
-                          result.newFactorsIndices,
-                          relinKeys,
-                          updateParams,
-                          // updateParams.extraReelimKeys,
-                          &affectedKeys,
-                          &observedKeys);
+  // cholmod_dense* A_hat_dense = cholmod_sparse_to_dense(A_hat->A, eTree_.igo_cm->cholmod_cm);
+  // igo_print_cholmod_dense(3, "A_hat_dense", A_hat_dense, eTree_.igo_cm->cholmod_cm);
 
-  // This step is technically not needed, we can just do this in symbolic update
-  eTree_.markAncestors(affectedKeys, &markedKeys);
+  igo_solve_increment(A_tilde, b_tilde, A_hat, b_hat, eTree_.igo_cm);
+  // igo_print_dense(3, "x", eTree_.igo_cm->x, eTree_.igo_cm);
 
-  static int last_variable_count;
-  static bool reorder_flag;
-  const int reorder_period = 30;
-  // DEBUG
-  // if(/*theta_.size() == 260 || theta_.size() == 280 || */ theta_.size() == 287) {
-  //   reorder_flag = true;
-  // }
-  // if(theta_.size() > 2500 && theta_.size() < 2800) {
-  //   cout << "marked keys size =  " <<  markedKeys.size() << endl;
-  // }
-
-  if(updateParams.constrainedKeys) {
-    // If we have constrained keys, we need to reorder
-    reorder_flag = true;
-  }
-  if(markedKeys.size() > 0
-        && (theta_.size() - last_variable_count >= reorder_period 
-        || affectedKeys.size() * 10 <= markedKeys.size() 
-        || markedKeys.size() * 2 > theta_.size())) {
-      last_variable_count = theta_.size();
-      reorder_flag = true;
-  }
-  if(reorder_flag) {
-      // cout << "reordering" << endl;
-      reorder_flag = false;
-      eTree_.updateOrdering(markedKeys, observedKeys, updateParams);
-  }
-
-  eTree_.symbolicElimination(markedKeys);
-  eTree_.choleskyElimination(theta_);
-
-  const ISAM2GaussNewtonParams& gaussNewtonParams =
-      boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
-
-  eTree_.backsolve(&delta_, gaussNewtonParams.wildfireThreshold);
-  eTree_.reset();
+  eTree_.updateDelta(&delta_);
   
   // cout << "Delta = " << endl;
   // delta_.print();
