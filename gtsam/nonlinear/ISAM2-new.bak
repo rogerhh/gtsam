@@ -486,7 +486,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // cholmod_dense* A_hat_dense = cholmod_sparse_to_dense(A_hat->A, eTree_.igo_cm->cholmod_cm);
   // igo_print_cholmod_dense(3, "A_hat_dense", A_hat_dense, eTree_.igo_cm->cholmod_cm);
 
-  igo_solve_increment(A_tilde, b_tilde, A_hat, b_hat, eTree_.igo_cm);
+  igo_solve_increment2(A_tilde, b_tilde, A_hat, b_hat, eTree_.igo_cm);
   // igo_print_dense(3, "x", eTree_.igo_cm->x, eTree_.igo_cm);
 
   eTree_.updateDelta(&delta_);
