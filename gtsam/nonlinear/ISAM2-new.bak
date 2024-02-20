@@ -16,6 +16,7 @@
  * @author  Michael Kaess, Richard Roberts, Frank Dellaert
  */
 
+#include "igo.h"
 #include <gtsam/nonlinear/ISAM2-impl.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/ISAM2Result.h>
@@ -463,10 +464,11 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // Get A_tilde, b_tilde, A_hat, b_hat
   // Compute Atb_tilde, Atb_hat
   // igo_incremental_opt
-  igo_sparse* A_tilde; 
-  igo_sparse* b_tilde;
-  igo_sparse* A_hat;
-  igo_sparse* b_hat;
+  igo_sparse* A_tilde = NULL; 
+  igo_sparse* b_tilde = NULL;
+  igo_sparse* A_hat = NULL;
+  igo_sparse* b_hat = NULL;
+  // cout << "before get linear system" << endl;
   eTree_.getLinearSystem(nonlinearFactors_,
                          result.newFactorsIndices,
                          relinKeys,
@@ -477,17 +479,13 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                          A_hat,
                          b_hat);
 
-  // cout << "after getlinearsystem" << endl;
-  // igo_print_sparse(3, "A_tilde", A_tilde, eTree_.igo_cm);
-  // igo_print_sparse(3, "b_tilde", b_tilde, eTree_.igo_cm);
-  // igo_print_sparse(3, "A_hat", A_hat, eTree_.igo_cm);
-  // igo_print_sparse(3, "b_hat", b_hat, eTree_.igo_cm);
-
-  // cholmod_dense* A_hat_dense = cholmod_sparse_to_dense(A_hat->A, eTree_.igo_cm->cholmod_cm);
-  // igo_print_cholmod_dense(3, "A_hat_dense", A_hat_dense, eTree_.igo_cm->cholmod_cm);
-
+  // cout << "before solve increment2" << endl;
   igo_solve_increment2(A_tilde, b_tilde, A_hat, b_hat, eTree_.igo_cm);
-  // igo_print_dense(3, "x", eTree_.igo_cm->x, eTree_.igo_cm);
+
+  igo_free_sparse(&A_tilde, eTree_.igo_cm);
+  igo_free_sparse(&b_tilde, eTree_.igo_cm);
+  igo_free_sparse(&A_hat, eTree_.igo_cm);
+  igo_free_sparse(&b_hat, eTree_.igo_cm);
 
   eTree_.updateDelta(&delta_);
   

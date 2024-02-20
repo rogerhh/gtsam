@@ -5,6 +5,7 @@
 * @date    Feb. 8, 2023
 */
 
+#include "igo.h"
 #include <gtsam/base/types.h>
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
@@ -41,6 +42,11 @@ CholeskyEliminationTree::CholeskyEliminationTree() : orderingLess_(this) {
 
   igo_cm = (igo_common*) malloc(sizeof(igo_common));
   igo_init(igo_cm);
+  igo_cm->BATCH_SOLVE_THRESH = 0.8;
+  igo_cm->REORDER_PERIOD = 20;
+  igo_cm->solve_type = IGO_SOLVE_DECIDE;
+  igo_cm->SEL_COLS_RATE = 0.01;
+  igo_cm->MIN_SEL_COLS = 128;
 
   factorToCols_.push_back(0);
   keyToRows_.push_back(0);
@@ -49,6 +55,7 @@ CholeskyEliminationTree::CholeskyEliminationTree() : orderingLess_(this) {
 
 CholeskyEliminationTree::~CholeskyEliminationTree() {
   igo_finish(igo_cm);
+  free(igo_cm);
   igo_cm = nullptr;
 }
 
@@ -88,6 +95,11 @@ void CholeskyEliminationTree::getLinearSystem(
   assert(igo_A_hat == NULL);
   assert(igo_b_hat == NULL);
 
+  cholmod_triplet* Atilde_tri = NULL;
+  cholmod_triplet* btilde_tri = NULL;
+  cholmod_triplet* Ahat_tri = NULL;
+  cholmod_triplet* bhat_tri = NULL;
+
   unordered_set<sharedFactorWrapper> relinFactors;
   size_t relinNonzeros = 0;
 
@@ -112,17 +124,13 @@ void CholeskyEliminationTree::getLinearSystem(
       }
     }
   }
-
-  igo_A_tilde = igo_allocate_sparse(0, 0, 0, igo_cm);
-  igo_b_tilde = igo_allocate_sparse(0, 0, 0, igo_cm);
   
   // Height of A is the dimension of all the variables
   size_t A_height = keyToRows_.back();
   size_t A_width = factorToCols_.back();
 
-  cholmod_triplet* Atilde_tri = cholmod_allocate_triplet(A_height, A_width, relinNonzeros, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
-  cholmod_triplet* btilde_tri = cholmod_allocate_triplet(A_width, 1, A_width, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
-
+  Atilde_tri = cholmod_allocate_triplet(A_height, A_width, relinNonzeros, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+  btilde_tri = cholmod_allocate_triplet(A_width, 1, A_width, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
 
   int* Atilde_tri_i = (int*) Atilde_tri->i;
   int* Atilde_tri_j = (int*) Atilde_tri->j;
@@ -180,20 +188,10 @@ void CholeskyEliminationTree::getLinearSystem(
   }
 
   cholmod_sparse* A_tilde = cholmod_triplet_to_sparse(Atilde_tri, Atilde_tri->nnz, igo_cm->cholmod_cm);
-
-  // /* DEBUG */
-  // if(Atilde_tri->nnz != 0) {
-  //   cholmod_dense* A_tilde_print = cholmod_sparse_to_dense(A_tilde, igo_cm->cholmod_cm);
-  //   igo_print_cholmod_dense(3, "A_tilde", A_tilde_print, igo_cm->cholmod_cm);
-  // }
-  // /* DEBUG END */
-
   igo_A_tilde = igo_allocate_sparse2(&A_tilde, igo_cm);
+
   cholmod_sparse* b_tilde = cholmod_triplet_to_sparse(btilde_tri, btilde_tri->nnz, igo_cm->cholmod_cm);
   igo_b_tilde = igo_allocate_sparse2(&b_tilde, igo_cm);
-
-  cholmod_free_triplet(&Atilde_tri, igo_cm->cholmod_cm);
-  cholmod_free_triplet(&btilde_tri, igo_cm->cholmod_cm);
 
   size_t numNewCols = 0;
   size_t numNonzeros = 0;
@@ -257,9 +255,8 @@ void CholeskyEliminationTree::getLinearSystem(
 
   }
 
-  cholmod_triplet* Ahat_tri = cholmod_allocate_triplet(A_height, numNewCols, numNonzeros, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
-  cholmod_triplet* bhat_tri = cholmod_allocate_triplet(numNewCols, 1, numNewCols, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
-
+  Ahat_tri = cholmod_allocate_triplet(A_height, numNewCols, numNonzeros, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+  bhat_tri = cholmod_allocate_triplet(numNewCols, 1, numNewCols, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
 
   int* Ahat_tri_i = (int*) Ahat_tri->i;
   int* Ahat_tri_j = (int*) Ahat_tri->j;
@@ -316,9 +313,10 @@ void CholeskyEliminationTree::getLinearSystem(
   // cholmod_dense* A_hat_print = cholmod_sparse_to_dense(A_hat, igo_cm->cholmod_cm);
   // igo_print_cholmod_dense(3, "A_hat", A_hat_print, igo_cm->cholmod_cm);
 
+  cholmod_free_triplet(&Atilde_tri, igo_cm->cholmod_cm);
+  cholmod_free_triplet(&btilde_tri, igo_cm->cholmod_cm);
   cholmod_free_triplet(&Ahat_tri, igo_cm->cholmod_cm);
   cholmod_free_triplet(&bhat_tri, igo_cm->cholmod_cm);
-
 }
 
 void CholeskyEliminationTree::updateDelta(VectorValues* delta_ptr) {
@@ -329,8 +327,7 @@ void CholeskyEliminationTree::updateDelta(VectorValues* delta_ptr) {
     int row = keyToRows_[remappedKey];
     int dim = colWidth(remappedKey);
     for(int j = 0; j < dim; j++) {
-      int newRow = LPerm[row + j];
-      delta_ptr->at(unmappedKey)[j] = xx[newRow];
+      delta_ptr->at(unmappedKey)[j] = xx[row + j];
     }
   }
 }
