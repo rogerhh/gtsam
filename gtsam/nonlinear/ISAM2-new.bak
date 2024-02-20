@@ -16,7 +16,6 @@
  * @author  Michael Kaess, Richard Roberts, Frank Dellaert
  */
 
-#include "igo.h"
 #include <gtsam/nonlinear/ISAM2-impl.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/ISAM2Result.h>
@@ -29,6 +28,10 @@
 #include <algorithm>
 #include <map>
 #include <utility>
+
+extern "C" {
+#include "igo.h"
+}
 
 using namespace std;
 

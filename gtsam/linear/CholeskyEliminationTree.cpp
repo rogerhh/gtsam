@@ -5,7 +5,6 @@
 * @date    Feb. 8, 2023
 */
 
-#include "igo.h"
 #include <gtsam/base/types.h>
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
@@ -22,6 +21,10 @@
 #include <cmath>
 #include <stdexcept>
 #include <unordered_map>
+
+extern "C" {
+#include "igo.h"
+}
 
 using namespace std;
 
