@@ -18,7 +18,9 @@
 #include <iostream>
 #include <boost/optional.hpp>
 
+extern "C" {
 #include <igo.h>
+}
 
 namespace gtsam {
 
