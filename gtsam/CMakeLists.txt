@@ -110,10 +110,10 @@ target_link_libraries(gtsam PUBLIC ${GTSAM_ADDITIONAL_LIBRARIES})
 
 # 09/05/2023: Add igo library
 target_include_directories(gtsam PUBLIC ${CHOLMOD_INCLUDE_DIR})
-target_include_directories(gtsam PUBLIC "/home/ubuntu/igo/src")
+target_include_directories(gtsam PUBLIC "$ENV{HOME}/igo/src")
 target_link_libraries(gtsam PUBLIC ${CHOLMOD_LIBRARY})
 add_library(igo SHARED IMPORTED GLOBAL)
-set_target_properties(igo PROPERTIES IMPORTED_LOCATION "/home/ubuntu/igo/build/src/libigo.so")
+set_target_properties(igo PROPERTIES IMPORTED_LOCATION "$ENV{HOME}/igo/build/src/libigo.so")
 target_link_libraries(gtsam PUBLIC igo)
 
 
