@@ -452,7 +452,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   KeySet relinKeys;
 
-  params_.relinearizeThreshold = 1e-5;
+  // cout << "relin thresh = " << boost::get<double>(params_.relinearizeThreshold) << endl;
   relinKeys = update.CheckRelinearizationFull(delta_, params_.relinearizeThreshold);
 
   if (!relinKeys.empty()) {
@@ -480,8 +480,10 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                          A_hat,
                          b_hat);
 
-  // cout << "before solve increment2" << endl;
-  igo_solve_increment2(A_tilde, b_tilde, A_hat, b_hat, eTree_.igo_cm);
+  // cout << "before solve increment4" << endl;
+  igo_solve_increment4(A_tilde, b_tilde, A_hat, b_hat, eTree_.igo_cm);
+  
+  // cout << "after solve increment4" << endl;
 
   igo_free_sparse(&A_tilde, eTree_.igo_cm);
   igo_free_sparse(&b_tilde, eTree_.igo_cm);
