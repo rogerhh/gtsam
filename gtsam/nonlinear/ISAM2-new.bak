@@ -492,6 +492,9 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
       last_variable_count = theta_.size();
       reorder_flag = true;
   }
+  // // Baseline against SuiteSparse
+  // reorder_flag = false;
+
   if(reorder_flag) {
       // cout << "reordering" << endl;
       reorder_flag = false;
@@ -504,7 +507,9 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   const ISAM2GaussNewtonParams& gaussNewtonParams =
       boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
 
-  eTree_.backsolve(&delta_, gaussNewtonParams.wildfireThreshold);
+  // Baseline against SuiteSparse
+  // eTree_.backsolve(&delta_, gaussNewtonParams.wildfireThreshold);
+  eTree_.backsolve(&delta_, 0.0);
   eTree_.reset();
   
   // cout << "Delta = " << endl;
