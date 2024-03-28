@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <gtsam/linear/GaussianBayesTree.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
 #include <gtsam/nonlinear/ISAM2Clique.h>
@@ -158,6 +159,9 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
   virtual ISAM2Result update(
       const NonlinearFactorGraph& newFactors = NonlinearFactorGraph(),
       const Values& newTheta = Values(),
+      int relin_tree_depth = INT_MAX,
+      int max_relin_factors = INT_MAX,
+      int max_relin_keys = INT_MAX,
       const FactorIndices& removeFactorIndices = FactorIndices(),
       const boost::optional<FastMap<Key, int> >& constrainedKeys = boost::none,
       const boost::optional<FastList<Key> >& noRelinKeys = boost::none,
@@ -184,7 +188,10 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
    */
   virtual ISAM2Result update(const NonlinearFactorGraph& newFactors,
                              const Values& newTheta,
-                             const ISAM2UpdateParams& updateParams);
+                             const ISAM2UpdateParams& updateParams,
+                             int relin_tree_depth = INT_MAX,
+                             int max_relin_factors = INT_MAX,
+                             int max_relin_keys = INT_MAX);
 
   /** Marginalize out variables listed in leafKeys.  These keys must be leaves
    * in the BayesTree.  Throws MarginalizeNonleafException if non-leaves are

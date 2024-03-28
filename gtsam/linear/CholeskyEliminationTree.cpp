@@ -5,6 +5,8 @@
 * @date    Feb. 8, 2023
 */
 
+#include "gtsam/linear/JacobianFactor.h"
+#include "gtsam/linear/VectorValues.h"
 #include "gtsam/nonlinear/NonlinearFactor.h"
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
@@ -20,6 +22,7 @@
 #include <fstream>
 #include <cmath>
 #include <stdexcept>
+#include <unordered_map>
 
 using namespace std;
 
@@ -180,6 +183,206 @@ void CholeskyEliminationTree::markAffectedKeys(
 
 }
 
+void CholeskyEliminationTree::pickRelinKeysVIO(
+  vector<pair<Key, double>>& KeyDeltaVec,
+  int maxRelinKeys,
+  double relinThresh,
+  KeySet* newRemappedRelinKeys) {
+
+  int key_count = 0;
+  int relin_count = 0;
+  for(auto it = KeyDeltaVec.rbegin(); it != KeyDeltaVec.rend(); it++) {
+    if(key_count < maxRelinKeys) {
+      newRemappedRelinKeys->insert(it->first);
+      key_count++;
+    }
+    if(it->second > relinThresh) {
+      relin_count++;
+    }
+  }
+
+  // cout << "Total relin keys: " << relin_count << " num relin: " << key_count << endl;
+
+  // cout << "Relin keys: ";
+  // for(auto k : *newRemappedRelinKeys) {
+  //   cout << k << " ";
+  // }
+  // cout << endl;
+}
+
+void CholeskyEliminationTree::pickRelinKeys(
+  vector<pair<Key, double>>& KeyDeltaVec,
+  int maxRelinKeys,
+  double relinThresh,
+  KeySet* newRemappedRelinKeys) {
+
+  newRemappedRelinKeys->clear();
+
+  vector<pair<Key, double>> newKeyDeltaVec;
+  newKeyDeltaVec.reserve(KeyDeltaVec.size());
+
+  for(auto& p : KeyDeltaVec) {
+    if(p.second > relinThresh) {
+      newKeyDeltaVec.push_back(p);
+    }
+  }
+  KeyDeltaVec = std::move(newKeyDeltaVec);
+
+  int key_count = 0;
+  int relin_count = KeyDeltaVec.size();
+
+  sort(KeyDeltaVec.begin(), KeyDeltaVec.end(), 
+      [](const auto& lhs, const auto& rhs) { return lhs.second < rhs.second; });
+
+  for(auto it = KeyDeltaVec.rbegin(); it != KeyDeltaVec.rend(); it++) {
+    if(key_count < maxRelinKeys && rand() % 100 < 100) {
+      newRemappedRelinKeys->insert(it->first);
+      key_count++;
+    }
+    if(key_count >= maxRelinKeys) { break; }
+  }
+
+  cout << "Total relin keys: " << relin_count << " num relin: " << key_count << endl;
+
+  cout << "Relin keys: ";
+  for(auto k : *newRemappedRelinKeys) {
+    cout << k << " ";
+  }
+  cout << endl;
+}
+
+
+// Mark directly changed keys and keys that we explicitly want to update (extraKeys)
+// observedKeys are the keys associated with the new factors
+void CholeskyEliminationTree::markAffectedKeys2(
+  int maxRelinDepth,
+  int maxRelinFactors,
+  const unordered_map<Key, int>& depthLookup,
+  const NonlinearFactorGraph& nonlinearFactors,
+  const FactorIndices& newFactorIndices,
+  const KeySet& relinKeys, 
+  const ISAM2UpdateParams& updateParams,
+  RemappedKeySet* affectedKeys,
+  RemappedKeySet* observedKeys) {
+
+  // cout << "[CholeskyEliminationTree] markAffectedKeys()" << endl;
+  affectedKeys->clear();
+  observedKeys->clear();
+
+  // RelinKeys should be processed before we add in factors because we only need to
+  // relinearize old factors
+  for(const Key unmappedRelinKey : relinKeys) {
+    RemappedKey relinKey = getRemapKey(unmappedRelinKey);
+    sharedNode relinNode = nodes_[relinKey];
+    assert(relinNode->status() != NEW);
+
+    // Ignore all relin nodes that are MARGINALIZED (fixed)
+    if(relinNode->status() == MARGINALIZED) {
+      continue;
+    }
+
+    for(sharedFactorWrapper factorWrapper : relinNode->factors) {
+      if(factorWrapper->status() == LINEARIZED) {
+        factorWrapper->setStatusRelinearize();
+        factorWrapper->markAffectedKeys(affectedKeys);
+      }
+    }
+
+  }
+  
+  for(const FactorIndex newFactorIndex : newFactorIndices) {
+    // newFactorIndex starts from 0, and does not necessarily correspond to total factor index
+    BlockIndexVector blockIndices;
+    sharedFactor factor = nonlinearFactors[newFactorIndex];
+    size_t factorIndex = factors_.size();
+    sharedFactorWrapper factorWrapper = std::make_shared<FactorWrapper>(
+                                          factorIndex, factor, nullptr, this);
+
+    // If factor involves variables that are marginalized, ignore factor
+    if(factorWrapper->hasMarginalizedKeys()) {
+      assert(0);
+    }
+
+    factors_.push_back(factorWrapper);
+
+    for(RemappedKey k : factorWrapper->remappedKeys()) {
+      // k is in every factor, we shouldn't have to store it
+      if(k != 0) {
+        sharedNode node = nodes_[k];
+        node->addFactor(factorWrapper);
+      }
+    }
+
+    factorWrapper->markAffectedKeys(affectedKeys);
+    factorWrapper->markAffectedKeys(observedKeys);
+  }
+  
+  for(const FactorIndex removeFactorIndex : updateParams.removeFactorIndices) {
+    sharedFactorWrapper factorWrapper = factors_.at(removeFactorIndex);
+    
+    // If factor involves variables that are marginalized, it cannot be removed
+    if(factorWrapper->hasMarginalizedKeys()) {
+      assert(0);
+    }
+
+    factorWrapper->setStatusRemoving();
+    factorWrapper->markAffectedKeys(affectedKeys);
+  }
+
+  // We don't have to worry about noRelinKeys for now as it will be removed from relinKeys
+  
+  // We have to manually mark extraReelimKeys as affectedKeys though
+  if(updateParams.extraReelimKeys) {
+    for(Key unmappedExtraReelimKey : updateParams.extraReelimKeys.get()) {
+      RemappedKey extraReelimKey = getRemapKey(unmappedExtraReelimKey);
+      affectedKeys->insert(extraReelimKey);
+    }
+  }
+
+  if(updateParams.newAffectedKeys) {
+    for(auto&[factorIndex, newUnmappedKeys] : updateParams.newAffectedKeys.get()) {
+      vector<RemappedKey> newKeys;
+      for(Key newUnmappedKey : newUnmappedKeys) {
+        newKeys.push_back(getRemapKey(newUnmappedKey));
+      }
+      sharedFactorWrapper factorWrapper = factors_[factorIndex];
+      factors_[factorIndex]->addNewKeys(newKeys);
+      factors_[factorIndex]->markAffectedKeys(affectedKeys);
+      factors_[factorIndex]->markAffectedKeys(observedKeys);
+    }
+  }
+
+  // DEBUG
+  for(RemappedKey key : *affectedKeys) {
+    if(!(nodes_[key]->status() == UNMARKED || nodes_[key]->status() == NEW)) {
+      cout << "Node " << key << " status = " << nodes_[key]->status() << endl;
+    }
+    assert(nodes_[key]->status() == UNMARKED || nodes_[key]->status() == NEW);
+  }
+  // DEBUG END
+
+  // // DEBUG
+  // cout << "Observed keys: ";
+  // for(RemappedKey key : *observedKeys) {
+  //   cout << key << " ";
+  // }
+  // cout << endl;
+
+  // cout << "RelinKeys: ";
+  // for(const Key relinKey : relinKeys) {
+  //     cout << getRemapKey(relinKey) << " ";
+  // }
+  // cout << endl;
+
+  // cout << "Affected keys: ";
+  // for(RemappedKey key : *affectedKeys) {
+  //   cout << key << " ";
+  // }
+  // cout << endl;
+  //  // DEBUG END
+
+}
+
 void CholeskyEliminationTree::markAncestors(
     const RemappedKeySet& affectedKeys, 
     RemappedKeySet* markedKeys) {
@@ -224,6 +427,8 @@ void CholeskyEliminationTree::markKey(const RemappedKey key, RemappedKeySet* mar
 void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKeys) {
   // cout << "[CholeskyEliminationTree] symbolicElimination()" << endl;
 
+  if(markedKeys.empty()) { return; }
+
   root_ = nullptr;
 
   // cout << "markedKeys: ";
@@ -243,12 +448,18 @@ void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKe
   }
   assert(root_);
 
+  if(!root_) {
+    cout << "No root!" << endl;
+    exit(1);
+  }
+
   if(postOrder_) {
     // sortedMarkedKeys in this case will be exactly the same as partialOrdering
     postReordering(sortedMarkedKeys);
   }
 
   allocateStack();
+
 
 #ifdef DEBUG
   checkInvariant_afterSymbolic();
@@ -298,7 +509,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
     // Clique 0 cannot be merged and will always be root
     sharedClique childClique = *(clique->children.begin());
     if(childClique->marked() 
-        && colStructure.size() == childClique->blockIndices.size() - childClique->cliqueSize()) {
+        && colStructure.size() == (int) childClique->blockIndices.size() - (int) childClique->cliqueSize()) {
       childClique->mergeClique(clique);
       // Need to update clique pointer to current clique, which is the child clique
       assert(clique.unique());
@@ -414,7 +625,7 @@ void CholeskyEliminationTree::constructCSCMatrix(
     sharedClique clique = cliques_[key];
     for(sharedClique child : clique->children) {
       assert(!child->marked());
-      for(size_t i = child->cliqueSize(); i < child->blockIndices.size() - 1; i++) {
+      for(int i = child->cliqueSize(); i < (int) child->blockIndices.size() - 1; i++) {
         RemappedKey key = get<BLOCK_INDEX_KEY>(child->blockIndices[i]);
         auto it = markedKeysIndex.find(key);
         assert(it != markedKeysIndex.end());
@@ -1042,7 +1253,7 @@ void CholeskyEliminationTree::editOrReconstructFromClique(
 
   bool processGrouped = true;
   size_t destSize = destCols.size();
-  size_t totalSize = blockIndices.size() - 1;
+  int totalSize = blockIndices.size() - 1;
   // if(destSize * 2 < totalSize) {
   //     processGrouped = false;
   // }
@@ -1334,6 +1545,7 @@ void CholeskyEliminationTree::backsolve(VectorValues* delta_ptr, double tol) {
   vector<pair<sharedClique, bool>> stack(1, {root_, false});
   // Already solved delta. Used to avoid VectorValues.at(key)
   vector<Vector> cachedDelta(nodes_.size());
+
   while(!stack.empty()) {
     auto& curPair = stack.back();
     sharedClique clique = curPair.first;
@@ -1348,13 +1560,13 @@ void CholeskyEliminationTree::backsolve(VectorValues* delta_ptr, double tol) {
       bool backsolve = clique->marked() || clique->needsBacksolve();
 
       if(backsolve) {
-
         backsolveClique(clique, delta_ptr, tol);
 
         for(sharedClique child : clique->children) {
           stack.push_back({child, false});
         }
       }
+
     }
     else {
       stack.pop_back();
@@ -1395,7 +1607,7 @@ void CholeskyEliminationTree::backsolveClique(
     Vector gatherX(subdiagHeight - 1);
 
     // Gather deltas this clique depends on, don't need last row
-    for(int i = cliqueSize; i < blockIndices.size() - 1; i++) {
+    for(int i = cliqueSize; i < ((int) blockIndices.size()) - 1; i++) {
       auto[key, row, height] = blockIndices[i];
       Key unmappedKey = unmapKey(key);
 
@@ -1569,7 +1781,7 @@ void CholeskyEliminationTree::marginalizeClique(
 
   const BlockIndexVector& blockIndices = clique->blockIndices;
   size_t lowestIndex = 0, lowestRow = 0;
-  for(size_t i = 0; i < blockIndices.size() - 1; i++) {
+  for(int i = 0; i < ((int) blockIndices.size()) - 1; i++) {
     const auto&[key, row, height] = blockIndices[i];
     if(nodes_[key]->status() != MARGINALIZED) {
       lowestIndex = i;
@@ -1593,7 +1805,7 @@ void CholeskyEliminationTree::marginalizeClique(
   vector<size_t> dimensions;
   vector<Key> unmappedKeys;
   dimensions.reserve(blockIndices.size());
-  for(size_t i = lowestIndex; i < blockIndices.size() - 1; i++) {
+  for(size_t i = lowestIndex; i < ((int) blockIndices.size()) - 1; i++) {
     // No need to add -1 key
     const auto&[key, row, height] = blockIndices[i];
     dimensions.push_back(height);
@@ -1655,6 +1867,83 @@ void CholeskyEliminationTree::printOrderingRemapped(std::ostream& os) const {
 
 NonlinearFactor::shared_ptr CholeskyEliminationTree::nonlinearFactorAt(size_t i) { 
     return factors_[i]->nonlinearFactor(); 
+}
+
+void CholeskyEliminationTree::makeTreeDepthMap(int maxDepth, unordered_map<Key, int>* depthLookup) const {
+    depthLookup->clear();
+
+    if(!root_) { return; }
+
+    vector<sharedClique> stack(1, root_);
+    vector<int> depth(1, 0);
+    while(!stack.empty()) {
+      sharedClique curClique = stack.back();
+      stack.pop_back();
+      int curDepth = depth.back();
+      depth.pop_back();
+
+      for(auto node : curClique->nodes) {
+        Key unmappedKey = unmapKey(node->key);
+        depthLookup->insert({unmappedKey, curDepth});
+        curDepth++;
+      }
+
+      if(curDepth > maxDepth) {
+        continue;
+      }
+      else {
+        for(auto child : curClique->children) {
+          stack.push_back(child);
+          depth.push_back(curDepth);
+        }
+      }
+    }
+}
+
+VectorValues CholeskyEliminationTree::gradient(const Values& accurate_theta) const {
+    // Zero-out the gradient
+    VectorValues g;
+    for(sharedFactorWrapper factorWrapper : factors_) {
+      if(factorWrapper->status() != LINEARIZED) {
+        cerr << "Factor not linearized!" << endl;
+        exit(1);
+      }
+
+      sharedLinearFactor lf = factorWrapper->nonlinearFactor()->linearize(accurate_theta);
+
+      VectorValues gi = lf->gradientAtZero();
+      g.addInPlace_(gi);
+    }
+    return g;
+}
+
+Errors CholeskyEliminationTree::Ax(const VectorValues& x, const Values& accurate_theta) const {
+    Errors e;
+    for(sharedFactorWrapper factorWrapper : factors_) {
+      if(factorWrapper->status() != LINEARIZED) {
+        cerr << "Factor not linearized!" << endl;
+        exit(1);
+      }
+
+      sharedLinearFactor lf = factorWrapper->nonlinearFactor()->linearize(accurate_theta);
+
+      const JacobianFactor* Ai = dynamic_cast<const JacobianFactor*>(lf.get());
+
+      e.push_back((*Ai) * x);
+    }
+    return e;
+}
+
+double CholeskyEliminationTree::error(const Values& values) const {
+  double total_error = 0.;
+  // iterate over all the factors_ to accumulate the log probabilities
+  for(const sharedFactorWrapper& factorWrapper : factors_) {
+    sharedFactor factor = factorWrapper->nonlinearFactor();
+
+    if(factor)
+      total_error += factor->error(values);
+  }
+  return total_error;
 }
 
 RemappedKey CholeskyEliminationTree::addRemapKey(const Key unmappedKey) {

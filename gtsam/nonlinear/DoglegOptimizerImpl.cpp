@@ -33,13 +33,16 @@ VectorValues DoglegOptimizerImpl::ComputeDoglegPoint(
   if(verbose) cout << "Steepest descent magnitude " << std::sqrt(x_u_norm_sq) << ", Newton's method magnitude " << std::sqrt(x_n_norm_sq) << endl;
   if(deltaSq < x_u_norm_sq) {
     // Trust region is smaller than steepest descent update
+    cout << "Dogleg 1" << endl;
     VectorValues x_d = std::sqrt(deltaSq / x_u_norm_sq) * dx_u;
     if(verbose) cout << "In steepest descent region with fraction " << std::sqrt(deltaSq / x_u_norm_sq) << " of steepest descent magnitude" << endl;
     return x_d;
   } else if(deltaSq < x_n_norm_sq) {
+    cout << "Dogleg 2" << endl;
     // Trust region boundary is between steepest descent point and Newton's method point
     return ComputeBlend(delta, dx_u, dx_n, verbose);
   } else {
+    cout << "Dogleg 3" << endl;
     assert(deltaSq >= x_n_norm_sq);
     if(verbose) cout << "In pure Newton's method region" << endl;
     // Trust region is larger than Newton's method point

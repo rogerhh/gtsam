@@ -13,9 +13,11 @@
 #include <gtsam/nonlinear/NonlinearFactorGraph.h>
 #include <gtsam/nonlinear/ISAM2UpdateParams.h>
 #include <vector>
+#include <unordered_set>
 #include <unordered_map>
 #include <utility>
 #include <iostream>
+#include <queue>
 #include <boost/optional.hpp>
 
 namespace gtsam {
@@ -82,6 +84,14 @@ private:
     std::vector<std::vector<RemappedKey>> descendants_;
     std::vector<std::vector<RemappedKey>> changedDescendants_;
 
+    std::unordered_set<sharedFactorWrapper> relinFactorsSet;
+    std::queue<sharedFactorWrapper> relinFactorsQueue;
+
+    std::set<Key> relinKeysSet;
+    std::queue<Key> relinKeysQueue;
+
+    std::unordered_set<RemappedKey> disableBackSolve;
+
 public:
   CholeskyEliminationTree();
 
@@ -90,6 +100,28 @@ public:
   // Mark directly changed keys and keys that we explicitly want to update (extraKeys)
   // observedKeys are the keys associated with the new factors
   void markAffectedKeys(const NonlinearFactorGraph& nonlinearFactors,
+                        const FactorIndices& newFactorIndices,
+                        const KeySet& relinKeys, 
+                        const ISAM2UpdateParams& updateParams,
+                        // const boost::optional<FastList<Key>>& extraKeys,
+                        RemappedKeySet* affectedKeys,
+                        RemappedKeySet* observedKeys);
+
+  void pickRelinKeysVIO(std::vector<std::pair<Key, double>>& keyDeltaVec,
+                     int maxRelinKeys,
+                     double relinThresh,
+                     KeySet* newRemappedRelinKeys);
+
+  void pickRelinKeys(std::vector<std::pair<Key, double>>& keyDeltaVec,
+                     int maxRelinKeys,
+                     double relinThresh,
+                     KeySet* newRemappedRelinKeys);
+
+  // Mark affected keys if smaller than max depth
+  void markAffectedKeys2(int maxRelinDepth,
+                        int maxRelinFactors,
+                        const std::unordered_map<Key, int>& depthLookup,
+                        const NonlinearFactorGraph& nonlinearFactors,
                         const FactorIndices& newFactorIndices,
                         const KeySet& relinKeys, 
                         const ISAM2UpdateParams& updateParams,
@@ -133,6 +165,14 @@ public:
   size_t numFactors() const { return factors_.size(); }
 
   sharedFactor nonlinearFactorAt(size_t i);
+
+  void makeTreeDepthMap(int maxDepth, std::unordered_map<Key, int>* depthLookup) const;
+
+  VectorValues gradient(const Values& accurate_theta) const;
+
+  Errors Ax(const VectorValues& x, const Values& accurate_theta) const;
+
+  double error(const Values& values) const;
 
 private:
   // Add new unmapped Key to transform map and return the mapped key, 

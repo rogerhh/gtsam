@@ -19,6 +19,7 @@
 #include <gtsam/nonlinear/ISAM2-impl.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/ISAM2Result.h>
+#include <gtsam/nonlinear/DoglegOptimizerImpl.h>
 
 #include <gtsam/base/debug.h>
 #include <gtsam/base/timing.h>
@@ -27,6 +28,7 @@
 
 #include <algorithm>
 #include <map>
+#include <unordered_map>
 #include <utility>
 
 using namespace std;
@@ -395,6 +397,9 @@ void ISAM2::removeVariables(const KeySet& unusedKeys) {
 /* ************************************************************************* */
 ISAM2Result ISAM2::update(
     const NonlinearFactorGraph& newFactors, const Values& newTheta,
+    int relin_tree_depth,
+    int max_relin_factors,
+    int max_relin_keys,
     const FactorIndices& removeFactorIndices,
     const boost::optional<FastMap<Key, int> >& constrainedKeys,
     const boost::optional<FastList<Key> >& noRelinKeys,
@@ -407,13 +412,16 @@ ISAM2Result ISAM2::update(
   params.noRelinKeys = noRelinKeys;
   params.removeFactorIndices = removeFactorIndices;
 
-  return update(newFactors, newTheta, params);
+  return update(newFactors, newTheta, params, relin_tree_depth, max_relin_factors, max_relin_keys);
 }
 
 /* ************************************************************************* */
 ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                           const Values& newTheta,
-                          const ISAM2UpdateParams& updateParams) {
+                          const ISAM2UpdateParams& updateParams,
+                          int relin_tree_depth,
+                          int max_relin_factors,
+                          int max_relin_keys) {
   // 1. Add new factors to list of factors and mark the variables involved
   // 2. Mark the variables that need to be relinearized (linearize when doing Cholesky for locality)
   // 3. Find all affected variables in the etree by traversing back up the tree from 
@@ -421,7 +429,9 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // 4. Determine a new ordering
   // 5. Do symbolic factorization and construct new etree
   // 6. Re-eliminate
-  //
+  
+  Values x_old = theta_.retract(delta_);
+
   gttic(ISAM2_update);
   this->update_count_ += 1;
   UpdateImpl::LogStartingUpdate(newFactors, *this);
@@ -449,9 +459,21 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   // Gather involved keys
 
+  vector<pair<Key, double>> keyDeltaVec;
   KeySet relinKeys;
+  KeySet newRelinKeys;
 
-  relinKeys = update.CheckRelinearizationFull(delta_, params_.relinearizeThreshold);
+  // relinKeys = update.CheckRelinearizationFull(delta_, params_.relinearizeThreshold);
+  
+  // For resource aware case
+  keyDeltaVec = update.CheckRelinearizationFull2(delta_, params_.relinearizeThreshold);
+  const int maxRelinDepth = relin_tree_depth;
+  unordered_map<Key, int> depthLookup;
+  eTree_.pickRelinKeys(keyDeltaVec, max_relin_keys, 
+      *boost::get<double>(&params_.relinearizeThreshold), &newRelinKeys);
+  // eTree_.pickRelinKeysVIO(keyDeltaVec, max_relin_keys, 
+  //     *boost::get<double>(&params_.relinearizeThreshold), &newRelinKeys);
+  relinKeys = newRelinKeys;
 
   if (!relinKeys.empty()) {
     // 6. Update linearization point for marked variables:
@@ -466,6 +488,17 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                           // updateParams.extraReelimKeys,
                           &affectedKeys,
                           &observedKeys);
+
+  // eTree_.markAffectedKeys2(maxRelinDepth,
+  //                         max_relin_factors,
+  //                         depthLookup,
+  //                         nonlinearFactors_,
+  //                         result.newFactorsIndices,
+  //                         relinKeys,
+  //                         updateParams,
+  //                         // updateParams.extraReelimKeys,
+  //                         &affectedKeys,
+  //                         &observedKeys);
 
   // This step is technically not needed, we can just do this in symbolic update
   eTree_.markAncestors(affectedKeys, &markedKeys);
@@ -507,6 +540,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   const ISAM2GaussNewtonParams& gaussNewtonParams =
       boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
 
+
   // Baseline against SuiteSparse
   // eTree_.backsolve(&delta_, gaussNewtonParams.wildfireThreshold);
   eTree_.backsolve(&delta_, 0.0);
@@ -518,6 +552,98 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // char t;
   // cin >> t;
   // cout << endl;
+
+  bool dogleg = max_relin_keys > 5;
+
+  if(dogleg) {
+    // 1. First compute h_gd and h_n (h_n is the solution given by delta)
+    //    Let g = Atb
+    //    Compute alpha = <g, g> / <Ltg, Ltg>
+    //    h_gd = -alpha * g
+
+    static double d = 0.01;
+    static double d_min = 1e-3;
+    static double eta1 = 0.75;
+    static double eta2 = 0.25;
+    static double gamma1 = 3;
+    static double gamma2 = 0.5;
+    static double avg_eta = (eta1 + eta2) / 2;
+
+    VectorValues g = eTree_.gradient(x_old);
+    // g.print();
+    
+    Errors Ltg = eTree_.Ax(g, x_old); // Gradient calculation needs to give best gradient
+
+    double gradientSqNorm = g.dot(g);
+    double step = -gradientSqNorm / dot(Ltg, Ltg);
+
+    VectorValues h_gd = g;
+
+    h_gd *= step;
+
+    cout << "step size = " << h_gd.norm() << endl;
+
+    VectorValues& h_n = delta_;
+
+
+    // 2. Compute h_dl as follows
+    //    Let d be the trust region size
+    //    if || h_gd || > d:
+    //      h_dl = h_gd * d / || h_gd ||
+    //    else if || h_n || > d:
+    //      h_dl = h_gd + beta (h_n - h_gd), where beta \in (0, 1) is chosen so that || h_dl || = d
+    //    else:
+    //      h_dl = h_n
+
+    // VectorValues h_dl = DoglegOptimizerImpl::ComputeDoglegPoint(d, h_gd, h_n, false);
+    VectorValues h_dl = h_gd;
+    // VectorValues h_dl = h_n;
+
+    // h_dl.print();
+
+    // 3. Update d as follows
+    //    First compute the gain ratio rho
+    //    ared = last_error - graph_error(x + h_dl)
+    //    pred = -(2 <g, h_dl> + <A h_dl, A h_dl>). This is because pred = q(0) - q(h_dl) = btb - (btb + 2gt h_dl + h_dlt AtA h_dl)
+    //    rho = ared / pred
+    //    if rho > thresh_1:
+    //      d = max(d, eta_1 * || h_n ||)
+    //    else if thresh_2 < rho < thresh_1:
+    //      d = d
+    //    else:
+    //      d = max(min_d, eta_2 * d)
+
+    Values x_dl = theta_.retract(h_dl);
+    double last_error = eTree_.error(x_old);
+    double cur_error = eTree_.error(x_dl);
+
+    double ared = last_error - cur_error;
+
+    cout << "last_error = " << last_error << " cur_error = " << cur_error << endl;
+
+    Errors Ah_dl = eTree_.Ax(h_dl, x_old);
+
+    cout << "gt h_dl = " << g.dot(h_dl) << " xtAtAx = " << dot(Ah_dl, Ah_dl) << endl;
+    double pred = (-2 * g.dot(h_dl) - dot(Ah_dl, Ah_dl));
+
+    double rho = (fabs(ared) < 1e-15 || fabs(pred) < 1e-15)? avg_eta : ared / pred;
+
+    cout << "ared = " << ared << " " << " pred = " << pred << " rho = " << rho << " d = " << d << endl;
+
+    if(rho > eta1) {
+      double h_dl_norm = h_dl.norm();
+      d = max(d, gamma1 * h_dl_norm);
+    }
+    else if(rho < eta2) {
+      d = max(d_min, gamma2 * d);
+    }
+
+    last_error = cur_error;
+
+
+    delta_ = h_dl;
+
+  }
 
   return result;
 }

@@ -92,7 +92,7 @@ void CholeskyEliminationTree::Clique::reorderClique() {
   std::sort(colStructure.begin(), colStructure.end(), etree->orderingLess_);
 
   bool needReorder = false;
-  for(size_t i = 0; i < blockIndices.size() - 1; i++) {
+  for(int i = 0; i < ((int) blockIndices.size()) - 1; i++) {
     if(colStructure[i] != get<BLOCK_INDEX_KEY>(blockIndices[i])) {
       needReorder = true;
       break;
@@ -334,6 +334,9 @@ void CholeskyEliminationTree::Clique::populateBlockIndices(
 }
 
 bool CholeskyEliminationTree::Clique::hasMarkedAncestor() {
+
+  if(blockIndices.size() < 2) { return false; }
+
   // only need to check highest key that is not 0 (last row)
   assert(blockIndices.size() > cliqueSize() + 1);
   assert(get<BLOCK_INDEX_KEY>(blockIndices.back()) == 0);
@@ -421,7 +424,7 @@ bool CholeskyEliminationTree::Clique::needsBacksolve() const {
   assert(get<BLOCK_INDEX_KEY>(blockIndices.back()) == 0);
   // Don't check key 0. Start from the back as higher keys are more likely to 
   // need to backsolve
-  for(size_t i = blockIndices.size() - 2; i >= cliqueSize(); i--) {
+  for(int i = (int) blockIndices.size() - 2; i >= (int) cliqueSize(); i--) {
     RemappedKey key = get<BLOCK_INDEX_KEY>(blockIndices[i]);
     if(etree->nodes_[key]->backsolve) {
       return true;
