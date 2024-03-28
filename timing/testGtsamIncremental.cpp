@@ -50,6 +50,7 @@ int main(int argc, char *argv[]) {
     double d_error = 0.001;
     int max_iter = 10;
     int num_steps = 1000000;
+    double relin_thresh = 0.1;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -58,6 +59,7 @@ int main(int argc, char *argv[]) {
         {"epsilon", required_argument, 0, 'e'},
         {"max_iter", required_argument, 0, 'm'},
         {"d_error", required_argument, 0, 'd'},
+        {"relin_thresh", required_argument, 0, 'r'},
         {"relinearize_skip", required_argument, 0, 's'},
         {"print_frequency", required_argument, 0, 'p'},
         {"num_steps", required_argument, 0, 't'},
@@ -80,6 +82,9 @@ int main(int argc, char *argv[]) {
                 break;
             case 'd':
                 d_error = atof(optarg);
+                break;
+            case 'r':
+                relin_thresh = atof(optarg);
                 break;
             case 's':
                 relinearize_skip = atoi(optarg);
@@ -119,6 +124,7 @@ int main(int argc, char *argv[]) {
     cout << "Playing forward time steps..." << endl;
 
     ISAM2Params isam2params;
+    isam2params.relinearizeThreshold = relin_thresh;
     isam2params.relinearizeSkip = relinearize_skip;
     ISAM2 isam2(isam2params);
 

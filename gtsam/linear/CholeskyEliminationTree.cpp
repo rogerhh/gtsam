@@ -149,14 +149,17 @@ void CholeskyEliminationTree::markAffectedKeys(
     }
   }
 
-  // DEBUG
-  for(RemappedKey key : *affectedKeys) {
-    if(!(nodes_[key]->status() == UNMARKED || nodes_[key]->status() == NEW)) {
-      cout << "Node " << key << " status = " << nodes_[key]->status() << endl;
-    }
-    assert(nodes_[key]->status() == UNMARKED || nodes_[key]->status() == NEW);
-  }
-  // DEBUG END
+  // cout << "Num affectedKeys = " << affectedKeys->size() << endl;
+
+
+  // // DEBUG
+  // for(RemappedKey key : *affectedKeys) {
+  //   if(!(nodes_[key]->status() == UNMARKED || nodes_[key]->status() == NEW)) {
+  //     cout << "Node " << key << " status = " << nodes_[key]->status() << endl;
+  //   }
+  //   assert(nodes_[key]->status() == UNMARKED || nodes_[key]->status() == NEW);
+  // }
+  // // DEBUG END
 
   // // DEBUG
   // cout << "Observed keys: ";
