@@ -416,6 +416,8 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
                           const Values& newTheta,
                           const ISAM2UpdateParams& updateParams,
                           const boost::optional<FastList<Key>>& extraRelinKeys) {
+  auto step_start = std::chrono::high_resolution_clock::now();
+
   // 1. Add new factors to list of factors and mark the variables involved
   // 2. Mark the variables that need to be relinearized (linearize when doing Cholesky for locality)
   // 3. Find all affected variables in the etree by traversing back up the tree from 
@@ -468,6 +470,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
     UpdateImpl::ExpmapMasked(delta_, relinKeys, &theta_);
   }
 
+  auto symbolic_start = std::chrono::high_resolution_clock::now();
   eTree_.markAffectedKeys(nonlinearFactors_,
                           result.newFactorsIndices,
                           relinKeys,
@@ -492,6 +495,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   //   cout << "marked keys size =  " <<  markedKeys.size() << endl;
   // }
 
+  auto reorder_start = std::chrono::high_resolution_clock::now();
   if(updateParams.constrainedKeys) {
     // If we have constrained keys, we need to reorder
     reorder_flag = true;
@@ -508,14 +512,28 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
       reorder_flag = false;
       eTree_.updateOrdering(markedKeys, observedKeys, updateParams);
   }
+  auto reorder_end = std::chrono::high_resolution_clock::now();
+  cout << "Reorder cycles: " << std::chrono::duration_cast<std::chrono::microseconds>(reorder_end - reorder_start).count() << endl;
 
   eTree_.symbolicElimination(markedKeys);
+  auto symbolic_end = std::chrono::high_resolution_clock::now();
+  cout << "Symbolic cycles: " << std::chrono::duration_cast<std::chrono::microseconds>(symbolic_end - symbolic_start).count() << endl;
+
+  auto chol_start = std::chrono::high_resolution_clock::now();
   eTree_.choleskyElimination(theta_);
+  auto chol_end = std::chrono::high_resolution_clock::now();
+
+  cout << "Cholesky cycles: " << std::chrono::duration_cast<std::chrono::microseconds>(chol_end - chol_start).count() << endl;
 
   const ISAM2GaussNewtonParams& gaussNewtonParams =
       boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
 
+  auto backsolve_start = std::chrono::high_resolution_clock::now();
   eTree_.backsolve(&delta_, gaussNewtonParams.wildfireThreshold);
+  auto backsolve_end = std::chrono::high_resolution_clock::now();
+
+  cout << "Backsolve cycles: " << std::chrono::duration_cast<std::chrono::microseconds>(backsolve_end - backsolve_start).count() << endl;
+
   eTree_.reset();
   
   // cout << "Delta = " << endl;
@@ -524,6 +542,10 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // char t;
   // cin >> t;
   // cout << endl;
+
+  auto step_end = std::chrono::high_resolution_clock::now();
+
+  cout << "Total step cycles: " << std::chrono::duration_cast<std::chrono::microseconds>(step_end - step_start).count() << endl;
 
   return result;
 }

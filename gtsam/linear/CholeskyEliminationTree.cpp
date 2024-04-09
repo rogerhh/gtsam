@@ -1,4 +1,3 @@
-
 /**
 * @file    CholeskyEliminationTree.h
 * @brief   Elimination tree structure to perform symbolic factorization and Cholesky factorization
@@ -25,10 +24,17 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <queue>
+#include <chrono>
 
 using namespace std;
 
 namespace gtsam {
+
+uint64_t restore_cycles = 0;
+uint64_t relin_cycles = 0;
+uint64_t AtA_cycles = 0;
+uint64_t fac_cycles = 0;
+uint64_t merge_cycles = 0;
 
 // Convenience function
 inline Eigen::Block<Eigen::Map<ColMajorMatrix<GEMMINI_TYPE>>> block(
@@ -1301,6 +1307,12 @@ void CholeskyEliminationTree::allocateAndGatherClique(sharedClique clique, bool 
 
 void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
   // cout << "[CholeskyEliminationTree] choleskyElimination()" << endl;
+
+  restore_cycles = 0;
+  relin_cycles = 0;
+  AtA_cycles = 0;
+  fac_cycles = 0;
+  merge_cycles = 0;
   
   vector<pair<sharedClique, bool>> stack(1, {root_, false});
   while(!stack.empty()) {
@@ -1330,14 +1342,22 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
 
           allocateAndGatherClique(clique, true, false);
           gathered = true;
+          auto start = std::chrono::high_resolution_clock::now();
           editOrReconstructFromClique(clique, editCols, 1);
+          auto end = std::chrono::high_resolution_clock::now();
+
+          restore_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
         if(clique->status() == EDIT) {
           if(!gathered) {
             allocateAndGatherClique(clique, true, false);
             gathered = true;
           }
+          auto start = std::chrono::high_resolution_clock::now();
           restoreClique(clique);
+          auto end = std::chrono::high_resolution_clock::now();
+
+          restore_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
         }
         else {
           if(!gathered) {
@@ -1366,7 +1386,11 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
           // }
           // cout << endl;
           allocateAndGatherClique(clique, false, false);
+          auto start = std::chrono::high_resolution_clock::now();
           editOrReconstructFromClique(clique, reconstructCols, -1);
+          auto end = std::chrono::high_resolution_clock::now();
+
+          restore_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
           expandChildren = true;
         }
@@ -1406,12 +1430,20 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
 
         // Eliminiate clique
         // cout << "before eliminate clique" << endl;
+        auto start = std::chrono::high_resolution_clock::now();
         eliminateClique(clique);
+        auto end = std::chrono::high_resolution_clock::now();
+
+        fac_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       }
 
       // Merge with parent
       // cout << "before merge clique" << endl;
+      auto start = std::chrono::high_resolution_clock::now();
       mergeWorkspaceClique(clique);
+      auto end = std::chrono::high_resolution_clock::now();
+
+      merge_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
       // Scatter workspace back into columns
       // UNMARKED nodes still need to scatter to clear workspace
@@ -1434,6 +1466,11 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
   assert(workspace_.empty());
 
   // checkInvariant_afterCholesky();
+  cout << "Restore cycles: " << restore_cycles << endl
+       << "Relin cycles: " << relin_cycles << endl
+       << "AtA cycles: " << AtA_cycles << endl
+       << "fac cycles: " << fac_cycles << endl
+       << "merge cycles: " << merge_cycles << endl;
 }
 
 void CholeskyEliminationTree::editOrReconstructFromClique(
@@ -1642,7 +1679,11 @@ void CholeskyEliminationTree::constructLambdaClique(sharedClique clique, const V
       }
 
       // Then relinearize factor to linear factor
+      auto start = std::chrono::high_resolution_clock::now();
       bool unlinearized = factorWrapper->linearizeIfNeeded(theta);
+      auto end = std::chrono::high_resolution_clock::now();
+
+      relin_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
 
       // Then add hessian of factor to workspace
       if(unlinearized) {
@@ -1654,7 +1695,11 @@ void CholeskyEliminationTree::constructLambdaClique(sharedClique clique, const V
         if(!info.valid) {
           info.construct(factorWrapper->remappedKeys(), infoMap);
         }
+        auto start = std::chrono::high_resolution_clock::now();
         factorWrapper->updateHessian(m, 1, info, CheckNotUnmarked());
+        auto end = std::chrono::high_resolution_clock::now();
+
+        AtA_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       }
       else if(factorStatus == LINEARIZED || factorStatus == LINEAR) {
         // // DEBUG
@@ -1665,7 +1710,11 @@ void CholeskyEliminationTree::constructLambdaClique(sharedClique clique, const V
         if(!info.valid) {
           info.construct(factorWrapper->remappedKeys(), infoMap);
         }
+        auto start = std::chrono::high_resolution_clock::now();
         factorWrapper->updateHessian(m, 1, info, CheckReconstructNew());
+        auto end = std::chrono::high_resolution_clock::now();
+
+        AtA_cycles += std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
       }
     }
   }
