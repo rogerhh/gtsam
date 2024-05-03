@@ -27,7 +27,7 @@ dataset:
         path:           "sphere2500"
         relin_thresh:   0.05
         start_step:     2
-        end_step:       2499    # Inclusive
+        end_step:       200    # Inclusive
         period:         25
     sphere2: 
         is3D:           true
@@ -88,7 +88,7 @@ RA:
     # - CAB7000
     # - CSAIL
     # - sphere2500
-    - sphere2
+    # - sphere2
     # - w10000
     # - M3500
     # - M3500c
@@ -107,12 +107,12 @@ Incremental:
     dataset:    # Comment out the datasets that will be skipped
     # - CAB1
     # - CAB7000
-    # - sphere2500
+    - sphere2500
     # - w10000
     # - M3500
     # - M3500c
     params:
-        print_dataset:      false            # Turn this off if not generating header
+        print_dataset:      true            # Turn this off if not generating header
         print_values:       false
         print_pred:         false
         print_traj:         true
@@ -166,7 +166,7 @@ VIO:
     dataset:    # Comment out the datasets that will be skipped
     # - CAB1
     # - CAB7000
-    - CSAIL
+    # - CSAIL
     # - sphere2500
     # - w10000
     # - M3500

@@ -12,9 +12,7 @@
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <utility>
 
-extern "C" {
 #include <gtsam/linear/gemmini_functions.h>
-}
 
 namespace gtsam {
 

@@ -16,9 +16,7 @@
 #include <tuple>
 #include <gtsam/linear/CholeskyEliminationTreeTypes.h>
 
-extern "C" {
 #include <gtsam/linear/gemmini_functions.h>
-}
 
 namespace gtsam {
 

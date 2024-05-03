@@ -6,11 +6,14 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
+#include <cstring>
 
 #include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
 
 #include "cholesky.h"
 #include "memory.h"
+
+using namespace std;
 
 // #define VALGRIND 0
 
@@ -357,11 +360,11 @@ int main() {
         // queue_lock controls node_ready_queue
         pthread_mutex_init(&queue_lock, NULL);
 
-        node_locks = malloc(nnodes * sizeof(pthread_mutex_t));
-        node_num_children = malloc(nnodes * sizeof(int));
-        node_done_children = malloc(nnodes * sizeof(int));
-        node_children = malloc(nnodes * sizeof(int*));
-        node_ready_queue = malloc(nnodes * sizeof(int));
+        node_locks = (pthread_mutex_t*) malloc(nnodes * sizeof(pthread_mutex_t));
+        node_num_children = (int*) malloc(nnodes * sizeof(int));
+        node_done_children = (int*) malloc(nnodes * sizeof(int));
+        node_children = (int**) malloc(nnodes * sizeof(int*));
+        node_ready_queue = (int*) malloc(nnodes * sizeof(int));
         memset(node_num_children, 0, nnodes * sizeof(int));
         memset(node_done_children, 0, nnodes * sizeof(int));
         memset(node_children, 0, nnodes * sizeof(int*));
@@ -400,7 +403,7 @@ int main() {
         // This is used as workspaces for each node's ABC matrix
         // We will allocate a node's workspace when its first child
         // is done
-        node_workspaces = malloc(nnodes * sizeof(float*));
+        node_workspaces = (float**) malloc(nnodes * sizeof(float*));
         memset(node_workspaces, 0, nnodes * sizeof(float*));
 
         const int num_threads = 1;
@@ -429,7 +432,7 @@ int main() {
 
             if(!marked && !fixed) { continue; }
 
-            node_children[node] = malloc(node_num_children[node] * sizeof(int));
+            node_children[node] = (int*) malloc(node_num_children[node] * sizeof(int));
 
             // Reset this so we can have some sort of indexing
             node_num_children[node] = 0;

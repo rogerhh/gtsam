@@ -16,9 +16,7 @@
 #include <cassert>
 #include <cstring>
 
-extern "C" {
 #include <gtsam/linear/gemmini_functions.h>
-}
 
 namespace gtsam {
 
