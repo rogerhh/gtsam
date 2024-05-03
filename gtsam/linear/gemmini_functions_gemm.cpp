@@ -9,6 +9,7 @@
 #include <gtsam/linear/CholeskyEliminationTreeTypes.h>
 #include <gtsam/base/Matrix.h>
 #include <assert.h>
+#include <iostream>
 
 using namespace gtsam;
 
@@ -26,7 +27,10 @@ void matmul(
 
   Eigen::OuterStride<> strideA(stride_A);
 
-  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(A, A_dim1, A_dim2, strideA);
+  // const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(A, A_dim1, A_dim2, strideA);
+  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>>(A, A_dim1, A_dim2);
+
+  std::cout << "A_mat = " << A_mat << std::endl;
 
   size_t B_dim1 = transpose_B? dim_K : dim_J;
   size_t B_dim2 = transpose_B? dim_J : dim_K;
@@ -34,6 +38,8 @@ void matmul(
   Eigen::OuterStride<> strideB(stride_B);
 
   const auto B_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(B, B_dim1, B_dim2, strideB);
+
+  std::cout << "B_mat = " << B_mat << std::endl;
 
   size_t C_dim1 = dim_J;
   size_t C_dim2 = dim_I;
@@ -60,6 +66,8 @@ void matmul(
       C_mat += AB_scale_factor * A_mat * B_mat;
     }
   }
+
+  std::cout << "C_mat = " << C_mat << std::endl;
 
 }
 
