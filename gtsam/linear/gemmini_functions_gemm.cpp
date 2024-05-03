@@ -22,15 +22,19 @@ void matmul(
   scale_t A_scale_factor, scale_t B_scale_factor,
   bool transpose_A, bool transpose_B) {
 
+  for(int i = 0; i < 6; i++) {
+      std::cout << A[i] << std::endl;
+  }
+
   size_t A_dim1 = transpose_A? dim_I : dim_K;
   size_t A_dim2 = transpose_A? dim_K : dim_I;
 
   Eigen::OuterStride<> strideA(stride_A);
 
-  // const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(A, A_dim1, A_dim2, strideA);
-  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>>(A, A_dim1, A_dim2);
+  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(A, A_dim2, A_dim1, strideA);
 
   std::cout << "A_mat = " << A_mat << std::endl;
+  exit(0);
 
   size_t B_dim1 = transpose_B? dim_K : dim_J;
   size_t B_dim2 = transpose_B? dim_J : dim_K;
