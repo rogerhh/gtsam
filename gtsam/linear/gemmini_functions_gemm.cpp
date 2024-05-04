@@ -22,19 +22,12 @@ void matmul(
   scale_t A_scale_factor, scale_t B_scale_factor,
   bool transpose_A, bool transpose_B) {
 
-  for(int i = 0; i < 6; i++) {
-      std::cout << A[i] << std::endl;
-  }
-
   size_t A_dim1 = transpose_A? dim_I : dim_K;
   size_t A_dim2 = transpose_A? dim_K : dim_I;
 
-  Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic> strideA(1, 3);
+  Eigen::OuterStride<> strideA(stride_A);
 
-  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>(A, A_dim2, A_dim1, strideA);
-
-  std::cout << "A_mat = " << A_mat << std::endl;
-  exit(0);
+  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(A, A_dim1, A_dim2, strideA);
 
   size_t B_dim1 = transpose_B? dim_K : dim_J;
   size_t B_dim2 = transpose_B? dim_J : dim_K;
@@ -42,8 +35,6 @@ void matmul(
   Eigen::OuterStride<> strideB(stride_B);
 
   const auto B_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(B, B_dim1, B_dim2, strideB);
-
-  std::cout << "B_mat = " << B_mat << std::endl;
 
   size_t C_dim1 = dim_J;
   size_t C_dim2 = dim_I;
@@ -54,8 +45,8 @@ void matmul(
 
   scale_t AB_scale_factor = A_scale_factor * B_scale_factor;
 
-  if(transpose_A) {
-    if(transpose_B) {
+  if(!transpose_A) {
+    if(!transpose_B) {
       C_mat += AB_scale_factor * A_mat.transpose() * B_mat.transpose();
     }
     else {
@@ -63,15 +54,13 @@ void matmul(
     }
   }
   else {
-    if(transpose_B) {
+    if(!transpose_B) {
       C_mat += AB_scale_factor * A_mat * B_mat.transpose();
     }
     else {
       C_mat += AB_scale_factor * A_mat * B_mat;
     }
   }
-
-  std::cout << "C_mat = " << C_mat << std::endl;
 
 }
 
@@ -117,8 +106,8 @@ void matmul2(
 
   scale_t AB_scale_factor = A_scale_factor * B_scale_factor;
 
-  if(transpose_A) {
-    if(transpose_B) {
+  if(!transpose_A) {
+    if(!transpose_B) {
       C_mat += AB_scale_factor * A_mat.transpose() * B_mat.transpose();
     }
     else {
@@ -126,7 +115,7 @@ void matmul2(
     }
   }
   else {
-    if(transpose_B) {
+    if(!transpose_B) {
       C_mat += AB_scale_factor * A_mat * B_mat.transpose();
     }
     else {
@@ -215,7 +204,7 @@ void gemv2(
 
   scale_t Ax_scale_factor = A_scale_factor * x_scale_factor;
 
-  if(transpose_A) {
+  if(!transpose_A) {
     y_vec += Ax_scale_factor * A_mat.transpose() * x_vec;
   }
   else {
