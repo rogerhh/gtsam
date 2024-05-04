@@ -29,9 +29,9 @@ void matmul(
   size_t A_dim1 = transpose_A? dim_I : dim_K;
   size_t A_dim2 = transpose_A? dim_K : dim_I;
 
-  Eigen::OuterStride<> strideA(stride_A);
+  Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic> strideA(1, 3);
 
-  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::OuterStride<>>(A, A_dim2, A_dim1, strideA);
+  const auto A_mat = Eigen::Map<const ColMajorMatrix<GEMMINI_TYPE>, 0, Eigen::Stride<Eigen::Dynamic, Eigen::Dynamic>>(A, A_dim2, A_dim1, strideA);
 
   std::cout << "A_mat = " << A_mat << std::endl;
   exit(0);

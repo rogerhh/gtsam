@@ -16,6 +16,10 @@ int main() {
   ColMajorMatrix C(4, 4);
   C.setZero();
 
+    for(int i = 0; i < 6; i++) {
+        cout << m.data()[i] << endl;
+    }
+
 
   matmul(2, 2, 3,
          m.data(), n.data(), C.data(),
