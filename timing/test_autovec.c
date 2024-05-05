@@ -3,12 +3,18 @@
 void matmul(int dim_I, int dim_J, int dim_K,
             float* A, float* B, float* C,
             int stride_A, int stride_B, int stride_C) {
+  float* Acol = A;
+  float* Ccol = C;
   for(size_t i = 0; i < dim_I; i++) {
-    for(size_t j = 0; j < dim_J; j++) {
-      for(size_t k = 0; k < dim_K; k++) {
-        C[i * stride_C + j] = A[i * stride_A + k] * B[k * stride_B + j];
+    float* Bcol = B;
+    for(size_t k = 0; k < dim_K; k++) {
+      for(size_t j = 0; j < dim_J; j++) {
+        Ccol[j] = Acol[k] * B[j];
       }
+      Bcol += stride_B;
     }
+    Acol += stride_A;
+    Ccol += stride_C;
   }
 }
 
