@@ -9,7 +9,7 @@ void matmul(int dim_I, int dim_J, int dim_K,
     float* Bcol = B;
     for(size_t k = 0; k < dim_K; k++) {
       for(size_t j = 0; j < dim_J; j++) {
-        Ccol[j] = Acol[k] * B[j];
+        Ccol[j] += Acol[k] * B[j];
       }
       Bcol += stride_B;
     }
