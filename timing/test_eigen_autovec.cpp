@@ -6,14 +6,14 @@
 using namespace gtsam;
 using namespace std;
 
-using ColMajorMatrix = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>; 
+using RowMajorMatrix = Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>; 
 
 int main() {
-  ColMajorMatrix m(3, 2);
-  m << 1, 2, 3, 4, 5, 6;
-  ColMajorMatrix n(3, 2);
-  n << 6, 5, 4, 3, 2, 1;
-  ColMajorMatrix C(4, 4);
+  RowMajorMatrix m(3, 3);
+  m << 1, 2, 3, 4, 5, 6, 7, 8, 9;
+  RowMajorMatrix n(3, 3);
+  n << 9, 8, 7, 6, 5, 4, 3, 2, 1;
+  RowMajorMatrix C(4, 4);
   C.setZero();
 
     for(int i = 0; i < 6; i++) {
@@ -21,11 +21,11 @@ int main() {
     }
 
 
-  matmul(2, 2, 3,
+  matmul(3, 3, 3,
          m.data(), n.data(), C.data(),
          3, 3, 4,
          1, 1,
-         false, true
+         false, false
 	 );
 
   cout << "m = \n" << m << endl;

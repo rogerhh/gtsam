@@ -26,10 +26,11 @@ void matmul(
 
   if(!transpose_A) {
     if(!transpose_B) {
-      for(size_t i = 0; i < dim_I; i++) {
-        for(size_t j = 0; j < dim_J; j++) {
-          for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + i];
+      const elem_t* A_col_start = A;
+      for(size_t j = 0; j < dim_J; j++) {
+        for(size_t k = 0; k < dim_K; k++) {
+          for(size_t i = 0; i < dim_I; i++) {
+            C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + j];
           }
         }
       }
@@ -38,7 +39,7 @@ void matmul(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
+            C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
           }
         }
       }
@@ -49,7 +50,7 @@ void matmul(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
+            C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
           }
         }
       }
@@ -58,7 +59,7 @@ void matmul(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[i * stride_B + k];
+            C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[j * stride_B + k];
           }
         }
       }
@@ -127,7 +128,7 @@ void matmul2(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + i] + D_scale_factor * D[j * stride_D + i];
+            C[i * stride_C + j] = AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + j] + D_scale_factor * D[i * stride_D + j];
           }
         }
       }
@@ -136,7 +137,8 @@ void matmul2(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k] + D_scale_factor * D[j * stride_D + i];
+            C[i * stride_C + j] = AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k] + D_scale_factor * D[i * stride_D + j];
+
           }
         }
       }
@@ -147,7 +149,7 @@ void matmul2(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j] + D_scale_factor * D[j * stride_D + i];
+            C[j * stride_C + i] = AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j] + D_scale_factor * D[j * stride_D + i];
           }
         }
       }
@@ -156,7 +158,7 @@ void matmul2(
       for(size_t i = 0; i < dim_I; i++) {
         for(size_t j = 0; j < dim_J; j++) {
           for(size_t k = 0; k < dim_K; k++) {
-            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[i * stride_B + k] + D_scale_factor * D[j * stride_D + i];
+            C[j * stride_C + i] = AB_scale_factor * A[k * stride_A + i] * B[j * stride_B + k] + D_scale_factor * D[j * stride_D + i];
           }
         }
       }
