@@ -22,6 +22,50 @@ void matmul(
   scale_t A_scale_factor, scale_t B_scale_factor,
   bool transpose_A, bool transpose_B) {
 
+  scale_t AB_scale_factor = A_scale_factor * B_scale_factor;
+
+  if(!transpose_A) {
+    if(!transpose_B) {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + i];
+          }
+        }
+      }
+    }
+    else {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
+          }
+        }
+      }
+    }
+  }
+  else {
+    if(!transpose_B) {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
+          }
+        }
+      }
+    }
+    else {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[i * stride_B + k];
+          }
+        }
+      }
+    }
+  }
+
+  /*
   size_t A_dim1 = transpose_A? dim_I : dim_K;
   size_t A_dim2 = transpose_A? dim_K : dim_I;
 
@@ -61,6 +105,7 @@ void matmul(
       C_mat += AB_scale_factor * A_mat * B_mat;
     }
   }
+  */
 
 }
 
@@ -74,6 +119,51 @@ void matmul2(
   scale_t A_scale_factor, scale_t B_scale_factor, scale_t D_scale_factor,
   bool transpose_A, bool transpose_B) {
 
+  scale_t AB_scale_factor = A_scale_factor * B_scale_factor;
+
+  // Same as matmul but add D_scale_factor * D
+  if(!transpose_A) {
+    if(!transpose_B) {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + i] + D_scale_factor * D[j * stride_D + i];
+          }
+        }
+      }
+    }
+    else {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k] + D_scale_factor * D[j * stride_D + i];
+          }
+        }
+      }
+    }
+  }
+  else {
+    if(!transpose_B) {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j] + D_scale_factor * D[j * stride_D + i];
+          }
+        }
+      }
+    }
+    else {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[j * stride_C + i] += AB_scale_factor * A[k * stride_A + i] * B[i * stride_B + k] + D_scale_factor * D[j * stride_D + i];
+          }
+        }
+      }
+    }
+  }
+
+  /*
   size_t A_dim1 = transpose_A? dim_I : dim_K;
   size_t A_dim2 = transpose_A? dim_K : dim_I;
 
@@ -122,6 +212,7 @@ void matmul2(
       C_mat += AB_scale_factor * A_mat * B_mat;
     }
   }
+  */
 
 }
 
@@ -178,6 +269,26 @@ void gemv2(
   scale_t A_scale_factor, scale_t x_scale_factor, scale_t z_scale_factor,
   bool transpose_A, bool transpose_x) {
 
+  scale_t Ax_scale_factor = A_scale_factor * x_scale_factor;
+
+  if(!transpose_A) {
+      for(size_t i = 0; i < dim_I; i++) {
+          for(size_t k = 0; k < dim_K; k++) {
+              y[i] += Ax_scale_factor * A[i * stride_A + k] * x[k];
+          }
+          y[i] += z_scale_factor * z[i];
+      }
+  }
+  else {
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t k = 0; k < dim_K; k++) {
+          y[i] += Ax_scale_factor * A[k * stride_A + i] * x[k];
+        }
+        y[i] += z_scale_factor * z[i];
+      }
+  }
+
+  /*
   size_t A_dim1 = transpose_A? dim_I : dim_K;
   size_t A_dim2 = transpose_A? dim_K : dim_I;
 
@@ -210,6 +321,7 @@ void gemv2(
   else {
     y_vec += Ax_scale_factor * A_mat * x_vec;
   }
+  */
 }
 
 // // Do C += scale * A * B. A, B, C must be preallocated
