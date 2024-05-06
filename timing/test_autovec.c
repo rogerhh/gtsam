@@ -3,14 +3,14 @@
 void matmul1(int dim_I, int dim_J, int dim_K,
             float* A, float* B, float* C,
             int stride_A, int stride_B, int stride_C) {
+  float AB_scale_factor = 1.0;
   float* Acol = A;
   float* Ccol = C;
-  float AB_scale_factor = 1.0;
   for(size_t i = 0; i < dim_I; i++) {
     float* Bcol = B;
     for(size_t k = 0; k < dim_K; k++) {
       for(size_t j = 0; j < dim_J; j++) {
-        Ccol[j] += AB_scale_factor * Acol[k] * B[j];
+        Ccol[j] += AB_scale_factor * Acol[k] * Bcol[j];
       }
       Bcol += stride_B;
     }
@@ -22,9 +22,9 @@ void matmul1(int dim_I, int dim_J, int dim_K,
 void matmul2(int dim_I, int dim_J, int dim_K,
             float* A, float* B, float* C,
             int stride_A, int stride_B, int stride_C) {
+  float AB_scale_factor = 1.0;
   float* Acol = A;
   float* Ccol = C;
-  float AB_scale_factor = 1.0;
   for(size_t i = 0; i < dim_I; i++) {
     for(size_t k = 0; k < dim_K; k++) {
       float* Bcol = B + k;
@@ -41,9 +41,9 @@ void matmul2(int dim_I, int dim_J, int dim_K,
 void matmul3(int dim_I, int dim_J, int dim_K,
             float* A, float* B, float* C,
             int stride_A, int stride_B, int stride_C) {
+  float AB_scale_factor = 1.0;
   float* Acol = A;
   float* Bcol = B;
-  float AB_scale_factor = 1.0;
   for(size_t k = 0; k < dim_K; k++) {
     float* Ccol = C;
     for(size_t i = 0; i < dim_I; i++) {
@@ -60,12 +60,12 @@ void matmul3(int dim_I, int dim_J, int dim_K,
 void matmul4(int dim_I, int dim_J, int dim_K,
             float* A, float* B, float* C,
             int stride_A, int stride_B, int stride_C) {
-  float* Acol = A;
   float AB_scale_factor = 1.0;
+  float* Acol = A;
   for(size_t k = 0; k < dim_K; k++) {
-    float* Bcol = B + k;
     float* Ccol = C;
     for(size_t i = 0; i < dim_I; i++) {
+      float* Bcol = B + k;
       for(size_t j = 0; j < dim_J; j++) {
         Ccol[j] += AB_scale_factor * Acol[i] * (*Bcol);
         Bcol += stride_B;

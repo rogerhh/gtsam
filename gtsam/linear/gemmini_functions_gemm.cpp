@@ -26,43 +26,95 @@ void matmul(
 
   if(!transpose_A) {
     if(!transpose_B) {
-      const elem_t* A_col_start = A;
-      for(size_t j = 0; j < dim_J; j++) {
+      const elem_t* Acol = A;
+      elem_t* Ccol = C;
+      for(size_t i = 0; i < dim_I; i++) {
+        const elem_t* Bcol = B;
         for(size_t k = 0; k < dim_K; k++) {
-          for(size_t i = 0; i < dim_I; i++) {
-            C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + j];
+          for(size_t j = 0; j < dim_J; j++) {
+            Ccol[j] += AB_scale_factor * Acol[k] * Bcol[j];
           }
+          Bcol += stride_B;
         }
+        Acol += stride_A;
+        Ccol += stride_C;
       }
+      // const elem_t* A_col_start = A;
+      // for(size_t j = 0; j < dim_J; j++) {
+      //   for(size_t k = 0; k < dim_K; k++) {
+      //     for(size_t i = 0; i < dim_I; i++) {
+      //       C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + j];
+      //     }
+      //   }
+      // }
     }
     else {
+      const elem_t* Acol = A;
+      elem_t* Ccol = C;
       for(size_t i = 0; i < dim_I; i++) {
-        for(size_t j = 0; j < dim_J; j++) {
-          for(size_t k = 0; k < dim_K; k++) {
-            C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
+        for(size_t k = 0; k < dim_K; k++) {
+          const elem_t* Bcol = B + k;
+          for(size_t j = 0; j < dim_J; j++) {
+            Ccol[j] += AB_scale_factor * Acol[k] * (*Bcol);
+            Bcol += stride_B;
           }
         }
+        Acol += stride_A;
+        Ccol += stride_C;
       }
+      // for(size_t i = 0; i < dim_I; i++) {
+      //   for(size_t j = 0; j < dim_J; j++) {
+      //     for(size_t k = 0; k < dim_K; k++) {
+      //       C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
+      //     }
+      //   }
+      // }
     }
   }
   else {
     if(!transpose_B) {
-      for(size_t i = 0; i < dim_I; i++) {
-        for(size_t j = 0; j < dim_J; j++) {
-          for(size_t k = 0; k < dim_K; k++) {
-            C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
+      const elem_t* Acol = A;
+      const elem_t* Bcol = B;
+      for(size_t k = 0; k < dim_K; k++) {
+        elem_t* Ccol = C;
+        for(size_t i = 0; i < dim_I; i++) {
+          for(size_t j = 0; j < dim_J; j++) {
+            Ccol[j] += AB_scale_factor * Acol[i] * Bcol[j];
           }
+          Ccol += stride_C;
         }
+        Acol += stride_A;
+        Bcol += stride_B;
       }
+      // for(size_t i = 0; i < dim_I; i++) {
+      //   for(size_t j = 0; j < dim_J; j++) {
+      //     for(size_t k = 0; k < dim_K; k++) {
+      //       C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
+      //     }
+      //   }
+      // }
     }
     else {
-      for(size_t i = 0; i < dim_I; i++) {
-        for(size_t j = 0; j < dim_J; j++) {
-          for(size_t k = 0; k < dim_K; k++) {
-            C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[j * stride_B + k];
+      const elem_t* Acol = A;
+      for(size_t k = 0; k < dim_K; k++) {
+        elem_t* Ccol = C;
+        for(size_t i = 0; i < dim_I; i++) {
+          const elem_t* Bcol = B + k;
+          for(size_t j = 0; j < dim_J; j++) {
+            Ccol[j] += AB_scale_factor * Acol[i] * (*Bcol);
+            Bcol += stride_B;
           }
+          Ccol += stride_C;
         }
+        Acol += stride_A;
       }
+      // for(size_t i = 0; i < dim_I; i++) {
+      //   for(size_t j = 0; j < dim_J; j++) {
+      //     for(size_t k = 0; k < dim_K; k++) {
+      //       C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[j * stride_B + k];
+      //     }
+      //   }
+      // }
     }
   }
 
@@ -274,20 +326,34 @@ void gemv2(
   scale_t Ax_scale_factor = A_scale_factor * x_scale_factor;
 
   if(!transpose_A) {
+    for(size_t k = 0; k < dim_K; k++) {
+      const elem_t* Acol = A + k;
       for(size_t i = 0; i < dim_I; i++) {
-          for(size_t k = 0; k < dim_K; k++) {
-              y[i] += Ax_scale_factor * A[i * stride_A + k] * x[k];
-          }
-          y[i] += z_scale_factor * z[i];
+        y[i] += Ax_scale_factor * (*Acol) * x[k] + z_scale_factor * z[i];
+        Acol += stride_A;
       }
+    }
+    // for(size_t i = 0; i < dim_I; i++) {
+    //     for(size_t k = 0; k < dim_K; k++) {
+    //         y[i] += Ax_scale_factor * A[i * stride_A + k] * x[k];
+    //     }
+    //     y[i] += z_scale_factor * z[i];
+    // }
   }
   else {
+    const elem_t* Acol = A;
+    for(size_t k = 0; k < dim_K; k++) {
       for(size_t i = 0; i < dim_I; i++) {
-        for(size_t k = 0; k < dim_K; k++) {
-          y[i] += Ax_scale_factor * A[k * stride_A + i] * x[k];
-        }
-        y[i] += z_scale_factor * z[i];
+        y[i] += Ax_scale_factor * Acol[i] * x[k] + z_scale_factor * z[i];
       }
+      Acol += stride_A;
+    }
+    // for(size_t i = 0; i < dim_I; i++) {
+    //   for(size_t k = 0; k < dim_K; k++) {
+    //     y[i] += Ax_scale_factor * A[k * stride_A + i] * x[k];
+    //   }
+    //   y[i] += z_scale_factor * z[i];
+    // }
   }
 
   /*
