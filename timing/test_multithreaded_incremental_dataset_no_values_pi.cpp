@@ -13,6 +13,8 @@
 #include "cholesky.h"
 #include "memory.h"
 
+#define NUM_CORE 4
+
 using namespace std;
 
 // #define VALGRIND 0
@@ -326,6 +328,18 @@ void* worker_backsolve(void* args_ptr) {
 int main(int argc, char** argv) {
     int num_threads = atoi(argv[1]);
 
+    cpu_set_t cpus[NUM_CORE];
+    pthread_t threads[NUM_CORE];
+    pthread_attr_t attr[NUM_CORE];
+    worker_args args[NUM_CORE];
+
+    for(int i = 0; i < NUM_CORE; i++) {
+      pthread_attr_init(&attr[i]);
+      CPU_ZERO(&cpus[i]);
+      CPU_SET(i, &cpus[i]);
+      pthread_attr_setaffinity_np(&attr[i], sizeof(cpu_set_t), &cpus[i]);
+    }
+
     for(int step = 0; step < num_timesteps; step++) {
 	clock_t start, end;    
 	start = clock();
@@ -407,13 +421,10 @@ int main(int argc, char** argv) {
         node_workspaces = (float**) malloc(nnodes * sizeof(float*));
         memset(node_workspaces, 0, nnodes * sizeof(float*));
 
-        const int max_num_threads = 12;
-        pthread_t threads[max_num_threads];
-        worker_args args[max_num_threads];
         for(int thread = 0; thread < num_threads; thread++) {
             args[thread].thread_id = thread;
             args[thread].step = step;
-            pthread_create(&threads[thread], NULL, worker_cholesky, &args[thread]);
+            pthread_create(&threads[thread], &attr[thread], worker_cholesky, &args[thread]);
         }
 
         for(int thread = 0; thread < num_threads; thread++) {
@@ -451,7 +462,7 @@ int main(int argc, char** argv) {
         for(int thread = 0; thread < num_threads; thread++) {
             args[thread].thread_id = thread;
             args[thread].step = step;
-            pthread_create(&threads[thread], NULL, worker_backsolve, &args[thread]);
+            pthread_create(&threads[thread], &attr[thread], worker_backsolve, &args[thread]);
         }
 
         for(int thread = 0; thread < num_threads; thread++) {
