@@ -76,6 +76,32 @@ void matmul4(int dim_I, int dim_J, int dim_K,
   }
 } 
 
+void gemv2(int dim_I, int dim_K,
+            float* A, float* x, 
+            float* z, float* y,
+            int transpose_A, float z_scale_factor, float Ax_scale_factor,
+            int stride_A) {
+
+  if(!transpose_A) {
+    for(size_t k = 0; k < dim_K; k++) {
+      float* Acol = A + k;
+      for(size_t i = 0; i < dim_I; i++) {
+        y[i] += Ax_scale_factor * (*Acol) * x[k] + z_scale_factor * z[i];
+        Acol += stride_A;
+      }
+    }
+  }
+  else {
+    float* Acol = A;
+    for(size_t k = 0; k < dim_K; k++) {
+      for(size_t i = 0; i < dim_I; i++) {
+        y[i] += Ax_scale_factor * Acol[i] * x[k] + z_scale_factor * z[i];
+      }
+      Acol += stride_A;
+    }
+  }
+}
+
 int main() {
     int LEN = 128;
 
@@ -87,6 +113,8 @@ int main() {
     matmul2(5, 5, 5, a, b, c, 10, 10, 10);
     matmul3(5, 5, 5, a, b, c, 10, 10, 10);
     matmul4(5, 5, 5, a, b, c, 10, 10, 10);
+
+    gemv2(5, 3, a, b, c, c, 0, 1, 1, 10);
 
     for(int i = 0; i < LEN; i++) {
 	printf("%f ", a[i]);
