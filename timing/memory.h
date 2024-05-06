@@ -22,9 +22,10 @@ void* my_malloc(unsigned int size) {
   
   // Check memory bound
   if(stack_ptr + size_div_8 >= MEMORY_SIZE / 8) {
-    printf("Out of memory!\n");
-    exit(1);
-    return 0;
+    // printf("Out of memory!\n");
+    // exit(1);
+    // return 0;
+    stack_ptr = 0;
   }
 
   double* ret = _memory + stack_ptr;

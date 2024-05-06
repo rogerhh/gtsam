@@ -1,28 +1,25 @@
-#include <stdio.h>
-#include <assert.h>
-#include <math.h>
-#include <float.h>
-#include <pthread.h>
-#include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <assert.h>
+#include <sched.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <float.h>
 #include <time.h>
-#include <cstring>
-
-#include "memory.h"
+#ifndef BAREMETAL
+#include <sys/mman.h>
+#endif
+#define NUM_CORE 1 // number of multithreading
 #include "cholesky.h"
-
 #include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
+pthread_barrier_t barrier_global;
 
-
-#define NUM_CORE 4
-
-using namespace std;
-
-// #define VALGRIND 0
+#define INTERVAL 25
 
 float** node_workspaces = NULL;
 pthread_mutex_t* node_locks;
-pthread_mutex_t malloc_lock;
 int* node_num_children;
 int* node_done_children;
 int** node_children;
@@ -32,6 +29,14 @@ int node_ready_index = 0;
 int node_ready_size = 0;
 int* node_ready_queue;
 int num_active_nodes = 0;
+// record timing
+uint64_t* node_time; // TODO: AtA/cholesky breakdown 
+uint64_t* AtA_time;
+uint64_t* merge_time;
+uint64_t* chol_time;
+bool* chol_marked;
+uint64_t* init_time;
+uint64_t* backsolve_time;
 
 typedef struct worker_args_t {
     int thread_id;
@@ -66,6 +71,7 @@ void* worker_cholesky(void* args_ptr) {
     int*** node_factor_B_blk_start = step_node_factor_B_blk_start[step];
     int*** node_factor_blk_width = step_node_factor_blk_width[step];
 
+    pthread_barrier_wait(&barrier_global);
     while(true) {
         bool done_flag = false;
         bool wait_flag = false;
@@ -96,7 +102,7 @@ void* worker_cholesky(void* args_ptr) {
             continue;
         }
             
-	// printf("thread %d node = %d\n", thread_id, node);
+        //printf("thread %d node = %d\n", thread_id, node);
 
         bool marked = node_marked[node];
         bool fixed = node_fixed[node];
@@ -126,11 +132,12 @@ void* worker_cholesky(void* args_ptr) {
         int** factor_blk_width = node_factor_blk_width[node];
 
         if(node_workspaces[node] == NULL) {
-            // printf("thread %d node %d malloc node %d\n", thread_id, node, node);
+            //node_workspaces[node] = malloc(H_h * H_h * sizeof(float));
             node_workspaces[node] = (float*) my_malloc(H_h * H_h * sizeof(float));
             memset(node_workspaces[node], 0, H_h * H_h * sizeof(float));
         }
 
+	
         float* ABC = node_workspaces[node];
         
         // Marked nodes
@@ -158,13 +165,12 @@ void* worker_cholesky(void* args_ptr) {
             float* workspace = (float*) malloc(h * h * sizeof(float));
             memset(workspace, 0, h * h * sizeof(float));
 
-#ifndef VALGRIND
             matmul(h, h, w, 
                    data, data, workspace,
                    h, h, h,
                    1, 1, 
                    true, false);
-#endif
+
 
             sparse_matrix_add3_3(workspace, h, h, 
                                  ABC, H_h, H_h, 
@@ -183,9 +189,7 @@ void* worker_cholesky(void* args_ptr) {
             }
 
             // 2. Cholesky
-#ifndef VALGRIND
             partial_factorization4(ABC, H_w, H_h);
-#endif
 
             // 4. Copy [A B] back from workspace
             memcpy(H_data, ABC, H_w * H_h * sizeof(float));
@@ -197,14 +201,13 @@ void* worker_cholesky(void* args_ptr) {
             float* LB = H_data + H_w;
             float* LC = ABC + H_w * (H_h + 1);
 
-#ifndef VALGRIND
             matmul(subdiag_h, subdiag_h, H_w,
                    LB, LB, LC,
                    H_h, H_h, H_h,
                    -1, 1,
                    true, false);
-#endif
         }
+	chol_marked[node] = marked ? true : false;
 
         // 3. Add LC to parent
         if(parent != nnodes - 1 && parent != -1) {
@@ -212,13 +215,14 @@ void* worker_cholesky(void* args_ptr) {
             // lock parent
             pthread_mutex_lock(&node_locks[parent]);
 
+
             int subdiag_h = H_h - H_w;
             float* C = ABC + H_w * (H_h + 1);
             int next_H_h = node_height[parent];
             int next_H_w = node_width[parent];
 
             if(node_workspaces[parent] == 0) {
-                // printf("thread %d node %d malloc parent %d\n", thread_id, node, parent);
+                //node_workspaces[parent] = malloc(next_H_h * next_H_h * sizeof(float));
                 node_workspaces[parent] = (float*) my_malloc(next_H_h * next_H_h * sizeof(float));
                 memset(node_workspaces[parent], 0, next_H_h * next_H_h * sizeof(float));
             }
@@ -247,9 +251,8 @@ void* worker_cholesky(void* args_ptr) {
         }
 
         // 4. Free this nodes workspace
-        // free(node_workspaces[node]);
+        //free(node_workspaces[node]);
         node_workspaces[node] = NULL;
-
         pthread_mutex_unlock(&node_locks[node]);
 
     }
@@ -274,6 +277,7 @@ void* worker_backsolve(void* args_ptr) {
     float** node_data = step_node_data[step];
     float* x_data = step_x_data[step];
 
+    pthread_barrier_wait(&barrier_global);
     while(true) {
         bool done_flag = false;
         bool wait_flag = false;
@@ -303,14 +307,13 @@ void* worker_backsolve(void* args_ptr) {
         else if(wait_flag) {
             continue;
         }
-
+            
+        //printf("thread %d solve node = %d\n", thread_id, node);
         int width = node_width[node];
         int height = node_height[node];
         int* ridx = node_ridx[node];
-        
-#ifndef VALGRIND
+
         partial_backsolve(node_data[node], width, height, height, ridx, x_data);
-#endif
 
         pthread_mutex_lock(&queue_lock);
         for(int i = 0; i < node_num_children[node]; i++) {
@@ -326,31 +329,66 @@ void* worker_backsolve(void* args_ptr) {
     pthread_exit(NULL);
 }
 
+void *print_message(void *ptr){
+    int cpu_id = sched_getcpu();
+   // char *msg;
+   // msg = (char *) ptr;
+    printf("print msg - cpu_id: %d \n", cpu_id);
+   // printf("%s \n", msg);
+   return NULL;
+}
 
 int main(int argc, char** argv) {
     int num_threads = atoi(argv[1]);
 
-    cpu_set_t cpus[NUM_CORE];
-    pthread_t threads[NUM_CORE];
+// #ifndef BAREMETAL
+//     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
+//       perror("mlockall failed");
+//       exit(1);
+//     }
+// #endif
+
+    int cpu_id;
+    cpu_id = sched_getcpu();
+    printf("main thread cpuid: %d \n", cpu_id);
+
+    cpu_set_t cpuset[NUM_CORE];
+    pthread_t thread[NUM_CORE];
     pthread_attr_t attr[NUM_CORE];
-    worker_args args[NUM_CORE];
-
-    pthread_mutex_init(&malloc_lock, NULL);
-
-    for(int i = 0; i < NUM_CORE; i++) {
+    for(int i = 0; i < NUM_CORE; i++)
       pthread_attr_init(&attr[i]);
-      CPU_ZERO(&cpus[i]);
-      CPU_SET(i, &cpus[i]);
-      pthread_attr_setaffinity_np(&attr[i], sizeof(cpu_set_t), &cpus[i]);
+
+    printf("create threading \n");
+    for(int i = 0; i < NUM_CORE; i++){
+	  CPU_ZERO(&cpuset[i]);
+	  CPU_SET(i, &cpuset[i]);
+	  pthread_attr_setaffinity_np(&attr[i], sizeof(cpu_set_t), &cpuset[i]);
+	  pthread_create(&thread[i], &attr[i], print_message, NULL);
     }
 
+    for(int i = 0; i < NUM_CORE; i++){
+      pthread_join(thread[i], NULL);
+    }
+    printf("thread joined after message printing\n");
+
+    pthread_barrier_init(&barrier_global, NULL, NUM_CORE);
     for(int step = 0; step < num_timesteps; step++) {
 	clock_t start, end;    
 	start = clock();
-        int true_step = step + timestep_start;
-        printf("step = %d\n", true_step);
+
+        int true_step = (step+1)*INTERVAL;//step + timestep_start;
+        printf("true step = %d\n", true_step);
 
         int nnodes = step_nnodes[step];
+        node_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        memset(node_time, 0, nnodes*sizeof(uint64_t));
+        init_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        AtA_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        merge_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        chol_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        chol_marked = (bool*) malloc(nnodes*sizeof(bool));
+        backsolve_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        memset(backsolve_time, 0, nnodes*sizeof(uint64_t));
 
         bool* node_marked = step_node_marked[step];
         bool* node_fixed = step_node_fixed[step];
@@ -367,11 +405,12 @@ int main(int argc, char** argv) {
         int* node_num_factors = step_node_num_factors[step];
         int** node_factor_height = step_node_factor_height[step];
         int** node_factor_width = step_node_factor_width[step];
+        float*** node_factor_data = step_node_factor_data[step];
         int** node_factor_num_blks = step_node_factor_num_blks[step];
         int*** node_factor_A_blk_start = step_node_factor_A_blk_start[step];
         int*** node_factor_B_blk_start = step_node_factor_B_blk_start[step];
         int*** node_factor_blk_width = step_node_factor_blk_width[step];
-
+        
         // node_num_children[node] gives the number of active children
         // in this node. When node_done_childre[node] == node_num_children[node]
         // then node is available to work on
@@ -411,20 +450,23 @@ int main(int argc, char** argv) {
             int parent = node_parent[node];
             node_num_children[parent]++;
         }
-
-        // printf("active node size: %d\n", num_active_nodes);
-        // printf("num children: \n");
-        // for(int node = 0; node < nnodes - 1; node++) {
-        //     printf("%d ", node_num_children[node]);
-        // }
-        // printf("\n");
-
+/*
+        printf("active node size: %d\n", num_active_nodes);
+        printf("num children: \n");
+        for(int node = 0; node < nnodes - 1; node++) {
+            printf("%d ", node_num_children[node]);
+        }
+        printf("\n");
+*/
         // This is used as workspaces for each node's ABC matrix
         // We will allocate a node's workspace when its first child
         // is done
         node_workspaces = (float**) malloc(nnodes * sizeof(float*));
         memset(node_workspaces, 0, nnodes * sizeof(float*));
 
+        const int num_threads = NUM_CORE;
+        pthread_t threads[num_threads];
+        worker_args args[num_threads];
         for(int thread = 0; thread < num_threads; thread++) {
             args[thread].thread_id = thread;
             args[thread].step = step;
@@ -434,8 +476,6 @@ int main(int argc, char** argv) {
         for(int thread = 0; thread < num_threads; thread++) {
             pthread_join(threads[thread], NULL);
         }
-
-        my_free_all(NULL);
 
         // Reset the ready queue for backsolve
         node_ready_index = 0;
@@ -488,6 +528,7 @@ int main(int argc, char** argv) {
         free(node_children);
         free(node_ready_queue);
         free(node_workspaces);
+	my_free_all(NULL);
 
         node_workspaces = NULL;
         node_ready_queue = NULL;
@@ -495,14 +536,29 @@ int main(int argc, char** argv) {
         node_num_children = NULL;
         node_children = NULL;
         node_locks = NULL;
+  
+        int nnode = step_nnodes[step];
+
+        free(merge_time);
+        free(chol_time);
+        free(chol_marked);
+        free(init_time);
+        free(node_time);
+        free(AtA_time);
+        free(backsolve_time);
+        merge_time = NULL;
+        chol_time = NULL;
+        init_time = NULL;
+	chol_marked = NULL;
+        node_time = NULL;
+        AtA_time = NULL;
+        backsolve_time = NULL;
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("step %d time: %f ms\n", step, cpu_time_used * 1000);
+
     }
-
-    pthread_mutex_destroy(&malloc_lock);
-
-    printf("Passed :)\n");
+    pthread_barrier_destroy(&barrier_global);
+    printf("end of test\n");
 }
-
