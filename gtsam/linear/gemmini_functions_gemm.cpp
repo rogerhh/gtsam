@@ -39,7 +39,6 @@ void matmul(
         Acol += stride_A;
         Ccol += stride_C;
       }
-      // const elem_t* A_col_start = A;
       // for(size_t j = 0; j < dim_J; j++) {
       //   for(size_t k = 0; k < dim_K; k++) {
       //     for(size_t i = 0; i < dim_I; i++) {

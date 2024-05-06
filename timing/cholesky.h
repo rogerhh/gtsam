@@ -179,7 +179,7 @@ void dense_block_cholesky(float* A, int dim, int stride) {
   for(int j = 0; j < dim; j++) {
     hh--;
     if(A[0] <= 0) {
-        printf("Non positive definite!\n");
+        printf("%p Non positive definite!\n", A);
         exit(1);
     }
     float sqrtdiag = sqrt(A[0]);

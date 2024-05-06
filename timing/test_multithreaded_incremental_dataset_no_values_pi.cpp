@@ -8,7 +8,7 @@
 #include <time.h>
 #include <cstring>
 
-#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
+#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
 
 #include "cholesky.h"
 #include "memory.h"
@@ -123,7 +123,7 @@ void* worker_cholesky(void* args_ptr) {
 
         if(node_workspaces[node] == NULL) {
             // printf("thread %d node %d malloc node %d\n", thread_id, node, node);
-            node_workspaces[node] = (float*) my_malloc(H_h * H_h * sizeof(float));
+            node_workspaces[node] = (float*) malloc(H_h * H_h * sizeof(float));
             memset(node_workspaces[node], 0, H_h * H_h * sizeof(float));
         }
 
@@ -208,7 +208,6 @@ void* worker_cholesky(void* args_ptr) {
             // lock parent
             pthread_mutex_lock(&node_locks[parent]);
 
-
             int subdiag_h = H_h - H_w;
             float* C = ABC + H_w * (H_h + 1);
             int next_H_h = node_height[parent];
@@ -216,7 +215,7 @@ void* worker_cholesky(void* args_ptr) {
 
             if(node_workspaces[parent] == 0) {
                 // printf("thread %d node %d malloc parent %d\n", thread_id, node, parent);
-                node_workspaces[parent] = (float*) my_malloc(next_H_h * next_H_h * sizeof(float));
+                node_workspaces[parent] = (float*) malloc(next_H_h * next_H_h * sizeof(float));
                 memset(node_workspaces[parent], 0, next_H_h * next_H_h * sizeof(float));
             }
 
@@ -244,7 +243,7 @@ void* worker_cholesky(void* args_ptr) {
         }
 
         // 4. Free this nodes workspace
-        // free(node_workspaces[node]);
+        free(node_workspaces[node]);
         node_workspaces[node] = NULL;
 
         pthread_mutex_unlock(&node_locks[node]);
@@ -324,7 +323,9 @@ void* worker_backsolve(void* args_ptr) {
 }
 
 
-int main() {
+int main(int argc, char** argv) {
+    int num_threads = atoi(argv[1]);
+
     for(int step = 0; step < num_timesteps; step++) {
 	clock_t start, end;    
 	start = clock();
@@ -406,9 +407,9 @@ int main() {
         node_workspaces = (float**) malloc(nnodes * sizeof(float*));
         memset(node_workspaces, 0, nnodes * sizeof(float*));
 
-        const int num_threads = 1;
-        pthread_t threads[num_threads];
-        worker_args args[num_threads];
+        const int max_num_threads = 12;
+        pthread_t threads[max_num_threads];
+        worker_args args[max_num_threads];
         for(int thread = 0; thread < num_threads; thread++) {
             args[thread].thread_id = thread;
             args[thread].step = step;
@@ -419,7 +420,7 @@ int main() {
             pthread_join(threads[thread], NULL);
         }
 
-        my_free_all(NULL);
+        // my_free_all(NULL);
 
         // Reset the ready queue for backsolve
         node_ready_index = 0;
