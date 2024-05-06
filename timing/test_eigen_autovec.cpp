@@ -25,7 +25,7 @@ int main() {
          m.data(), n.data(), C.data(),
          3, 3, 4,
          1, 1,
-         false, false
+         true, true
 	 );
 
   cout << "m = \n" << m << endl;
