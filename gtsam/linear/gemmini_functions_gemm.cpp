@@ -11,6 +11,8 @@
 #include <assert.h>
 #include <iostream>
 
+// #define AUTOVEC 1
+
 using namespace gtsam;
 
 // Perform C += A_scale_factor * A^(transpose_A * T) * B_scale_factor * B^(transpose_B * T)
@@ -26,6 +28,7 @@ void matmul(
 
   if(!transpose_A) {
     if(!transpose_B) {
+#ifdef AUTOVEC
       const elem_t* Acol = A;
       elem_t* Ccol = C;
       for(size_t i = 0; i < dim_I; i++) {
@@ -39,15 +42,18 @@ void matmul(
         Acol += stride_A;
         Ccol += stride_C;
       }
-      // for(size_t j = 0; j < dim_J; j++) {
-      //   for(size_t k = 0; k < dim_K; k++) {
-      //     for(size_t i = 0; i < dim_I; i++) {
-      //       C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + j];
-      //     }
-      //   }
-      // }
+#else
+      for(size_t j = 0; j < dim_J; j++) {
+        for(size_t k = 0; k < dim_K; k++) {
+          for(size_t i = 0; i < dim_I; i++) {
+            C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[k * stride_B + j];
+          }
+        }
+      }
+#endif
     }
     else {
+#ifdef AUTOVEC
       const elem_t* Acol = A;
       elem_t* Ccol = C;
       for(size_t i = 0; i < dim_I; i++) {
@@ -61,17 +67,20 @@ void matmul(
         Acol += stride_A;
         Ccol += stride_C;
       }
-      // for(size_t i = 0; i < dim_I; i++) {
-      //   for(size_t j = 0; j < dim_J; j++) {
-      //     for(size_t k = 0; k < dim_K; k++) {
-      //       C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
-      //     }
-      //   }
-      // }
+#else
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[i * stride_C + j] += AB_scale_factor * A[i * stride_A + k] * B[j * stride_B + k];
+          }
+        }
+      }
+#endif
     }
   }
   else {
     if(!transpose_B) {
+#ifdef AUTOVEC
       const elem_t* Acol = A;
       const elem_t* Bcol = B;
       for(size_t k = 0; k < dim_K; k++) {
@@ -85,15 +94,18 @@ void matmul(
         Acol += stride_A;
         Bcol += stride_B;
       }
-      // for(size_t i = 0; i < dim_I; i++) {
-      //   for(size_t j = 0; j < dim_J; j++) {
-      //     for(size_t k = 0; k < dim_K; k++) {
-      //       C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
-      //     }
-      //   }
-      // }
+#else
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[k * stride_B + j];
+          }
+        }
+      }
+#endif
     }
     else {
+#ifdef AUTOVEC
       const elem_t* Acol = A;
       for(size_t k = 0; k < dim_K; k++) {
         elem_t* Ccol = C;
@@ -107,13 +119,15 @@ void matmul(
         }
         Acol += stride_A;
       }
-      // for(size_t i = 0; i < dim_I; i++) {
-      //   for(size_t j = 0; j < dim_J; j++) {
-      //     for(size_t k = 0; k < dim_K; k++) {
-      //       C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[j * stride_B + k];
-      //     }
-      //   }
-      // }
+#else
+      for(size_t i = 0; i < dim_I; i++) {
+        for(size_t j = 0; j < dim_J; j++) {
+          for(size_t k = 0; k < dim_K; k++) {
+            C[i * stride_C + j] += AB_scale_factor * A[k * stride_A + i] * B[j * stride_B + k];
+          }
+        }
+      }
+#endif
     }
   }
 
@@ -325,6 +339,7 @@ void gemv2(
   scale_t Ax_scale_factor = A_scale_factor * x_scale_factor;
 
   if(!transpose_A) {
+#ifdef AUTOVEC
     for(size_t k = 0; k < dim_K; k++) {
       const elem_t* Acol = A + k;
       for(size_t i = 0; i < dim_I; i++) {
@@ -332,14 +347,17 @@ void gemv2(
         Acol += stride_A;
       }
     }
-    // for(size_t i = 0; i < dim_I; i++) {
-    //     for(size_t k = 0; k < dim_K; k++) {
-    //         y[i] += Ax_scale_factor * A[i * stride_A + k] * x[k];
-    //     }
-    //     y[i] += z_scale_factor * z[i];
-    // }
+#else
+    for(size_t i = 0; i < dim_I; i++) {
+        for(size_t k = 0; k < dim_K; k++) {
+            y[i] += Ax_scale_factor * A[i * stride_A + k] * x[k];
+        }
+        y[i] += z_scale_factor * z[i];
+    }
+#endif
   }
   else {
+#ifdef AUTOVEC
     const elem_t* Acol = A;
     for(size_t k = 0; k < dim_K; k++) {
       for(size_t i = 0; i < dim_I; i++) {
@@ -347,12 +365,14 @@ void gemv2(
       }
       Acol += stride_A;
     }
-    // for(size_t i = 0; i < dim_I; i++) {
-    //   for(size_t k = 0; k < dim_K; k++) {
-    //     y[i] += Ax_scale_factor * A[k * stride_A + i] * x[k];
-    //   }
-    //   y[i] += z_scale_factor * z[i];
-    // }
+#else
+    for(size_t i = 0; i < dim_I; i++) {
+      for(size_t k = 0; k < dim_K; k++) {
+        y[i] += Ax_scale_factor * A[k * stride_A + i] * x[k];
+      }
+      y[i] += z_scale_factor * z[i];
+    }
+#endif
   }
 
   /*

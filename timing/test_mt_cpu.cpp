@@ -11,7 +11,7 @@
 #ifndef BAREMETAL
 #include <sys/mman.h>
 #endif
-#define NUM_CORE 1 // number of multithreading
+#define NUM_CORE 4 // number of multithreading
 #include "cholesky.h"
 #include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
 pthread_barrier_t barrier_global;
@@ -341,13 +341,6 @@ void *print_message(void *ptr){
 int main(int argc, char** argv) {
     int num_threads = atoi(argv[1]);
 
-// #ifndef BAREMETAL
-//     if (mlockall(MCL_CURRENT | MCL_FUTURE) != 0) {
-//       perror("mlockall failed");
-//       exit(1);
-//     }
-// #endif
-
     int cpu_id;
     cpu_id = sched_getcpu();
     printf("main thread cpuid: %d \n", cpu_id);
@@ -359,19 +352,19 @@ int main(int argc, char** argv) {
       pthread_attr_init(&attr[i]);
 
     printf("create threading \n");
-    for(int i = 0; i < NUM_CORE; i++){
+    for(int i = 0; i < num_threads; i++){
 	  CPU_ZERO(&cpuset[i]);
 	  CPU_SET(i, &cpuset[i]);
 	  pthread_attr_setaffinity_np(&attr[i], sizeof(cpu_set_t), &cpuset[i]);
 	  pthread_create(&thread[i], &attr[i], print_message, NULL);
     }
 
-    for(int i = 0; i < NUM_CORE; i++){
+    for(int i = 0; i < num_threads; i++){
       pthread_join(thread[i], NULL);
     }
     printf("thread joined after message printing\n");
 
-    pthread_barrier_init(&barrier_global, NULL, NUM_CORE);
+    pthread_barrier_init(&barrier_global, NULL, num_threads);
     for(int step = 0; step < num_timesteps; step++) {
 	clock_t start, end;    
 	start = clock();
@@ -464,9 +457,8 @@ int main(int argc, char** argv) {
         node_workspaces = (float**) malloc(nnodes * sizeof(float*));
         memset(node_workspaces, 0, nnodes * sizeof(float*));
 
-        const int num_threads = NUM_CORE;
-        pthread_t threads[num_threads];
-        worker_args args[num_threads];
+        pthread_t threads[NUM_CORE];
+        worker_args args[NUM_CORE];
         for(int thread = 0; thread < num_threads; thread++) {
             args[thread].thread_id = thread;
             args[thread].step = step;
