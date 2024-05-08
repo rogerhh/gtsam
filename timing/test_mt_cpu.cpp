@@ -24,8 +24,6 @@ pthread_barrier_t barrier_global;
 // struct timespec got_node_start, got_node_end, AtA_start, AtA_end, chol_fac_end, chol_mem_end, chol_syrk_end, chol_end, merge_end, 
 struct timespec step_start, step_end;
 
-volatile bool buffered_other_thread_done[4096] = {0};
-
 float** node_workspaces = NULL;
 pthread_mutex_t* node_locks;
 int* node_num_children;
@@ -35,7 +33,6 @@ int** node_children;
 pthread_mutex_t queue_lock;
 int node_ready_index = 0;
 int node_ready_size = 0;
-int node_done_size = 0;
 int* node_ready_queue;
 int* node_affinity;
 int num_active_nodes = 0;
@@ -290,12 +287,6 @@ void* worker_cholesky(void* args_ptr) {
 
         // clock_gettime(CLOCK_MONOTONIC, &got_node_start);
     }
-    buffered_other_thread_done[2048] = true;
-
-    // printf("thread %d: got_node_time = %f ms, AtA time = %f ms, chol time = %f ms, chol_fac_time = %f ms, chol_mem_time = %f ms, chol_syrk_time = %f ms, merge time = %f ms\n", thread_id, got_node_time, AtA_time, chol_time, chol_fac_time, chol_mem_time, chol_syrk_time, merge_time);
-    // double AB_time = (double) cholesky_AB_time / CLOCKS_PER_SEC * 1000;
-    // double C_time = (double) cholesky_C_time / CLOCKS_PER_SEC * 1000;
-    // printf("thread %d: AB_time = %f ms, C_time = %f ms\n", thread_id, AB_time, C_time);
 
     pthread_exit(NULL);
 }
@@ -463,10 +454,6 @@ int main(int argc, char** argv) {
         num_active_nodes = 0;
         node_ready_size = 0;
         node_ready_index = 0;
-        node_done_size = 0;
-        // cholesky_AB_time = 0;
-        // cholesky_C_time = 0;
-        buffered_other_thread_done[2048] = false;
 
         for(int node = 0; node < nnodes - 1; node++) {
             bool marked = node_marked[node];
