@@ -13,7 +13,7 @@
 #include <sys/mman.h>
 #endif
 #define NUM_CORE 4 // number of multithreading
-#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
+#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
 
 #include "cholesky.h"
 
@@ -21,7 +21,7 @@ pthread_barrier_t barrier_global;
 
 #define INTERVAL 25
 
-// struct timespec got_node_start, got_node_end, AtA_start, AtA_end, chol_fac_end, chol_mem_end, chol_syrk_end, chol_end, merge_end, 
+struct timespec got_node_start, got_node_end, AtA_start, AtA_end, chol_fac_end, chol_mem_end, chol_syrk_end, chol_end, merge_end;
 struct timespec step_start, step_end;
 
 float** node_workspaces = NULL;
@@ -79,7 +79,7 @@ void* worker_cholesky(void* args_ptr) {
     int*** node_factor_blk_width = step_node_factor_blk_width[step];
 
 
-    // clock_gettime(CLOCK_MONOTONIC, &got_node_start);
+    clock_gettime(CLOCK_MONOTONIC, &got_node_start);
 
     double got_node_time = 0;
     double AtA_time = 0, chol_time = 0, merge_time = 0, chol_fac_time = 0, chol_mem_time = 0, chol_syrk_time = 0;    
@@ -117,8 +117,8 @@ void* worker_cholesky(void* args_ptr) {
             continue;
         }
 
-        // clock_gettime(CLOCK_MONOTONIC, &got_node_end);
-        // got_node_time += (double) (got_node_end.tv_nsec - got_node_start.tv_nsec) / 1000;
+        clock_gettime(CLOCK_MONOTONIC, &got_node_end);
+        got_node_time += (double) (got_node_end.tv_nsec - got_node_start.tv_nsec) / 1000;
             
         // printf("thread %d node = %d\n", thread_id, node);
 
@@ -169,7 +169,7 @@ void* worker_cholesky(void* args_ptr) {
         // 3. Add LC to parent
         // 4. Don't copy [A B] back from workspace
 
-        // clock_gettime(CLOCK_MONOTONIC, &AtA_start);
+        clock_gettime(CLOCK_MONOTONIC, &AtA_start);
 
         // 1. AtA
         for(int i = 0; i < num_factors; i++) {
@@ -200,7 +200,7 @@ void* worker_cholesky(void* args_ptr) {
             free(workspace);
         }
 
-        // clock_gettime(CLOCK_MONOTONIC, &AtA_end);
+        clock_gettime(CLOCK_MONOTONIC, &AtA_end);
 
         if(marked) {
             // Manually insert 1 in the diagonal
@@ -230,7 +230,7 @@ void* worker_cholesky(void* args_ptr) {
         }
 	// chol_marked[node] = marked ? true : false;
 
-        // clock_gettime(CLOCK_MONOTONIC, &chol_end);
+        clock_gettime(CLOCK_MONOTONIC, &chol_end);
 
         // 3. Add LC to parent
         if(parent != nnodes - 1 && parent != -1) {
@@ -274,19 +274,21 @@ void* worker_cholesky(void* args_ptr) {
             pthread_mutex_unlock(&node_locks[parent]);
         }
 
-        // clock_gettime(CLOCK_MONOTONIC, &merge_end);
+        clock_gettime(CLOCK_MONOTONIC, &merge_end);
 
         // 4. Free this nodes workspace
         // free(node_workspaces[node]);
         node_workspaces[node] = NULL;
         // pthread_mutex_unlock(&node_locks[node]);
 
-        // AtA_time += (double) (AtA_end.tv_nsec - AtA_start.tv_nsec) / 1000;
-        // chol_time += (double) (chol_end.tv_nsec - AtA_end.tv_nsec) / 1000;
-        // merge_time += (double) (merge_end.tv_nsec - chol_end.tv_nsec) / 1000;
+        AtA_time += (double) ((long) (AtA_end.tv_nsec - AtA_start.tv_nsec)) / 1e6;
+        chol_time += (double) ((long) (chol_end.tv_nsec - AtA_end.tv_nsec)) / 1e6;
+        merge_time += (double) ((long) (merge_end.tv_nsec - chol_end.tv_nsec)) / 1e6;
 
-        // clock_gettime(CLOCK_MONOTONIC, &got_node_start);
+        clock_gettime(CLOCK_MONOTONIC, &got_node_start);
     }
+
+    printf("thread %d: AtA time = %f ms, chol time = %f ms, merge time = %f ms\n", thread_id, AtA_time, chol_time, merge_time);
 
     pthread_exit(NULL);
 }
