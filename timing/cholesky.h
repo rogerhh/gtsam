@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <math.h>
 #include <float.h>
-#include <time.h>
 #include <gtsam/linear/gemmini_functions.h>
 #include "memory.h"
 
@@ -388,8 +387,6 @@ void partial_factorization3(float* AB, int w, int h) {
                scale_factor_A);
 }
 
-// clock_t cholesky_AB_time = 0, cholesky_C_time = 0;
-
 // Splitting out LC = C - LB LB^T computation for profiling
 void partial_factorization4(float* AB, int w, int h) {
 
@@ -400,10 +397,6 @@ void partial_factorization4(float* AB, int w, int h) {
   // I is the row index of the subdiagonal block
   int J;
   int I;
-
-  clock_t start1, end1, end2;
-
-  start1 = clock();
 
   // This is interleaved [LA; LB] computation
   for(J = 0; J < w; J += CHOL_BLOCK_SIZE) {
@@ -438,29 +431,20 @@ void partial_factorization4(float* AB, int w, int h) {
     hh -= CHOL_BLOCK_SIZE;
   }
 
-  end1 = clock();
-  // cholesky_AB_time += end1 - start1;
+  if(h - w > 0) {
+      // This is LC = C - LB LB^T computation
+      int dim_I = h - w, dim_J = dim_I, dim_K = w;
+      float* B = AB + w;
+      float* C = AB + w * (h + 1);
+      int stride_B = h, stride_C = h;
+      float scale_factor_A = -1, scale_factor_B = 1;
+      bool transpose_A = true, transpose_B = false;
 
-  int tmp = 1;
-  for(int i = 0; i < 5000000; i++) {
-    __asm__ __volatile__ ("" : : : "memory");
-    tmp += 1;
+      blocked_syrk(dim_I, dim_K,
+                   B, C,
+                   stride_B, stride_C,
+                   scale_factor_A);
   }
-
-  // if(h - w > 0) {
-  //     // This is LC = C - LB LB^T computation
-  //     int dim_I = h - w, dim_J = dim_I, dim_K = w;
-  //     float* B = AB + w;
-  //     float* C = AB + w * (h + 1);
-  //     int stride_B = h, stride_C = h;
-  //     float scale_factor_A = -1, scale_factor_B = 1;
-  //     bool transpose_A = true, transpose_B = false;
-
-  //     blocked_syrk(dim_I, dim_K,
-  //                  B, C,
-  //                  stride_B, stride_C,
-  //                  scale_factor_A);
-  // }
 }
 
 // Seah's impl of partial_factorization4

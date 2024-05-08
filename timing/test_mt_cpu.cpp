@@ -13,13 +13,16 @@
 #include <sys/mman.h>
 #endif
 #define NUM_CORE 4 // number of multithreading
-#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
+#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
 
 #include "cholesky.h"
 
 pthread_barrier_t barrier_global;
 
 #define INTERVAL 25
+
+// struct timespec got_node_start, got_node_end, AtA_start, AtA_end, chol_fac_end, chol_mem_end, chol_syrk_end, chol_end, merge_end, 
+struct timespec step_start, step_end;
 
 volatile bool buffered_other_thread_done[4096] = {0};
 
@@ -79,57 +82,21 @@ void* worker_cholesky(void* args_ptr) {
     int*** node_factor_blk_width = step_node_factor_blk_width[step];
 
 
-    clock_t got_node_start = clock();
+    // clock_gettime(CLOCK_MONOTONIC, &got_node_start);
+
     double got_node_time = 0;
     double AtA_time = 0, chol_time = 0, merge_time = 0, chol_fac_time = 0, chol_mem_time = 0, chol_syrk_time = 0;    
 
     pthread_barrier_wait(&barrier_global);
     while(true) {
-
-        if(thread_id != 0) {
-          // if(node_ready_size >= 0.8 * num_active_nodes) {
-          if(buffered_other_thread_done[2048]) {
-            break;
-          }
-          else {
-            continue;
-          }
-        }
         
         bool done_flag = false;
         bool wait_flag = false;
         int node = -1;
 
-        // pthread_mutex_lock(&queue_lock);
+        pthread_mutex_lock(&queue_lock);
 
-        // bool node_flag = false;
-        // for(int i = 0; i < node_ready_size; i++) {
-        //   if(node_ready_queue[i] >= 0 
-        //       && (node_affinity[i] == thread_id || node_affinity[i] == -1)) {
-        //     node = node_ready_queue[i];
-        //     node_ready_queue[i] = -1;
-        //     node_done_size++;
-        //     node_flag = true;
-        //     break;
-        //   }
-        // }
-
-        // if(node_flag) {
-        //   // pass
-        // }
-        // else if(node_done_size == num_active_nodes) {
-        //     done_flag = true;
-        // }
-        // else if(node_done_size > num_active_nodes) {
-        //     printf("thread %d: Done queue size greater than active nodes!\n", thread_id);
-        //     exit(1);
-        // }
-        // else {
-        //     wait_flag = true;
-        // }
-
-
-        if(node_ready_index < node_ready_size && thread_id == 0) {
+        if(node_ready_index < node_ready_size) {
             node = node_ready_queue[node_ready_index];
             node_ready_index++;
         }
@@ -144,7 +111,7 @@ void* worker_cholesky(void* args_ptr) {
             wait_flag = true;
         }
 
-        // pthread_mutex_unlock(&queue_lock);
+        pthread_mutex_unlock(&queue_lock);
 
         if(done_flag) {
             break;
@@ -153,8 +120,8 @@ void* worker_cholesky(void* args_ptr) {
             continue;
         }
 
-        clock_t got_node_end = clock();
-        got_node_time += (double) (got_node_end - got_node_start) / CLOCKS_PER_SEC * 1000;
+        // clock_gettime(CLOCK_MONOTONIC, &got_node_end);
+        // got_node_time += (double) (got_node_end.tv_nsec - got_node_start.tv_nsec) / 1000;
             
         // printf("thread %d node = %d\n", thread_id, node);
 
@@ -205,7 +172,7 @@ void* worker_cholesky(void* args_ptr) {
         // 3. Add LC to parent
         // 4. Don't copy [A B] back from workspace
 
-        clock_t AtA_start = clock();
+        // clock_gettime(CLOCK_MONOTONIC, &AtA_start);
 
         // 1. AtA
         for(int i = 0; i < num_factors; i++) {
@@ -236,7 +203,7 @@ void* worker_cholesky(void* args_ptr) {
             free(workspace);
         }
 
-        clock_t AtA_end = clock();
+        // clock_gettime(CLOCK_MONOTONIC, &AtA_end);
 
         if(marked) {
             // Manually insert 1 in the diagonal
@@ -249,16 +216,8 @@ void* worker_cholesky(void* args_ptr) {
             // 2. Cholesky
             partial_factorization4(ABC, H_w, H_h);
 
-            clock_t chol_fac_end = clock();
-
             // 4. Copy [A B] back from workspace
             memcpy(H_data, ABC, H_w * H_h * sizeof(float));
-
-            clock_t chol_mem_end = clock();
-
-            chol_fac_time += (double) (chol_fac_end - AtA_end) / CLOCKS_PER_SEC * 1000;
-            chol_mem_time += (double) (chol_mem_end - chol_fac_end) / CLOCKS_PER_SEC * 1000;
-
         }
         else if(fixed) {
             // 2. LC = -LB LB^T
@@ -271,20 +230,17 @@ void* worker_cholesky(void* args_ptr) {
                    H_h, H_h, H_h,
                    -1, 1,
                    true, false);
-
-            clock_t chol_syrk_end = clock();
-            chol_syrk_time += (double) (chol_syrk_end - AtA_end) / CLOCKS_PER_SEC * 1000;
         }
 	// chol_marked[node] = marked ? true : false;
 
-        clock_t chol_end = clock();
+        // clock_gettime(CLOCK_MONOTONIC, &chol_end);
 
         // 3. Add LC to parent
         if(parent != nnodes - 1 && parent != -1) {
             // printf("thread %d node = %d parent = %d\n", thread_id, node, parent);
 
             // lock parent
-            // pthread_mutex_lock(&node_locks[parent]);
+            pthread_mutex_lock(&node_locks[parent]);
 
             int subdiag_h = H_h - H_w;
             float* C = ABC + H_w * (H_h + 1);
@@ -311,32 +267,32 @@ void* worker_cholesky(void* args_ptr) {
 
             node_done_children[parent]++;
             if(node_done_children[parent] == node_num_children[parent]) {
-                // pthread_mutex_lock(&queue_lock);
+                pthread_mutex_lock(&queue_lock);
                 node_ready_queue[node_ready_size] = parent;
                 node_affinity[node_ready_size] = thread_id;
                 node_ready_size++;
-                // pthread_mutex_unlock(&queue_lock);
+                pthread_mutex_unlock(&queue_lock);
             }
 
-            // pthread_mutex_unlock(&node_locks[parent]);
+            pthread_mutex_unlock(&node_locks[parent]);
         }
 
-        clock_t merge_end = clock();
+        // clock_gettime(CLOCK_MONOTONIC, &merge_end);
 
         // 4. Free this nodes workspace
         // free(node_workspaces[node]);
         node_workspaces[node] = NULL;
         // pthread_mutex_unlock(&node_locks[node]);
 
-        AtA_time += (double) (AtA_end - AtA_start) / CLOCKS_PER_SEC * 1000;
-        chol_time += (double) (chol_end - AtA_end) / CLOCKS_PER_SEC * 1000;
-        merge_time += (double) (merge_end - chol_end) / CLOCKS_PER_SEC * 1000;
+        // AtA_time += (double) (AtA_end.tv_nsec - AtA_start.tv_nsec) / 1000;
+        // chol_time += (double) (chol_end.tv_nsec - AtA_end.tv_nsec) / 1000;
+        // merge_time += (double) (merge_end.tv_nsec - chol_end.tv_nsec) / 1000;
 
-        got_node_start = clock();
+        // clock_gettime(CLOCK_MONOTONIC, &got_node_start);
     }
     buffered_other_thread_done[2048] = true;
 
-    printf("thread %d: got_node_time = %f ms, AtA time = %f ms, chol time = %f ms, chol_fac_time = %f ms, chol_mem_time = %f ms, chol_syrk_time = %f ms, merge time = %f ms\n", thread_id, got_node_time, AtA_time, chol_time, chol_fac_time, chol_mem_time, chol_syrk_time, merge_time);
+    // printf("thread %d: got_node_time = %f ms, AtA time = %f ms, chol time = %f ms, chol_fac_time = %f ms, chol_mem_time = %f ms, chol_syrk_time = %f ms, merge time = %f ms\n", thread_id, got_node_time, AtA_time, chol_time, chol_fac_time, chol_mem_time, chol_syrk_time, merge_time);
     // double AB_time = (double) cholesky_AB_time / CLOCKS_PER_SEC * 1000;
     // double C_time = (double) cholesky_C_time / CLOCKS_PER_SEC * 1000;
     // printf("thread %d: AB_time = %f ms, C_time = %f ms\n", thread_id, AB_time, C_time);
@@ -450,8 +406,7 @@ int main(int argc, char** argv) {
 
     pthread_barrier_init(&barrier_global, NULL, num_threads);
     for(int step = 0; step < num_timesteps; step++) {
-	clock_t start, end;    
-	start = clock();
+        clock_gettime(CLOCK_MONOTONIC, &step_start);
 
         int true_step = (step+1)*INTERVAL;//step + timestep_start;
         printf("true step = %d\n", true_step);
@@ -635,9 +590,10 @@ int main(int argc, char** argv) {
         // AtA_time = NULL;
         // backsolve_time = NULL;
 
-	end = clock();
-	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
-	printf("step %d time: %f ms\n", step, cpu_time_used * 1000);
+	clock_gettime(CLOCK_MONOTONIC, &step_end);
+	double cpu_time_used = (step_end.tv_sec - step_start.tv_sec) * 1000
+            + ((long) (step_end.tv_nsec - step_start.tv_nsec)) / 1000000;
+	printf("step %d time: %f ms\n", step, cpu_time_used);
 
     }
     pthread_barrier_destroy(&barrier_global);
