@@ -2,6 +2,7 @@
 #include <stddef.h>
 #include <assert.h>
 #include <sched.h>
+#include <unistd.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,11 +13,15 @@
 #include <sys/mman.h>
 #endif
 #define NUM_CORE 4 // number of multithreading
+#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
+
 #include "cholesky.h"
-#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
+
 pthread_barrier_t barrier_global;
 
 #define INTERVAL 25
+
+volatile bool buffered_other_thread_done[4096] = {0};
 
 float** node_workspaces = NULL;
 pthread_mutex_t* node_locks;
@@ -27,16 +32,18 @@ int** node_children;
 pthread_mutex_t queue_lock;
 int node_ready_index = 0;
 int node_ready_size = 0;
+int node_done_size = 0;
 int* node_ready_queue;
+int* node_affinity;
 int num_active_nodes = 0;
-// record timing
-uint64_t* node_time; // TODO: AtA/cholesky breakdown 
-uint64_t* AtA_time;
-uint64_t* merge_time;
-uint64_t* chol_time;
-bool* chol_marked;
-uint64_t* init_time;
-uint64_t* backsolve_time;
+// // record timing
+// uint64_t* node_time; // TODO: AtA/cholesky breakdown 
+// uint64_t* AtA_time;
+// uint64_t* merge_time;
+// uint64_t* chol_time;
+// bool* chol_marked;
+// uint64_t* init_time;
+// uint64_t* backsolve_time;
 
 typedef struct worker_args_t {
     int thread_id;
@@ -71,14 +78,58 @@ void* worker_cholesky(void* args_ptr) {
     int*** node_factor_B_blk_start = step_node_factor_B_blk_start[step];
     int*** node_factor_blk_width = step_node_factor_blk_width[step];
 
+
+    clock_t got_node_start = clock();
+    double got_node_time = 0;
+    double AtA_time = 0, chol_time = 0, merge_time = 0, chol_fac_time = 0, chol_mem_time = 0, chol_syrk_time = 0;    
+
     pthread_barrier_wait(&barrier_global);
     while(true) {
+
+        if(thread_id != 0) {
+          // if(node_ready_size >= 0.8 * num_active_nodes) {
+          if(buffered_other_thread_done[2048]) {
+            break;
+          }
+          else {
+            continue;
+          }
+        }
+        
         bool done_flag = false;
         bool wait_flag = false;
         int node = -1;
-        pthread_mutex_lock(&queue_lock);
 
-        if(node_ready_index < node_ready_size) {
+        // pthread_mutex_lock(&queue_lock);
+
+        // bool node_flag = false;
+        // for(int i = 0; i < node_ready_size; i++) {
+        //   if(node_ready_queue[i] >= 0 
+        //       && (node_affinity[i] == thread_id || node_affinity[i] == -1)) {
+        //     node = node_ready_queue[i];
+        //     node_ready_queue[i] = -1;
+        //     node_done_size++;
+        //     node_flag = true;
+        //     break;
+        //   }
+        // }
+
+        // if(node_flag) {
+        //   // pass
+        // }
+        // else if(node_done_size == num_active_nodes) {
+        //     done_flag = true;
+        // }
+        // else if(node_done_size > num_active_nodes) {
+        //     printf("thread %d: Done queue size greater than active nodes!\n", thread_id);
+        //     exit(1);
+        // }
+        // else {
+        //     wait_flag = true;
+        // }
+
+
+        if(node_ready_index < node_ready_size && thread_id == 0) {
             node = node_ready_queue[node_ready_index];
             node_ready_index++;
         }
@@ -93,7 +144,7 @@ void* worker_cholesky(void* args_ptr) {
             wait_flag = true;
         }
 
-        pthread_mutex_unlock(&queue_lock);
+        // pthread_mutex_unlock(&queue_lock);
 
         if(done_flag) {
             break;
@@ -101,8 +152,11 @@ void* worker_cholesky(void* args_ptr) {
         else if(wait_flag) {
             continue;
         }
+
+        clock_t got_node_end = clock();
+        got_node_time += (double) (got_node_end - got_node_start) / CLOCKS_PER_SEC * 1000;
             
-        //printf("thread %d node = %d\n", thread_id, node);
+        // printf("thread %d node = %d\n", thread_id, node);
 
         bool marked = node_marked[node];
         bool fixed = node_fixed[node];
@@ -115,7 +169,7 @@ void* worker_cholesky(void* args_ptr) {
         // Technically we don't need to lock node because no two threads can
         // grab the same node. But lock it anyways
 
-        pthread_mutex_lock(&node_locks[node]);
+        // pthread_mutex_lock(&node_locks[node]);
 
         int parent = node_parent[node];
         int H_h = node_height[node];
@@ -132,7 +186,7 @@ void* worker_cholesky(void* args_ptr) {
         int** factor_blk_width = node_factor_blk_width[node];
 
         if(node_workspaces[node] == NULL) {
-            //node_workspaces[node] = malloc(H_h * H_h * sizeof(float));
+            // node_workspaces[node] = (float*) malloc(H_h * H_h * sizeof(float));
             node_workspaces[node] = (float*) my_malloc(H_h * H_h * sizeof(float));
             memset(node_workspaces[node], 0, H_h * H_h * sizeof(float));
         }
@@ -150,6 +204,8 @@ void* worker_cholesky(void* args_ptr) {
         // 2. LC = -LB LB^T
         // 3. Add LC to parent
         // 4. Don't copy [A B] back from workspace
+
+        clock_t AtA_start = clock();
 
         // 1. AtA
         for(int i = 0; i < num_factors; i++) {
@@ -180,6 +236,8 @@ void* worker_cholesky(void* args_ptr) {
             free(workspace);
         }
 
+        clock_t AtA_end = clock();
+
         if(marked) {
             // Manually insert 1 in the diagonal
             float* ABC_col = ABC;
@@ -191,8 +249,15 @@ void* worker_cholesky(void* args_ptr) {
             // 2. Cholesky
             partial_factorization4(ABC, H_w, H_h);
 
+            clock_t chol_fac_end = clock();
+
             // 4. Copy [A B] back from workspace
             memcpy(H_data, ABC, H_w * H_h * sizeof(float));
+
+            clock_t chol_mem_end = clock();
+
+            chol_fac_time += (double) (chol_fac_end - AtA_end) / CLOCKS_PER_SEC * 1000;
+            chol_mem_time += (double) (chol_mem_end - chol_fac_end) / CLOCKS_PER_SEC * 1000;
 
         }
         else if(fixed) {
@@ -206,15 +271,20 @@ void* worker_cholesky(void* args_ptr) {
                    H_h, H_h, H_h,
                    -1, 1,
                    true, false);
+
+            clock_t chol_syrk_end = clock();
+            chol_syrk_time += (double) (chol_syrk_end - AtA_end) / CLOCKS_PER_SEC * 1000;
         }
-	chol_marked[node] = marked ? true : false;
+	// chol_marked[node] = marked ? true : false;
+
+        clock_t chol_end = clock();
 
         // 3. Add LC to parent
         if(parent != nnodes - 1 && parent != -1) {
+            // printf("thread %d node = %d parent = %d\n", thread_id, node, parent);
 
             // lock parent
-            pthread_mutex_lock(&node_locks[parent]);
-
+            // pthread_mutex_lock(&node_locks[parent]);
 
             int subdiag_h = H_h - H_w;
             float* C = ABC + H_w * (H_h + 1);
@@ -222,7 +292,7 @@ void* worker_cholesky(void* args_ptr) {
             int next_H_w = node_width[parent];
 
             if(node_workspaces[parent] == 0) {
-                //node_workspaces[parent] = malloc(next_H_h * next_H_h * sizeof(float));
+                // node_workspaces[parent] = (float*) malloc(next_H_h * next_H_h * sizeof(float));
                 node_workspaces[parent] = (float*) my_malloc(next_H_h * next_H_h * sizeof(float));
                 memset(node_workspaces[parent], 0, next_H_h * next_H_h * sizeof(float));
             }
@@ -241,21 +311,35 @@ void* worker_cholesky(void* args_ptr) {
 
             node_done_children[parent]++;
             if(node_done_children[parent] == node_num_children[parent]) {
-                pthread_mutex_lock(&queue_lock);
+                // pthread_mutex_lock(&queue_lock);
                 node_ready_queue[node_ready_size] = parent;
+                node_affinity[node_ready_size] = thread_id;
                 node_ready_size++;
-                pthread_mutex_unlock(&queue_lock);
+                // pthread_mutex_unlock(&queue_lock);
             }
 
-            pthread_mutex_unlock(&node_locks[parent]);
+            // pthread_mutex_unlock(&node_locks[parent]);
         }
 
-        // 4. Free this nodes workspace
-        //free(node_workspaces[node]);
-        node_workspaces[node] = NULL;
-        pthread_mutex_unlock(&node_locks[node]);
+        clock_t merge_end = clock();
 
+        // 4. Free this nodes workspace
+        // free(node_workspaces[node]);
+        node_workspaces[node] = NULL;
+        // pthread_mutex_unlock(&node_locks[node]);
+
+        AtA_time += (double) (AtA_end - AtA_start) / CLOCKS_PER_SEC * 1000;
+        chol_time += (double) (chol_end - AtA_end) / CLOCKS_PER_SEC * 1000;
+        merge_time += (double) (merge_end - chol_end) / CLOCKS_PER_SEC * 1000;
+
+        got_node_start = clock();
     }
+    buffered_other_thread_done[2048] = true;
+
+    printf("thread %d: got_node_time = %f ms, AtA time = %f ms, chol time = %f ms, chol_fac_time = %f ms, chol_mem_time = %f ms, chol_syrk_time = %f ms, merge time = %f ms\n", thread_id, got_node_time, AtA_time, chol_time, chol_fac_time, chol_mem_time, chol_syrk_time, merge_time);
+    // double AB_time = (double) cholesky_AB_time / CLOCKS_PER_SEC * 1000;
+    // double C_time = (double) cholesky_C_time / CLOCKS_PER_SEC * 1000;
+    // printf("thread %d: AB_time = %f ms, C_time = %f ms\n", thread_id, AB_time, C_time);
 
     pthread_exit(NULL);
 }
@@ -373,15 +457,15 @@ int main(int argc, char** argv) {
         printf("true step = %d\n", true_step);
 
         int nnodes = step_nnodes[step];
-        node_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
-        memset(node_time, 0, nnodes*sizeof(uint64_t));
-        init_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
-        AtA_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
-        merge_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
-        chol_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
-        chol_marked = (bool*) malloc(nnodes*sizeof(bool));
-        backsolve_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
-        memset(backsolve_time, 0, nnodes*sizeof(uint64_t));
+        // node_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        // memset(node_time, 0, nnodes*sizeof(uint64_t));
+        // init_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        // AtA_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        // merge_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        // chol_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        // chol_marked = (bool*) malloc(nnodes*sizeof(bool));
+        // backsolve_time = (uint64_t*) malloc(nnodes*sizeof(uint64_t));
+        // memset(backsolve_time, 0, nnodes*sizeof(uint64_t));
 
         bool* node_marked = step_node_marked[step];
         bool* node_fixed = step_node_fixed[step];
@@ -416,6 +500,7 @@ int main(int argc, char** argv) {
         node_done_children = (int*) malloc(nnodes * sizeof(int));
         node_children = (int**) malloc(nnodes * sizeof(int*));
         node_ready_queue = (int*) malloc(nnodes * sizeof(int));
+        node_affinity = (int*) malloc(nnodes * sizeof(int));
         memset(node_num_children, 0, nnodes * sizeof(int));
         memset(node_done_children, 0, nnodes * sizeof(int));
         memset(node_children, 0, nnodes * sizeof(int*));
@@ -423,7 +508,10 @@ int main(int argc, char** argv) {
         num_active_nodes = 0;
         node_ready_size = 0;
         node_ready_index = 0;
-
+        node_done_size = 0;
+        // cholesky_AB_time = 0;
+        // cholesky_C_time = 0;
+        buffered_other_thread_done[2048] = false;
 
         for(int node = 0; node < nnodes - 1; node++) {
             bool marked = node_marked[node];
@@ -437,6 +525,7 @@ int main(int argc, char** argv) {
 
             if(node_num_children[node] == 0) {
                 node_ready_queue[node_ready_size] = node;
+                node_affinity[node_ready_size] = 0;
                 node_ready_size++;
             }
 
@@ -531,20 +620,20 @@ int main(int argc, char** argv) {
   
         int nnode = step_nnodes[step];
 
-        free(merge_time);
-        free(chol_time);
-        free(chol_marked);
-        free(init_time);
-        free(node_time);
-        free(AtA_time);
-        free(backsolve_time);
-        merge_time = NULL;
-        chol_time = NULL;
-        init_time = NULL;
-	chol_marked = NULL;
-        node_time = NULL;
-        AtA_time = NULL;
-        backsolve_time = NULL;
+        // free(merge_time);
+        // free(chol_time);
+        // free(chol_marked);
+        // free(init_time);
+        // free(node_time);
+        // free(AtA_time);
+        // free(backsolve_time);
+        // merge_time = NULL;
+        // chol_time = NULL;
+        // init_time = NULL;
+	// chol_marked = NULL;
+        // node_time = NULL;
+        // AtA_time = NULL;
+        // backsolve_time = NULL;
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;

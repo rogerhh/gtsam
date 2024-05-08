@@ -8,11 +8,10 @@
 #include <time.h>
 #include <cstring>
 
-#include "memory.h"
-#include "cholesky.h"
-
 #include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
 
+#include "memory.h"
+#include "cholesky.h"
 
 #define NUM_CORE 4
 
