@@ -11,7 +11,7 @@
 #include <assert.h>
 #include <iostream>
 
-// #define AUTOVEC 1
+#define AUTOVEC 1
 
 using namespace gtsam;
 

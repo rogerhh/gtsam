@@ -13,7 +13,7 @@
 #include <sys/mman.h>
 #endif
 #define NUM_CORE 4 // number of multithreading
-#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
+#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
 
 #include "cholesky.h"
 
@@ -288,7 +288,7 @@ void* worker_cholesky(void* args_ptr) {
         clock_gettime(CLOCK_MONOTONIC, &got_node_start);
     }
 
-    printf("thread %d: AtA time = %f ms, chol time = %f ms, merge time = %f ms\n", thread_id, AtA_time, chol_time, merge_time);
+    // printf("thread %d: AtA time = %f ms, chol time = %f ms, merge time = %f ms\n", thread_id, AtA_time, chol_time, merge_time);
 
     pthread_exit(NULL);
 }
