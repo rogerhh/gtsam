@@ -1,0 +1,137 @@
+# All datasets and their paths relative to gtsam/examples/Data
+dataset:
+    CAB1: 
+        is3D:           true
+        path:           "ra_datasets/CAB_query_val_phone"
+        relin_thresh:   0.01
+        start_step:     2
+        end_step:       463     # Inclusive
+        period:         1
+    CAB1-smallnoise: 
+        is3D:           true
+        path:           "ra_datasets/CAB_query_val_phone-2"
+        relin_thresh:   0.001
+        start_step:     2
+        end_step:       463     # Inclusive
+        period:         1
+    CAB7000: 
+        is3D:           true
+        path:           "ra_datasets/CAB7000"
+        relin_thresh:   0.02
+        start_step:     2
+        end_step:       3000    # Inclusive
+        period:         25
+    CAB7000-smallnoise: 
+        is3D:           true
+        path:           "ra_datasets/CAB7000-2"
+        relin_thresh:   0.001
+        start_step:     2
+        end_step:       3000    # Inclusive
+        period:         25
+    CSAIL: 
+        is3D:           false
+        path:           "ra_datasets/CSAIL"
+        relin_thresh:   0.01
+        start_step:     2
+        end_step:       1045    # Inclusive
+        period:         25
+        noise_format:   "graph"
+    sphere2500: 
+        is3D:           true
+        path:           "sphere2500"
+        relin_thresh:   0.05
+        start_step:     2
+        end_step:       2499    # Inclusive
+        period:         25
+    sphere2: 
+        is3D:           true
+        path:           "ra_datasets/sphere_smallnoise_pruned"
+        relin_thresh:   0.01
+        start_step:     2
+        end_step:       2499    # Inclusive
+        period:         25
+    w10000: 
+        is3D:           false
+        path:           "w10000"
+        relin_thresh:   0.1
+        start_step:     2
+        end_step:       10000   # Inclusive
+        period:         1
+    M3500: 
+        is3D:           false
+        path:           "ra_datasets/M3500"
+        relin_thresh:   0.1
+        start_step:     2
+        end_step:       3500    # Inclusive
+        period:         1
+    M3500c: 
+        is3D:           false
+        path:           "ra_datasets/M3500c"
+        relin_thresh:   0.1
+        start_step:     2
+        end_step:       3500    # Inclusive
+        period:         1
+
+# Metadata
+metadata:
+    scriptdir: "."
+    builddir: "../../build"
+    headerdir: "../baremetal_tests"
+    recompile: false     # True if C++ sources changed
+    make_flags: "-j4"
+    target_binary:
+        # - testGtsamIncremental
+        # - testGtsamIncremental3D
+        # - testGtsamIncremental-ra
+        - testGtsamIncremental3D-ra
+        # - testGtsamIncremental-vio
+        # - testGtsamIncremental3D-vio
+        # - testGtsamIncremental-treegen
+        # - testGtsamIncremental3D-treegen
+        # - testGtsamIncremental-datasetgen
+        # - testGtsamIncremental3D-datasetgen
+        # - testGtsamIncremental3D-lru
+
+target_dataset: sphere2
+    # - CAB1
+    # - CAB1-smallnoise
+    # - CAB7000
+    # - CAB7000-smallnoise
+    # - CSAIL
+    # - sphere2500
+    # - sphere2
+    # - w10000
+    # - M3500
+    # - M3500c
+
+target_configs:
+    - RA1
+    # - RA2
+    - VIO
+
+#####################################################################
+#   Add Configs Here
+#####################################################################
+RA1: 
+    alg: ra
+    num_threads: 1
+    latency: 33     # ms
+
+RA2: 
+    alg: ra
+    num_threads: 2
+    latency: 33     # ms
+
+VIO: 
+    alg: vio
+    max_iter:           1
+    vio_lag:            20
+    run_lc:             false
+    lc_period:          8
+
+VIOLC: 
+    alg: vio
+    max_iter:           1
+    vio_lag:            20
+    run_lc:             true
+    lc_period:          8

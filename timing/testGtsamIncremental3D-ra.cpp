@@ -14,6 +14,8 @@
 #include <boost/range/adaptor/reversed.hpp>
 #include <chrono>
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <getopt.h>
 
@@ -60,6 +62,8 @@ int main(int argc, char *argv[]) {
     bool print_traj = false;
     bool print_values = false;
 
+    string demo_pipe = "";
+
     // Get experiment setup
     static struct option long_options[] = {
         {"dataset", required_argument, 0, 'f'},
@@ -78,6 +82,7 @@ int main(int argc, char *argv[]) {
         {"print_dataset", no_argument, 0, 150},
         {"print_pred", no_argument, 0, 151},
         {"print_traj", no_argument, 0, 152},
+        {"demo_pipe", required_argument, 0, 153},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -131,11 +136,29 @@ int main(int argc, char *argv[]) {
             case 152:
                 print_traj = true;
                 break;
+            case 153:
+                demo_pipe = string(optarg);
+                break;
             default:
                 cerr << "Unrecognized option" << endl;
                 exit(1);
         }
     }
+
+    cout << "here0" << endl;
+
+    ofstream demo_fout;
+    if(demo_pipe != "") {
+    cout << "here01" << endl;
+      mkfifo(demo_pipe.data(), 0666);
+    cout << "here02 " << demo_pipe << endl;
+      demo_fout.open(demo_pipe);
+    cout << "here03" << endl;
+
+    }
+
+    cout << "here1" << endl;
+
 
     vector<int> step_num_threads;
     ifstream num_threads_fin;
@@ -380,6 +403,12 @@ int main(int argc, char *argv[]) {
 
                   estimate.print_kitti_pose3(traj_fout);
                 }
+
+              }
+              if(demo_pipe != "") {
+                  demo_fout << "step start " << step << endl;
+                  estimate.print_kitti_pose3(demo_fout);
+                  demo_fout << "step end" << endl;
               }
             }
         }

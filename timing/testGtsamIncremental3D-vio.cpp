@@ -15,6 +15,8 @@
 #include <boost/range/adaptor/reversed.hpp>
 #include <chrono>
 
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <getopt.h>
 
@@ -55,9 +57,16 @@ int main(int argc, char *argv[]) {
     double relin_thresh = 0.1;
     NoiseFormat noiseFormat = gtsam::NoiseFormatAUTO;
     string dataset_outdir = "";
+    bool print_dataset = false;
+    bool print_pred = false;
+    bool print_traj = false;
+    bool print_values = false;
+
     bool run_lc = false;
     int lc_period = 30;
     int loop_size = lc_period;
+
+    string demo_pipe = "";
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -72,8 +81,13 @@ int main(int argc, char *argv[]) {
         {"num_steps", required_argument, 0, 't'},
         {"vio_lag", required_argument, 0, 52},
         {"dataset_outdir", required_argument, 0, 54},
+        {"print_values", no_argument, 0, 149},
+        {"print_dataset", no_argument, 0, 150},
+        {"print_pred", no_argument, 0, 151},
+        {"print_traj", no_argument, 0, 152},
         {"run_lc", no_argument, 0, 55},
         {"lc_period", required_argument, 0, 56},
+        {"demo_pipe", required_argument, 0, 153},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -134,6 +148,18 @@ int main(int argc, char *argv[]) {
             case 54:
                 dataset_outdir = string(optarg);
                 break;
+            case 149:
+                print_values = true;
+                break;
+            case 150:
+                print_dataset = true;
+                break;
+            case 151:
+                print_pred = true;
+                break;
+            case 152:
+                print_traj = true;
+                break;
             case 55:
                 run_lc = true;
                 break;
@@ -142,10 +168,19 @@ int main(int argc, char *argv[]) {
                 loop_size = lc_period;
                 break;
             }
+            case 153:
+                demo_pipe = string(optarg);
+                break;
             default:
                 cerr << "Unrecognized option" << endl;
                 exit(1);
         }
+    }
+
+    ofstream demo_fout;
+    if(demo_pipe != "") {
+      mkfifo(demo_pipe.data(), 0666);
+      demo_fout.open(demo_pipe);
     }
 
     cout << "Incremental optimization" << endl
@@ -418,26 +453,37 @@ int main(int argc, char *argv[]) {
             vioNewVariables.clear();
             vioNewFactors = NonlinearFactorGraph();
 
-            string outfile = dataset_outdir + "/step-" + to_string(step) + "_traj.txt";
-            ofstream fout(outfile);
+            if(dataset_outdir != "") {
+              if(print_traj) {
+                string outfile = dataset_outdir + "/step-" + to_string(step) + "_traj.txt";
+                ofstream fout(outfile);
 
-            if(!fout.is_open()) {
-              cerr << "Cannot open file: " << outfile << endl;
-              exit(1);
+                if(!fout.is_open()) {
+                  cerr << "Cannot open file: " << outfile << endl;
+                  exit(1);
+                }
+
+                vio_estimate.print_kitti_pose3(fout);
+
+                string lc_outfile = dataset_outdir + "/step-" + to_string(step) + "_lc-traj.txt";
+                ofstream lc_fout(lc_outfile);
+
+                if(!lc_fout.is_open()) {
+                  cerr << "Cannot open file: " << lc_outfile << endl;
+                  exit(1);
+                }
+
+                Values lc_estimate = isam2.calculateEstimate();
+                lc_estimate.print_kitti_pose3(lc_fout);
+
+              }
             }
 
-            vio_estimate.print_kitti_pose3(fout);
-
-            string lc_outfile = dataset_outdir + "/step-" + to_string(step) + "_lc-traj.txt";
-            ofstream lc_fout(lc_outfile);
-
-            if(!lc_fout.is_open()) {
-              cerr << "Cannot open file: " << lc_outfile << endl;
-              exit(1);
+            if(demo_pipe != "") {
+                demo_fout << "step start " << step << endl;
+                vio_estimate.print_kitti_pose3(demo_fout);
+                demo_fout << "step end" << endl;
             }
-
-            Values lc_estimate = isam2.calculateEstimate();
-            lc_estimate.print_kitti_pose3(lc_fout);
 
 
         }
