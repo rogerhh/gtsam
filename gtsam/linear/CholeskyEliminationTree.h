@@ -115,7 +115,7 @@ public:
   void pickRelinKeys(std::vector<std::pair<Key, double>>& keyDeltaVec,
                      int maxRelinKeys,
                      double relinThresh,
-                     KeySet* newRemappedRelinKeys);
+                     KeySet* newRelinKeys);
 
   // Mark affected keys if smaller than max depth
   void markAffectedKeys2(int maxRelinDepth,

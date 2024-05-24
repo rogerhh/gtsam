@@ -555,7 +555,8 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   bool dogleg = max_relin_keys > 5;
 
-  if(dogleg) {
+  // if(dogleg) {
+  if(false) {
     // 1. First compute h_gd and h_n (h_n is the solution given by delta)
     //    Let g = Atb
     //    Compute alpha = <g, g> / <Ltg, Ltg>

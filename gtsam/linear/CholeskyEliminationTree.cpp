@@ -214,9 +214,9 @@ void CholeskyEliminationTree::pickRelinKeys(
   vector<pair<Key, double>>& KeyDeltaVec,
   int maxRelinKeys,
   double relinThresh,
-  KeySet* newRemappedRelinKeys) {
+  KeySet* newRelinKeys) {
 
-  newRemappedRelinKeys->clear();
+  newRelinKeys->clear();
 
   vector<pair<Key, double>> newKeyDeltaVec;
   newKeyDeltaVec.reserve(KeyDeltaVec.size());
@@ -236,7 +236,7 @@ void CholeskyEliminationTree::pickRelinKeys(
 
   for(auto it = KeyDeltaVec.rbegin(); it != KeyDeltaVec.rend(); it++) {
     if(key_count < maxRelinKeys && rand() % 100 < 100) {
-      newRemappedRelinKeys->insert(it->first);
+      newRelinKeys->insert(it->first);
       key_count++;
     }
     if(key_count >= maxRelinKeys) { break; }
@@ -245,7 +245,7 @@ void CholeskyEliminationTree::pickRelinKeys(
   cout << "Total relin keys: " << relin_count << " num relin: " << key_count << endl;
 
   cout << "Relin keys: ";
-  for(auto k : *newRemappedRelinKeys) {
+  for(auto k : *newRelinKeys) {
     cout << k << " ";
   }
   cout << endl;
