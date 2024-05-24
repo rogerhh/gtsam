@@ -42,7 +42,7 @@ CholeskyEliminationTree::CholeskyEliminationTree() : orderingLess_(this) {
 
   igo_cm = (igo_common*) malloc(sizeof(igo_common));
   igo_init(igo_cm);
-  igo_cm->BATCH_SOLVE_THRESH = 0.5;
+  igo_cm->BATCH_SOLVE_THRESH = 100;
   igo_cm->REORDER_PERIOD = 20;
   igo_cm->solve_type = IGO_SOLVE_DECIDE;
   igo_cm->SEL_COLS_RATE = 0.1;

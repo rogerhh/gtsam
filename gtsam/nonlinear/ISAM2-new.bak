@@ -452,7 +452,6 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
 
   KeySet relinKeys;
 
-  params_.relinearizeThreshold = 1e-5;
   relinKeys = update.CheckRelinearizationFull(delta_, params_.relinearizeThreshold);
 
   if (!relinKeys.empty()) {
