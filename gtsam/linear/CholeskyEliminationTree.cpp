@@ -22,6 +22,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <unordered_map>
+#include <numeric>
 
 using namespace std;
 
@@ -42,11 +43,15 @@ CholeskyEliminationTree::CholeskyEliminationTree() : orderingLess_(this) {
 
   igo_cm = (igo_common*) malloc(sizeof(igo_common));
   igo_init(igo_cm);
-  igo_cm->BATCH_SOLVE_THRESH = 100;
-  igo_cm->REORDER_PERIOD = 20;
+  igo_cm->BATCH_SOLVE_THRESH = 0.5;
+  igo_cm->REORDER_PERIOD = 1;
+  igo_cm->solve_partial = IGO_SOLVE_PARTIAL_FALSE;
   igo_cm->solve_type = IGO_SOLVE_DECIDE;
-  igo_cm->SEL_COLS_RATE = 0.1;
+  igo_cm->SEL_COLS_RATE = 0.2;
   igo_cm->MIN_SEL_COLS = 10;
+  igo_cm->pcg_atol = 1e-7;
+  igo_cm->pcg_rtol = 1e-7;
+  // igo_cm->partial_thresh = 1;
 
   factorToCols_.push_back(0);
   keyToRows_.push_back(0);
@@ -75,6 +80,259 @@ void CholeskyEliminationTree::addVariables(const Values& newTheta) {
   }
 } 
 
+// void CholeskyEliminationTree::getLinearSystem(
+//   const NonlinearFactorGraph& nonlinearFactors, 
+//   const FactorIndices& newFactorIndices,
+//   const KeySet& relinKeys,
+//   const ISAM2UpdateParams& updateParams,
+//   const Values& theta, 
+//   igo_sparse*& igo_A_tilde,
+//   igo_sparse*& igo_b_tilde,
+//   igo_sparse*& igo_A_hat,
+//   igo_sparse*& igo_b_hat) {
+// 
+//   // RelinKeys should be processed before we add in factors because we only need to
+//   // relinearize old factors
+// 
+//   // Copy all jacobian factors into A_tilde and b_tilde
+//   assert(igo_A_tilde == NULL);
+//   assert(igo_b_tilde == NULL);
+//   assert(igo_A_hat == NULL);
+//   assert(igo_b_hat == NULL);
+// 
+//   cholmod_triplet* Atilde_tri = NULL;
+//   cholmod_triplet* btilde_tri = NULL;
+//   cholmod_triplet* Ahat_tri = NULL;
+//   cholmod_triplet* bhat_tri = NULL;
+// 
+//   unordered_set<sharedFactorWrapper> relinFactors;
+//   size_t relinNonzeros = 0;
+// 
+//   for(const Key unmappedRelinKey : relinKeys) {
+//     RemappedKey relinKey = getRemapKey(unmappedRelinKey);
+//     sharedNode relinNode = nodes_[relinKey];
+//     assert(relinNode->status() != NEW);
+// 
+//     // Ignore all relin nodes that are MARGINALIZED (fixed)
+//     if(relinNode->status() == MARGINALIZED) {
+//       continue;
+//     }
+// 
+//     for(auto factorWrapper : relinNode->factors) {
+//       auto[iter, inserted] = relinFactors.insert(factorWrapper);
+//       if(inserted) {
+//         factorWrapper->setStatusRelinearize();
+//         size_t factorCol = factorToCols_[factorWrapper->factorIndex()];
+//         size_t factorHeight = factorToCols_[factorWrapper->factorIndex() + 1] - factorCol;
+//         size_t factorWidth = get<BLOCK_INDEX_ROW>(factorWrapper->blockIndices().back());
+//         relinNonzeros += factorHeight * factorWidth;
+//       }
+//     }
+//   }
+//   
+//   // Height of A is the dimension of all the variables
+//   size_t A_height = keyToRows_.back();
+//   size_t A_width = factorToCols_.back();
+// 
+//   A_tilde = igo_allocate_sparse(A_height, A_width, relinNonzeros, igo_cm);
+//   b_tilde = igo_allocate_sparse(A_width, 1, A_width, igo_cm);
+// 
+//   int* A_tilde_p = (int*) A_tilde->A->p;
+//   int* A_tilde_i = (int*) A_tilde->A->i;
+//   double* A_tilde_x = (double*) A_tilde->A->x;
+//   int* b_tilde_p = (int*) b_tilde->A->p;
+//   int* b_tilde_i = (int*) b_tilde->A->i;
+//   double* b_tilde_x = (double*) b_tilde->A->x;
+// 
+//   for(sharedFactorWrapper relinFactor : relinFactors) {
+// 
+//     relinFactor->linearizeIfNeeded(theta);
+// 
+//     const JacobianFactor* jf = relinFactor->toJacobianFactor();
+//     if(!jf) { 
+//       throw runtime_error("Only Jacobian factors are supported");
+//     }
+// 
+//     // Copy jf matrix into 
+//     size_t factorCol = factorToCols_[relinFactor->factorIndex()];
+//     size_t factorHeight = factorToCols_[relinFactor->factorIndex() + 1] - factorCol;
+//     size_t factorWidth = get<BLOCK_INDEX_ROW>(relinFactor->blockIndices().back());
+// 
+//     // Here factorHeight and factorWidth refers to the row major storage of the factor
+//     // We will transpose it for A_tilde
+// 
+//     const Matrix& Ab = jf->matrixObject().matrix();
+//     size_t Ab_nrow = Ab.rows();
+//     size_t Ab_ncol = Ab.cols() - 1; // Don't count last col
+// 
+//     const BlockIndexVector& blockIndices = relinFactor->blockIndices();
+// 
+//     // cout << "Ab = " << jf->keys()[0] << " " << jf->keys()[1] << "\n" << Ab << endl;
+//     for(int j = 0; j < Ab_nrow; j++) {
+//       for(int blockIndex = 0; blockIndex < blockIndices.size() - 1; blockIndex++) {
+//         const auto&[key, col, width] = blockIndices.at(blockIndex);
+//         size_t keyRow = keyToRows_[key];
+//         for(int i = 0; i < width; i++) {
+//           
+//         }
+//       }
+//     }
+// 
+//     for(int blockIndex = 0; blockIndex < blockIndices.size() - 1; blockIndex++) {
+//       // Don't do last col
+//       const auto&[key, col, width] = blockIndices.at(blockIndex);
+//       size_t keyRow = keyToRows_[key];       
+// 
+//       // Transpose Ab into Ahat_tri
+//       for(int j = 0; j < Ab_nrow; j++) {
+//         for(int i = 0; i < width; i++) {
+//           Atilde_tri_i[Atilde_tri->nnz] = keyRow + i;
+//           Atilde_tri_j[Atilde_tri->nnz] = factorCol + j;
+//           Atilde_tri_x[Atilde_tri->nnz] = Ab(j, col + i);
+//           Atilde_tri->nnz++;
+//         }
+//       }
+//     }
+//     for(int i = 0; i < Ab_nrow; i++) {
+//       btilde_tri_i[btilde_tri->nnz] = factorCol + i;
+//       btilde_tri_j[btilde_tri->nnz] = 0;
+//       btilde_tri_x[btilde_tri->nnz] = Ab(i, Ab_ncol);
+//       btilde_tri->nnz++;
+//     }
+//   }
+// 
+//   cholmod_sparse* A_tilde = cholmod_triplet_to_sparse(Atilde_tri, Atilde_tri->nnz, igo_cm->cholmod_cm);
+//   igo_A_tilde = igo_allocate_sparse2(&A_tilde, igo_cm);
+// 
+//   cholmod_sparse* b_tilde = cholmod_triplet_to_sparse(btilde_tri, btilde_tri->nnz, igo_cm->cholmod_cm);
+//   igo_b_tilde = igo_allocate_sparse2(&b_tilde, igo_cm);
+// 
+//   size_t numNewCols = 0;
+//   size_t numNonzeros = 0;
+// 
+//   vector<sharedFactorWrapper> newFactors;
+//   
+//   for(const FactorIndex newFactorIndex : newFactorIndices) {
+//     // newFactorIndex starts from 0, and does not necessarily correspond to total factor index
+//     BlockIndexVector blockIndices;
+//     sharedFactor factor = nonlinearFactors[newFactorIndex];
+//     size_t factorIndex = factors_.size();
+//     sharedFactorWrapper factorWrapper = std::make_shared<FactorWrapper>(
+//                                           factorIndex, factor, nullptr, this);
+//     newFactors.push_back(factorWrapper);
+// 
+//     // Remap old factorIndex to real factor index
+//     // Removing factors uses old factorIndex
+//     if(newFactorIndex >= factorIndexTransformMap_.size()) {
+//       for(size_t i = factorIndexTransformMap_.size(); i <= newFactorIndex; i++) {
+//         factorIndexTransformMap_.push_back(-1);
+//       }
+//     }
+//     factorIndexTransformMap_[newFactorIndex] = factorIndex;
+// 
+//     // If factor involves variables that are marginalized, ignore factor
+//     if(factorWrapper->hasMarginalizedKeys()) {
+//       assert(0);
+//     }
+// 
+//     factors_.push_back(factorWrapper);
+// 
+//     for(RemappedKey k : factorWrapper->remappedKeys()) {
+//       // k is in every factor, we shouldn't have to store it
+//       if(k != 0) {
+//         sharedNode node = nodes_[k];
+//         node->addFactor(factorWrapper);
+//       }
+//     }
+// 
+//     factorWrapper->linearizeIfNeeded(theta);
+// 
+//     const JacobianFactor* jf = factorWrapper->toJacobianFactor();
+//     if(!jf) { 
+//       throw runtime_error("Only Jacobian factors are supported");
+//     }
+// 
+//     size_t factorWidth = get<BLOCK_INDEX_ROW>(factorWrapper->blockIndices().back());
+//     size_t factorHeight;
+//     sharedFactor nonlinearFactor = factorWrapper->nonlinearFactor();
+//     if(nonlinearFactor == nullptr) {
+//       factorHeight =  nonlinearFactor->dim();
+//     }
+//     else {
+//       factorHeight = factorWrapper->toJacobianFactor()->matrixObject().matrix().rows();
+//     }
+// 
+//     factorToCols_.push_back(factorToCols_.back() + factorHeight);
+// 
+//     numNewCols += factorHeight;
+//     numNonzeros += factorHeight * factorWidth;
+// 
+//   }
+// 
+//   Ahat_tri = cholmod_allocate_triplet(A_height, numNewCols, numNonzeros, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+//   bhat_tri = cholmod_allocate_triplet(numNewCols, 1, numNewCols, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+// 
+//   int* Ahat_tri_i = (int*) Ahat_tri->i;
+//   int* Ahat_tri_j = (int*) Ahat_tri->j;
+//   double* Ahat_tri_x = (double*) Ahat_tri->x;
+//   int* bhat_tri_i = (int*) bhat_tri->i;
+//   int* bhat_tri_j = (int*) bhat_tri->j;
+//   double* bhat_tri_x = (double*) bhat_tri->x;
+// 
+//   size_t elementCount = 0;
+//   size_t factorCol = 0;
+// 
+//   for(sharedFactorWrapper factorWrapper : newFactors) {
+// 
+//     const JacobianFactor* jf = factorWrapper->toJacobianFactor();
+//     const Matrix& Ab = jf->matrixObject().matrix();
+//     size_t Ab_nrow = Ab.rows();
+//     size_t Ab_ncol = Ab.cols() - 1; // Don't count last col
+// 
+//     const BlockIndexVector& blockIndices = factorWrapper->blockIndices();
+// 
+//     // cout << "Ab = " << jf->keys()[0] << " " << jf->keys().back() << "\n" << Ab << endl;
+// 
+//     for(int blockIndex = 0; blockIndex < blockIndices.size() - 1; blockIndex++) {
+//       // Don't do last col
+//       const auto&[key, col, width] = blockIndices.at(blockIndex);
+//       size_t keyRow = keyToRows_[key];       
+// 
+//       // Transpose Ab into Ahat_tri
+//       for(int j = 0; j < Ab_nrow; j++) {
+//         for(int i = 0; i < width; i++) {
+//           Ahat_tri_i[elementCount] = keyRow + i;
+//           Ahat_tri_j[elementCount] = factorCol + j;
+//           Ahat_tri_x[elementCount] = Ab(j, col + i);
+//           elementCount++;
+//         }
+//       }
+//     }
+//     for(int i = 0; i < Ab_nrow; i++) {
+//       bhat_tri_i[factorCol + i] = factorCol + i;
+//       bhat_tri_j[factorCol + i] = 0;
+//       bhat_tri_x[factorCol + i] = Ab(i, Ab_ncol);
+//     }
+//     factorCol += Ab_nrow;
+// 
+//   }
+//   Ahat_tri->nnz = elementCount;
+//   cholmod_sparse* A_hat = cholmod_triplet_to_sparse(Ahat_tri, elementCount, igo_cm->cholmod_cm);
+//   igo_A_hat = igo_allocate_sparse2(&A_hat, igo_cm);
+//   bhat_tri->nnz = factorCol;
+//   cholmod_sparse* b_hat = cholmod_triplet_to_sparse(bhat_tri, factorCol, igo_cm->cholmod_cm);
+//   igo_b_hat = igo_allocate_sparse2(&b_hat, igo_cm);
+//   // igo_print_cholmod_sparse(3, "A_hat", A_hat, igo_cm->cholmod_cm);
+// 
+//   // cholmod_dense* A_hat_print = cholmod_sparse_to_dense(A_hat, igo_cm->cholmod_cm);
+//   // igo_print_cholmod_dense(3, "A_hat", A_hat_print, igo_cm->cholmod_cm);
+// 
+//   cholmod_free_triplet(&Atilde_tri, igo_cm->cholmod_cm);
+//   cholmod_free_triplet(&btilde_tri, igo_cm->cholmod_cm);
+//   cholmod_free_triplet(&Ahat_tri, igo_cm->cholmod_cm);
+//   cholmod_free_triplet(&bhat_tri, igo_cm->cholmod_cm);
+// }
+
 void CholeskyEliminationTree::getLinearSystem(
   const NonlinearFactorGraph& nonlinearFactors, 
   const FactorIndices& newFactorIndices,
@@ -95,12 +353,11 @@ void CholeskyEliminationTree::getLinearSystem(
   assert(igo_A_hat == NULL);
   assert(igo_b_hat == NULL);
 
-  cholmod_triplet* Atilde_tri = NULL;
-  cholmod_triplet* btilde_tri = NULL;
   cholmod_triplet* Ahat_tri = NULL;
   cholmod_triplet* bhat_tri = NULL;
 
-  unordered_set<sharedFactorWrapper> relinFactors;
+  vector<int> relinFactorVec(factors_.size(), 0);
+  vector<int> relinFactors;
   size_t relinNonzeros = 0;
 
   for(const Key unmappedRelinKey : relinKeys) {
@@ -114,8 +371,9 @@ void CholeskyEliminationTree::getLinearSystem(
     }
 
     for(auto factorWrapper : relinNode->factors) {
-      auto[iter, inserted] = relinFactors.insert(factorWrapper);
-      if(inserted) {
+      if(relinFactorVec[factorWrapper->factorIndex()] == 0) {
+        relinFactorVec[factorWrapper->factorIndex()] = 1;
+        relinFactors.push_back(factorWrapper->factorIndex());
         factorWrapper->setStatusRelinearize();
         size_t factorCol = factorToCols_[factorWrapper->factorIndex()];
         size_t factorHeight = factorToCols_[factorWrapper->factorIndex() + 1] - factorCol;
@@ -124,22 +382,32 @@ void CholeskyEliminationTree::getLinearSystem(
       }
     }
   }
+
+  sort(relinFactors.begin(), relinFactors.end());
   
   // Height of A is the dimension of all the variables
   size_t A_height = keyToRows_.back();
   size_t A_width = factorToCols_.back();
 
-  Atilde_tri = cholmod_allocate_triplet(A_height, A_width, relinNonzeros, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
-  btilde_tri = cholmod_allocate_triplet(A_width, 1, A_width, 0, CHOLMOD_REAL, igo_cm->cholmod_cm);
+  igo_A_tilde = igo_allocate_sparse(A_height, A_width, relinNonzeros, igo_cm);
+  igo_b_tilde = igo_allocate_sparse(A_width, 1, A_width, igo_cm);
 
-  int* Atilde_tri_i = (int*) Atilde_tri->i;
-  int* Atilde_tri_j = (int*) Atilde_tri->j;
-  double* Atilde_tri_x = (double*) Atilde_tri->x;
-  int* btilde_tri_i = (int*) btilde_tri->i;
-  int* btilde_tri_j = (int*) btilde_tri->j;
-  double* btilde_tri_x = (double*) btilde_tri->x;
+  int* A_tilde_p = (int*) igo_A_tilde->A->p;
+  int* A_tilde_i = (int*) igo_A_tilde->A->i;
+  double* A_tilde_x = (double*) igo_A_tilde->A->x;
 
-  for(sharedFactorWrapper relinFactor : relinFactors) {
+  int* b_tilde_p = (int*) igo_b_tilde->A->p;
+  int* b_tilde_i = (int*) igo_b_tilde->A->i;
+  double* b_tilde_x = (double*) igo_b_tilde->A->x;
+
+  A_tilde_p[0] = 0;
+  b_tilde_p[0] = 0;
+  b_tilde_p[1] = 0;
+
+  int relin_idx = 0;
+  int last_factor_col = 0;
+  for(int relinFactorIndex : relinFactors) {
+    sharedFactorWrapper relinFactor = factors_[relinFactorIndex];
 
     relinFactor->linearizeIfNeeded(theta);
 
@@ -162,36 +430,46 @@ void CholeskyEliminationTree::getLinearSystem(
 
     const BlockIndexVector& blockIndices = relinFactor->blockIndices();
 
-    // cout << "Ab = " << jf->keys()[0] << " " << jf->keys()[1] << "\n" << Ab << endl;
+    auto remapped_keys = relinFactor->remappedKeys();
+    vector<int> sorted_idx(remapped_keys.size() - 1);
+    iota(sorted_idx.begin(), sorted_idx.end(), 0);
+    sort(sorted_idx.begin(), sorted_idx.end(), [&remapped_keys](int i1, int i2) {return remapped_keys[i1] < remapped_keys[i2];});
 
-    for(int blockIndex = 0; blockIndex < blockIndices.size() - 1; blockIndex++) {
-      // Don't do last col
-      const auto&[key, col, width] = blockIndices.at(blockIndex);
-      size_t keyRow = keyToRows_[key];       
-
-      // Transpose Ab into Ahat_tri
-      for(int j = 0; j < Ab_nrow; j++) {
+    int last_Ap = A_tilde_p[last_factor_col];
+    for(int j = last_factor_col + 1; j <= factorCol; j++) {
+      A_tilde_p[j] = last_Ap;
+    }
+    last_factor_col = factorCol + Ab_nrow;
+    
+    for(int j = 0; j < Ab_nrow; j++) {
+      A_tilde_p[factorCol + j + 1] = A_tilde_p[factorCol + j] + Ab_ncol;
+      for(int blockIndex : sorted_idx) {
+        // Don't do last col
+        const auto&[key, col, width] = blockIndices.at(blockIndex);
+        size_t keyRow = keyToRows_[key];       
         for(int i = 0; i < width; i++) {
-          Atilde_tri_i[Atilde_tri->nnz] = keyRow + i;
-          Atilde_tri_j[Atilde_tri->nnz] = factorCol + j;
-          Atilde_tri_x[Atilde_tri->nnz] = Ab(j, col + i);
-          Atilde_tri->nnz++;
+          A_tilde_i[relin_idx] = keyRow + i;
+          A_tilde_x[relin_idx] = Ab(j, col + i);
+          relin_idx++;
         }
       }
     }
     for(int i = 0; i < Ab_nrow; i++) {
-      btilde_tri_i[btilde_tri->nnz] = factorCol + i;
-      btilde_tri_j[btilde_tri->nnz] = 0;
-      btilde_tri_x[btilde_tri->nnz] = Ab(i, Ab_ncol);
-      btilde_tri->nnz++;
+      b_tilde_i[b_tilde_p[1]] = factorCol + i;
+      b_tilde_x[b_tilde_p[1]] = Ab(i, Ab_ncol);
+      b_tilde_p[1]++;
     }
   }
 
-  cholmod_sparse* A_tilde = cholmod_triplet_to_sparse(Atilde_tri, Atilde_tri->nnz, igo_cm->cholmod_cm);
-  igo_A_tilde = igo_allocate_sparse2(&A_tilde, igo_cm);
+  int last_Ap = A_tilde_p[last_factor_col];
+  for(int j = last_factor_col + 1; j <= A_width; j++) {
+    A_tilde_p[j] = last_Ap;
+  }
 
-  cholmod_sparse* b_tilde = cholmod_triplet_to_sparse(btilde_tri, btilde_tri->nnz, igo_cm->cholmod_cm);
-  igo_b_tilde = igo_allocate_sparse2(&b_tilde, igo_cm);
+  // igo_print_sparse(3, "A_tilde", igo_A_tilde, igo_cm);
+  // igo_print_sparse(3, "b_tilde", igo_b_tilde, igo_cm);
+  // fflush(stdout);
+
 
   size_t numNewCols = 0;
   size_t numNonzeros = 0;
@@ -313,8 +591,6 @@ void CholeskyEliminationTree::getLinearSystem(
   // cholmod_dense* A_hat_print = cholmod_sparse_to_dense(A_hat, igo_cm->cholmod_cm);
   // igo_print_cholmod_dense(3, "A_hat", A_hat_print, igo_cm->cholmod_cm);
 
-  cholmod_free_triplet(&Atilde_tri, igo_cm->cholmod_cm);
-  cholmod_free_triplet(&btilde_tri, igo_cm->cholmod_cm);
   cholmod_free_triplet(&Ahat_tri, igo_cm->cholmod_cm);
   cholmod_free_triplet(&bhat_tri, igo_cm->cholmod_cm);
 }
