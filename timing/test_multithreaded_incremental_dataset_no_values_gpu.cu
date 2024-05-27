@@ -194,6 +194,7 @@ int main(int argc, char** argv) {
         cudaMalloc(&d_csrRowPtrAT, h_csrRowPtrAT.size() * sizeof(int));
         cudaMalloc(&d_csrColIndAT, h_csrColIndAT.size() * sizeof(int));
         cudaMalloc(&d_csrValAT, h_csrValAT.size() * sizeof(float));
+        cudaMalloc(&d_csrRowPtrD, h_csrRowPtrD.size() * sizeof(int));
         cudaMalloc(&d_b, h_b.size() * sizeof(float));
         cudaMalloc(&d_ATb, n * sizeof(float));
         cudaMalloc(&d_x, n * sizeof(float));
@@ -206,11 +207,6 @@ int main(int argc, char** argv) {
         cudaMemcpy(d_csrColIndAT, h_csrColIndAT.data(), h_csrColIndAT.size() * sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(d_csrValAT, h_csrValAT.data(), h_csrValAT.size() * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_csrRowPtrD, h_csrRowPtrD.data(), h_csrRowPtrD.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrColIndD, h_csrColIndD.data(), h_csrColIndD.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrValD, h_csrValD.data(), h_csrValD.size() * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrRowPtrH, h_csrRowPtrH.data(), h_csrRowPtrH.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrColIndH, h_csrColIndH.data(), h_csrColIndH.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrValH, h_csrValH.data(), h_csrValH.size() * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_b, h_b.data(), h_b.size() * sizeof(float), cudaMemcpyHostToDevice);
 
         printDeviceVals(d_csrRowPtrA, m + 1, "d_csrRowPtrA", "int");
