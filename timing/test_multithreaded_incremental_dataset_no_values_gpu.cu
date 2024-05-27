@@ -319,13 +319,45 @@ int main(int argc, char** argv) {
         }
         printf("\n");
 
+        cudaFree(d_csrRowPtrA);
+        cudaFree(d_csrColIndA);
+        cudaFree(d_csrValA);
+        cudaFree(d_csrRowPtrAT);
+        cudaFree(d_csrColIndAT);
+        cudaFree(d_csrValAT);
+        cudaFree(d_b);
+        cudaFree(d_ATb);
+        cudaFree(d_x);
+
+        cudaFree(d_csrRowPtrD);
+        cudaFree(d_csrColIndD);
+        cudaFree(d_csrValD);
+        cudaFree(d_csrRowPtrH);
+        cudaFree(d_csrColIndH);
+        cudaFree(d_csrValH);
+
+        cudaFree(buffer1);
+        cudaFree(buffer2);
+
+        cusparseDestroySpMat(descrSpA);
+        cusparseDestroySpMat(descrSpAT);
+        cusparseDestroyDnVec(descrDnb);
+        cusparseDestroyDnVec(descrDnATb);
+
+        cusparseDestroyMatDescr(descrA);
+        cusparseDestroyMatDescr(descrAT);
+        cusparseDestroyMatDescr(descrH);
+        cusparseDestroyMatDescr(descrD);
+
+        cusparseDestroyCsrgemm2Info(info);
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("step %d time: %f ms\n", step, cpu_time_used * 1000);
-
-        exit(1);
     }
+
+    cusparseDestroy(cusparseHandle);
+    cusolverSpDestroy(cusolverSpHandle);
 
     printf("Passed :)\n");
 }
