@@ -132,7 +132,6 @@ int main(int argc, char** argv) {
                     h_b.push_back(1.0f);
                     h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height - 1);
                     for(int ih = 0; ih < height - 1; ih++) {
-                        printf("%d %d\n", ih, ridx[ih]);
                         h_csrColIndA.push_back(node_ridx[node][ridx[ih]]);
                         if(ih == j) { h_csrValA.push_back(1.0f); }
                         else { h_csrValA.push_back(0.0f); }
@@ -173,20 +172,12 @@ int main(int argc, char** argv) {
             }
         }
 
-        printf("h_csrRowPtrA: ");
-        for(int i = 0; i < h_csrRowPtrAT.size(); i++) {
-            printf("%d ", h_csrRowPtrAT[i]);
-        }
-        printf("\n");
-
         // Convenience variables
         // A is m x n, AT is n x m, b is m x 1, ATb is n x 1, x is n x 1
         int m = h_csrRowPtrA.size() - 1;
         int n = h_csrRowPtrAT.size() - 1;
         int nnzA = h_csrColIndA.size();
         float one = 1, zero = 0;
-
-        printf("m = %d, n = %d, nnzA = %d\n", m, n, nnzA);
 
         // Device memory allocation
         cudaMalloc(&d_csrRowPtrA, h_csrRowPtrA.size() * sizeof(int));
@@ -208,12 +199,12 @@ int main(int argc, char** argv) {
         cudaMemcpy(d_csrValAT, h_csrValAT.data(), h_csrValAT.size() * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_b, h_b.data(), h_b.size() * sizeof(float), cudaMemcpyHostToDevice);
 
-        printDeviceVals(d_csrRowPtrA, m + 1, "d_csrRowPtrA", "int");
-        printDeviceVals(d_csrColIndA, nnzA, "d_csrColIndA", "int");
-        printDeviceVals(d_csrValA, nnzA, "d_csrValA", "float");
-        printDeviceVals(d_csrRowPtrAT, n + 1, "d_csrRowPtrAT", "int");
-        printDeviceVals(d_csrColIndAT, nnzA, "d_csrColIndAT", "int");
-        printDeviceVals(d_csrValAT, nnzA, "d_csrValAT", "float");
+        // printDeviceVals(d_csrRowPtrA, m + 1, "d_csrRowPtrA", "int");
+        // printDeviceVals(d_csrColIndA, nnzA, "d_csrColIndA", "int");
+        // printDeviceVals(d_csrValA, nnzA, "d_csrValA", "float");
+        // printDeviceVals(d_csrRowPtrAT, n + 1, "d_csrRowPtrAT", "int");
+        // printDeviceVals(d_csrColIndAT, nnzA, "d_csrColIndAT", "int");
+        // printDeviceVals(d_csrValAT, nnzA, "d_csrValAT", "float");
 
         // Matrix descriptors
         cusparseSpMatDescr_t descrSpA;
@@ -230,15 +221,13 @@ int main(int argc, char** argv) {
                                 &one, descrSpAT, descrDnb, &zero, descrDnATb, 
                                 CUDA_R_32F, CUSPARSE_MV_ALG_DEFAULT, &bufferSize);
 
-        printf("bufferSize = %lu\n", bufferSize);
-
         cudaMalloc(&buffer1, bufferSize);
 
         cusparseSpMV(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                      &one, descrSpAT, descrDnb, &zero, descrDnATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer1);
 
-        printDeviceVals(d_b, m, "d_b", "float");
-        printDeviceVals(d_ATb, n, "ATb", "float");
+        // printDeviceVals(d_b, m, "d_b", "float");
+        // printDeviceVals(d_ATb, n, "ATb", "float");
 
         // Compute ATA
 
@@ -270,8 +259,6 @@ int main(int argc, char** argv) {
                                         info,
                                         &bufferSize);
 
-        printf("bufferSize = %lu\n", bufferSize);
-
         cudaMalloc(&buffer2, bufferSize);
 
         // step 3: compute csrRowPtrH
@@ -283,8 +270,8 @@ int main(int argc, char** argv) {
                              descrH, d_csrRowPtrH, &nnzH,
                              info, buffer2);
 
-        printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
-        printf("nnzH = %d\n", nnzH);
+        // printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
+        // printf("nnzH = %d\n", nnzH);
 
         // step 4: finish sparsity pattern and value of H
         cudaMalloc(&d_csrColIndH, nnzH * sizeof(int));
@@ -298,9 +285,9 @@ int main(int argc, char** argv) {
                           descrH, d_csrValH, d_csrRowPtrH, d_csrColIndH,
                           info, buffer2);
 
-        printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
-        printDeviceVals(d_csrColIndH, nnzH, "d_csrColIndH", "int");
-        printDeviceVals(d_csrValH, nnzH, "d_csrValH", "float");
+        // printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
+        // printDeviceVals(d_csrColIndH, nnzH, "d_csrColIndH", "int");
+        // printDeviceVals(d_csrValH, nnzH, "d_csrValH", "float");
 
         // Solve ATA x = ATb
         int singularity;
@@ -313,11 +300,11 @@ int main(int argc, char** argv) {
 
         cudaMemcpy(h_x.data(), d_x, n * sizeof(float), cudaMemcpyDeviceToHost);
 
-        printf("x: ");
-        for(int i = 0; i < n; i++) {
-            printf("%f ", h_x[i]);
-        }
-        printf("\n");
+        // printf("x: ");
+        // for(int i = 0; i < n; i++) {
+        //     printf("%f ", h_x[i]);
+        // }
+        // printf("\n");
 
         cudaFree(d_csrRowPtrA);
         cudaFree(d_csrColIndA);
