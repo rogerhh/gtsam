@@ -127,7 +127,8 @@ int main(int argc, char** argv) {
                     for(int ih = 0; ih < height - 1; ih++) {
                         printf("%d %d\n", ih, ridx[ih]);
                         h_csrColIndA.push_back(node_ridx[node][ridx[ih]]);
-                        h_csrValA.push_back(1.0f);
+                        if(ih == j) { h_csrValA.push_back(1.0f); }
+                        else { h_csrValA.push_back(0.0f); }
                     }
                 }
             }
@@ -246,7 +247,7 @@ int main(int argc, char** argv) {
         cusparseCreateMatDescr(&descrD);
 
         // assume matrices A, AT and D are ready
-        int baseC, nnzC;
+        int nnzH;
         csrgemm2Info_t info = NULL;
 
         // step 1: create an opaque structure
@@ -261,6 +262,20 @@ int main(int argc, char** argv) {
                                         &bufferSize);
 
         printf("bufferSize = %lu\n", bufferSize);
+
+        cudaMalloc(&buffer2, bufferSize);
+
+        // step 3: compute csrRowPtrH
+        cudaMalloc(&d_csrRowPtrH, (n + 1) * sizeof(int));
+        cusparseXcsrgemm2Nnz(cusparseHandle, n, n, m,
+                             descrAT, nnzA, d_csrRowPtrAT, d_csrColIndAT,
+                             descrA, nnzA, d_csrRowPtrA, d_csrColIndA,
+                             descrD, nnzD, NULL, NULL,
+                             descrH, d_csrRowPtrH, &nnzH,
+                             info, buffer2);
+
+        printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
+        printf("nnzH = %d\n", nnzH);
 
 
 	end = clock();
