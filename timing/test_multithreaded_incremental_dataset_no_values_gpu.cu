@@ -73,12 +73,12 @@ int main(int argc, char** argv) {
                 int* ridx = factor_ridx[i];
 
                 for(int ih = 0; ih < height - 1; ih++) {
-                    ridx_set.insert(ridx[ih]);
+                    ridx_set.insert(node_ridx[node][ridx[ih]]);
                 }
 
                 for(int j = 0; j < width; j++) {
                     h_b.push_back(0.0f);
-                    h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height);
+                    h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height - 1);
                     for(int ih = 0; ih < height - 1; ih++) {
                         printf("%d %d\n", ih, ridx[ih]);
                         h_csrColIndA.push_back(node_ridx[node][ridx[ih]]);
