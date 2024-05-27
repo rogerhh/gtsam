@@ -13,7 +13,7 @@
 #include <cstring>
 #include <vector>
 
-#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
+#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
 
 using namespace std;
 
