@@ -49,6 +49,11 @@ int main(int argc, char** argv) {
         vector<int> h_csrColIndA;
         vector<float> h_csrValA;
 
+        vector<float> h_b;
+
+        set<int> ridx_set;
+        map<int, int> remapped_ridx;
+
         for(int node = 0; node < nnodes - 1; node++) {
             bool marked = node_marked[node];
             bool fixed = node_fixed[node];
@@ -65,15 +70,29 @@ int main(int argc, char** argv) {
                 int width = factor_width[i];
                 int* ridx = factor_ridx[i];
 
+                for(int ih = 0; ih < height - 1; ih++) {
+                    ridx_set.insert(ridx[ih]);
+                }
+
                 for(int j = 0; j < width; j++) {
+                    h_b.push_back(0.0f);
                     h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height);
-                    for(int ih = 0; ih < height; ih++) {
+                    for(int ih = 0; ih < height - 1; ih++) {
                         printf("%d %d\n", ih, ridx[ih]);
                         h_csrColIndA.push_back(node_ridx[node][ridx[ih]]);
                         h_csrValA.push_back(1.0f);
                     }
                 }
             }
+        }
+
+        int count = 0;
+        for(int ridx : ridx_set) {
+            remapped_ridx[ridx] = count++;
+        }
+
+        for(int i = 0; i < h_csrColIndA.size(); i++) {
+            h_csrColIndA[i] = remapped_ridx[h_csrColIndA[i]];
         }
 
         printf("h_csrRowPtrA: ");
