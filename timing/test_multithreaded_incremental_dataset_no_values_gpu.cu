@@ -176,16 +176,6 @@ int main(int argc, char** argv) {
         int n = h_csrRowPtrAT.size() - 1;
         int one = 1, zero = 0;
 
-        // Matrix descriptors
-        cusparseMatDescr_t descrA;
-        cusparseCreateMatDescr(&descrA);
-        cusparseMatDescr_t descrAT;
-        cusparseCreateMatDescr(&descrAT);
-        cusparseDnVecDescr_t descrb;
-        cusparseCreateDnVec(&descrb);
-        cusparseDnVecDescr_t descrATb;
-        cusparseCreateDnVec(&descrATb);
-
         // Device memory allocation
         cudaMalloc(&d_csrRowPtrA, h_csrRowPtrA.size() * sizeof(int));
         cudaMalloc(&d_csrColIndA, h_csrColIndA.size() * sizeof(int));
@@ -196,6 +186,16 @@ int main(int argc, char** argv) {
         cudaMalloc(&d_b, h_b.size() * sizeof(float));
         cudaMalloc(&d_ATb, n * sizeof(float));
         cudaMalloc(&d_x, n * sizeof(float));
+
+        // Matrix descriptors
+        cusparseMatDescr_t descrA;
+        cusparseCreateMatDescr(&descrA);
+        cusparseMatDescr_t descrAT;
+        cusparseCreateMatDescr(&descrAT);
+        cusparseDnVecDescr_t descrb;
+        cusparseCreateDnVec(&descrb, m, d_b, CUDA_R_32F);
+        cusparseDnVecDescr_t descrATb;
+        cusparseCreateDnVec(&descrATb, n, d_ATb, CUDA_R_32F);
 
         // Device memory copy
         cudaMemcpy(d_csrRowPtrA, h_csrRowPtrA.data(), h_csrRowPtrA.size() * sizeof(int), cudaMemcpyHostToDevice);
