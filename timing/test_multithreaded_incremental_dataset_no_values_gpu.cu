@@ -293,7 +293,7 @@ int main(int argc, char** argv) {
                           descrAT, nnzA, d_csrValAT, d_csrRowPtrAT, d_csrColIndAT, 
                           descrA, nnzA, d_csrValA, d_csrRowPtrA, d_csrColIndA, 
                           &zero, 
-                          descrD, nnzD, d_csrRowPtrD, NULL,
+                          descrD, nnzD, NULL, d_csrRowPtrD, NULL,
                           descrH, d_csrValH, d_csrRowPtrH, d_csrColIndH,
                           info, buffer2);
 
