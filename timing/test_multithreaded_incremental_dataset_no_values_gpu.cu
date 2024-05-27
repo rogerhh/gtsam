@@ -188,6 +188,15 @@ int main(int argc, char** argv) {
         cudaMalloc(&d_ATb, n * sizeof(float));
         cudaMalloc(&d_x, n * sizeof(float));
 
+        // Device memory copy
+        cudaMemcpy(d_csrRowPtrA, h_csrRowPtrA.data(), h_csrRowPtrA.size() * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_csrColIndA, h_csrColIndA.data(), h_csrColIndA.size() * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_csrValA, h_csrValA.data(), h_csrValA.size() * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_csrRowPtrAT, h_csrRowPtrAT.data(), h_csrRowPtrAT.size() * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_csrColIndAT, h_csrColIndAT.data(), h_csrColIndAT.size() * sizeof(int), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_csrValAT, h_csrValAT.data(), h_csrValAT.size() * sizeof(float), cudaMemcpyHostToDevice);
+        cudaMemcpy(d_b, h_b.data(), h_b.size() * sizeof(float), cudaMemcpyHostToDevice);
+
         // Matrix descriptors
         cusparseSpMatDescr_t descrA;
         cusparseCreateCsr(&descrA, m, n, nnzA, d_csrRowPtrA, d_csrColIndA, d_csrValA, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
@@ -197,15 +206,6 @@ int main(int argc, char** argv) {
         cusparseCreateDnVec(&descrb, m, d_b, CUDA_R_32F);
         cusparseDnVecDescr_t descrATb;
         cusparseCreateDnVec(&descrATb, n, d_ATb, CUDA_R_32F);
-
-        // Device memory copy
-        cudaMemcpy(d_csrRowPtrA, h_csrRowPtrA.data(), h_csrRowPtrA.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrColIndA, h_csrColIndA.data(), h_csrColIndA.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrValA, h_csrValA.data(), h_csrValA.size() * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrRowPtrAT, h_csrRowPtrAT.data(), h_csrRowPtrAT.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrColIndAT, h_csrColIndAT.data(), h_csrColIndAT.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrValAT, h_csrValAT.data(), h_csrValAT.size() * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_b, h_b.data(), h_b.size() * sizeof(float), cudaMemcpyHostToDevice);
 
         // Compute ATb
         cusparseSpMV_bufferSize(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
