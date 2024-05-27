@@ -12,6 +12,8 @@
 #include <time.h>
 #include <cstring>
 #include <vector>
+#include <set>
+#include <map>
 
 #include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
 
@@ -114,6 +116,8 @@ int main(int argc, char** argv) {
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("step %d time: %f ms\n", step, cpu_time_used * 1000);
+
+        exit(1);
     }
 
     printf("Passed :)\n");
