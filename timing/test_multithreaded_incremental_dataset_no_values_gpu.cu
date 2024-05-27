@@ -177,6 +177,8 @@ int main(int argc, char** argv) {
         int nnzA = h_csrColIndA.size();
         int one = 1, zero = 0;
 
+        printf("m = %d, n = %d, nnzA = %d\n", m, n, nnzA);
+
         // Device memory allocation
         cudaMalloc(&d_csrRowPtrA, h_csrRowPtrA.size() * sizeof(int));
         cudaMalloc(&d_csrColIndA, h_csrColIndA.size() * sizeof(int));
