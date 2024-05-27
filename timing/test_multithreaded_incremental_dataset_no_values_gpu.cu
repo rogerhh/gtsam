@@ -78,6 +78,21 @@ int main(int argc, char** argv) {
             }
         }
 
+        cout << "h_csrRowPtrA: ";
+        for(auto& val : h_csrRowPtrA) {
+            cout << val << " ";
+        }
+        cout << endl;
+        cout << "h_csrColIndA: ";
+        for(auto& val : h_csrColIndA) {
+            cout << val << " ";
+        }
+        cout << endl;
+        cout << "h_csrValA: ";
+        for(auto& val : h_csrValA) {
+            cout << val << " ";
+        }
+        cout << endl;
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
