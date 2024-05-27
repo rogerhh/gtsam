@@ -285,6 +285,22 @@ int main(int argc, char** argv) {
         printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
         printf("nnzH = %d\n", nnzH);
 
+        // step 4: finish sparsity pattern and value of H
+        cudaMalloc(&d_csrColIndH, nnzH * sizeof(int));
+        cudaMalloc(&d_csrValH, nnzH * sizeof(float));
+
+        cusparseScsrgemm2(cusparseHandle, n, n, m, &one, 
+                          descrAT, nnzA, d_csrValAT, d_csrRowPtrAT, d_csrColIndAT, 
+                          descrA, nnzA, d_csrValA, d_csrRowPtrA, d_csrColIndA, 
+                          &zero, 
+                          descrD, nnzD, d_csrRowPtrD, NULL,
+                          descrH, d_csrValH, d_csrRowPtrH, d_csrColIndH,
+                          info, buffer2);
+
+        printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
+        printDeviceVals(d_csrColIndH, nnzH, "d_csrColIndH", "int");
+        printDeviceVals(d_csrValH, nnzH, "d_csrValH", "float");
+
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
