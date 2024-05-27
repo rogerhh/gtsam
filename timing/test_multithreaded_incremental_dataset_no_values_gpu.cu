@@ -174,6 +174,7 @@ int main(int argc, char** argv) {
         // A is m x n, AT is n x m, b is m x 1, ATb is n x 1, x is n x 1
         int m = h_csrRowPtrA.size() - 1;
         int n = h_csrRowPtrAT.size() - 1;
+        int nnzA = h_csrColIndA.size();
         int one = 1, zero = 0;
 
         // Device memory allocation
@@ -188,10 +189,10 @@ int main(int argc, char** argv) {
         cudaMalloc(&d_x, n * sizeof(float));
 
         // Matrix descriptors
-        cusparseMatDescr_t descrA;
-        cusparseCreateMatDescr(&descrA);
-        cusparseMatDescr_t descrAT;
-        cusparseCreateMatDescr(&descrAT);
+        cusparseSpMatDescr_t descrA;
+        cusparseCreateCsr(&descrA, m, n, nnzA, d_csrRowPtrA, d_csrColIndA, d_csrValA, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
+        cusparseSpMatDescr_t descrAT;
+        cusparseCreateCsr(&descrAT, n, m, nnzA, d_csrRowPtrAT, d_csrColIndAT, d_csrValAT, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
         cusparseDnVecDescr_t descrb;
         cusparseCreateDnVec(&descrb, m, d_b, CUDA_R_32F);
         cusparseDnVecDescr_t descrATb;
