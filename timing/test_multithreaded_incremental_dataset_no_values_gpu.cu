@@ -169,7 +169,7 @@ int main(int argc, char** argv) {
         int m = h_csrRowPtrA.size() - 1;
         int n = h_csrRowPtrAT.size() - 1;
         int nnzA = h_csrColIndA.size();
-        int one = 1, zero = 0;
+        float one = 1, zero = 0;
 
         printf("m = %d, n = %d, nnzA = %d\n", m, n, nnzA);
 
