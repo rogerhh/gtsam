@@ -219,6 +219,7 @@ int main(int argc, char** argv) {
         cusparseSpMV(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                      &one, descrAT, descrb, &zero, descrATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer);
 
+        printDeviceVals(d_b, m, "d_b", "float");
         printDeviceVals(d_ATb, n, "ATb", "float");
 
 	end = clock();
