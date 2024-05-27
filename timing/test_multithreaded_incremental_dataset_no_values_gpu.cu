@@ -77,6 +77,12 @@ int main(int argc, char** argv) {
         vector<int> h_csrColIndAT;
         vector<float> h_csrValAT;
         vector<float> h_b;
+        vector<int> h_csrRowPtrD;
+        vector<int> h_csrColIndD;
+        vector<float> h_csrValD;
+        vector<int> h_csrRowPtrH;
+        vector<int> h_csrColIndH;
+        vector<float> h_csrValH;
 
         // Device data
         int* d_csrRowPtrA;
@@ -89,7 +95,8 @@ int main(int argc, char** argv) {
         float* d_ATb;
         float* d_x;
         size_t bufferSize;
-        void* buffer = NULL;
+        void* buffer1 = NULL;
+        void* buffer2 = NULL;
 
         set<int> ridx_set;
         map<int, int> remapped_ridx;
@@ -217,15 +224,44 @@ int main(int argc, char** argv) {
 
         printf("bufferSize = %lu\n", bufferSize);
 
-        cudaMalloc(&buffer, bufferSize);
+        cudaMalloc(&buffer1, bufferSize);
 
         cusparseSpMV(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                     &one, descrSpAT, descrDnb, &zero, descrDnATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer);
+                     &one, descrSpAT, descrDnb, &zero, descrDnATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer1);
 
         printDeviceVals(d_b, m, "d_b", "float");
         printDeviceVals(d_ATb, n, "ATb", "float");
 
         // Compute ATA
+
+        // Set up matrices
+        int nnzD = 0;
+        h_csrRowPtrD.resize(n + 1, 0);
+
+        // Matrix descriptors
+        cusparseMatDescr_t descrA, descrAT, descrH, descrD;
+        cusparseCreateMatDescr(&descrA);
+        cusparseCreateMatDescr(&descrAT);
+        cusparseCreateMatDescr(&descrH);
+        cusparseCreateMatDescr(&descrD);
+
+        // assume matrices A, AT and D are ready
+        int baseC, nnzC;
+        csrgemm2Info_t info = NULL;
+
+        // step 1: create an opaque structure
+        cusparseCreateCsrgemm2Info(&info);
+
+        cusparseScsrgemm2_bufferSizeExt(cusparseHandle, n, n, m, &one, 
+                                        descrAT, nnzA, d_csrRowPtrAT, d_csrColIndAT, 
+                                        descrA, nnzA, d_csrRowPtrA, d_csrColIndA, 
+                                        &zero, 
+                                        descrD, nnzD, NULL, NULL,
+                                        info,
+                                        &bufferSize);
+
+        printf("bufferSize = %lu\n", bufferSize);
+
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
