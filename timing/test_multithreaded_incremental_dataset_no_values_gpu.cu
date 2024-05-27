@@ -214,6 +214,13 @@ int main(int argc, char** argv) {
 
         printf("bufferSize = %lu\n", bufferSize);
 
+        cudaMalloc(&buffer, bufferSize);
+
+        cusparseSpMV(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                     &one, descrAT, descrb, &zero, descrATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer);
+
+        printDeviceVals(d_ATb, n, "ATb", "float");
+
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
 	printf("step %d time: %f ms\n", step, cpu_time_used * 1000);
