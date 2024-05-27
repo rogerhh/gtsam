@@ -141,6 +141,13 @@ int main(int argc, char** argv) {
         for(int i = 0; i < h_csrColIndA.size(); i++) {
             h_csrRowPtrAT[h_csrColIndA[i] + 1]++;
         }
+
+        printf("h_csrRowPtrA: ");
+        for(int i = 0; i < h_csrRowPtrAT.size(); i++) {
+            printf("%d ", h_csrRowPtrAT[i]);
+        }
+
+        printf("\n");
         for(int i = 1; i < h_csrRowPtrAT.size(); i++) {
             h_csrRowPtrAT[i] += h_csrRowPtrAT[i - 1];
         }
