@@ -137,6 +137,7 @@ int main(int argc, char** argv) {
 
         // Transpose A
         h_csrRowPtrAT.resize(remapped_ridx.size() + 1, 0);
+        h_csrRowPtrAT[0] = 0;
         for(int i = 0; i < h_csrColIndA.size(); i++) {
             h_csrRowPtrAT[h_csrColIndA[i] + 1]++;
         }
