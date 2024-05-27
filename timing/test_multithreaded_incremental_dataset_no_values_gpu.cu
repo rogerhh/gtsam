@@ -194,8 +194,6 @@ int main(int argc, char** argv) {
         cudaMalloc(&d_csrRowPtrAT, h_csrRowPtrAT.size() * sizeof(int));
         cudaMalloc(&d_csrColIndAT, h_csrColIndAT.size() * sizeof(int));
         cudaMalloc(&d_csrValAT, h_csrValAT.size() * sizeof(float));
-        cudaMalloc(&d_csrRowPtrD, h_csrRowPtrD.size() * sizeof(int));
-        cudaMalloc(&d_csrColIndD, h_csrColIndD.size() * sizeof(int));
         cudaMalloc(&d_b, h_b.size() * sizeof(float));
         cudaMalloc(&d_ATb, n * sizeof(float));
         cudaMalloc(&d_x, n * sizeof(float));
@@ -207,8 +205,6 @@ int main(int argc, char** argv) {
         cudaMemcpy(d_csrRowPtrAT, h_csrRowPtrAT.data(), h_csrRowPtrAT.size() * sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(d_csrColIndAT, h_csrColIndAT.data(), h_csrColIndAT.size() * sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(d_csrValAT, h_csrValAT.data(), h_csrValAT.size() * sizeof(float), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrRowPtrD, h_csrRowPtrD.data(), h_csrRowPtrD.size() * sizeof(int), cudaMemcpyHostToDevice);
-        cudaMemcpy(d_csrColIndD, h_csrColIndD.data(), h_csrColIndD.size() * sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(d_b, h_b.data(), h_b.size() * sizeof(float), cudaMemcpyHostToDevice);
 
         printDeviceVals(d_csrRowPtrA, m + 1, "d_csrRowPtrA", "int");
@@ -245,9 +241,11 @@ int main(int argc, char** argv) {
 
         // Compute ATA
 
-        // Set up matrices
+        // Set up zero matrix D
         int nnzD = 0;
         h_csrRowPtrD.resize(n + 1, 0);
+        cudaMalloc(&d_csrRowPtrD, h_csrRowPtrD.size() * sizeof(int));
+        cudaMemcpy(d_csrRowPtrD, h_csrRowPtrD.data(), h_csrRowPtrD.size() * sizeof(int), cudaMemcpyHostToDevice);
 
         // Matrix descriptors
         cusparseMatDescr_t descrA, descrAT, descrH, descrD;
