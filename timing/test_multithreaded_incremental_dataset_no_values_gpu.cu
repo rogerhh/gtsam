@@ -135,22 +135,6 @@ int main(int argc, char** argv) {
             h_csrColIndA[i] = remapped_ridx[h_csrColIndA[i]];
         }
 
-        printf("h_csrRowPtrA: ");
-        for(int i = 0; i < h_csrRowPtrA.size(); i++) {
-            printf("%d ", h_csrRowPtrA[i]);
-        }
-        printf("\n");
-        printf("h_csrColIndA: ");
-        for(int i = 0; i < h_csrColIndA.size(); i++) {
-            printf("%d ", h_csrColIndA[i]);
-        }
-        printf("\n");
-        printf("h_csrValA: ");
-        for(int i = 0; i < h_csrValA.size(); i++) {
-            printf("%f ", h_csrValA[i]);
-        }
-        printf("\n");
-
         // Transpose A
         h_csrRowPtrAT.resize(remapped_ridx.size() + 1, 0);
         for(int i = 0; i < h_csrColIndA.size(); i++) {
@@ -198,6 +182,13 @@ int main(int argc, char** argv) {
         cudaMemcpy(d_csrColIndAT, h_csrColIndAT.data(), h_csrColIndAT.size() * sizeof(int), cudaMemcpyHostToDevice);
         cudaMemcpy(d_csrValAT, h_csrValAT.data(), h_csrValAT.size() * sizeof(float), cudaMemcpyHostToDevice);
         cudaMemcpy(d_b, h_b.data(), h_b.size() * sizeof(float), cudaMemcpyHostToDevice);
+
+        printDeviceVals(d_csrRowPtrA, m + 1, "d_csrRowPtrA", "int");
+        printDeviceVals(d_csrColIndA, nnzA, "d_csrColIndA", "int");
+        printDeviceVals(d_csrValA, nnzA, "d_csrValA", "float");
+        printDeviceVals(d_csrRowPtrAT, n + 1, "d_csrRowPtrAT", "int");
+        printDeviceVals(d_csrColIndAT, nnzA, "d_csrColIndAT", "int");
+        printDeviceVals(d_csrValAT, nnzA, "d_csrValAT", "float");
 
         // Matrix descriptors
         cusparseSpMatDescr_t descrA;
