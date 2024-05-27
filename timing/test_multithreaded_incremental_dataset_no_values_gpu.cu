@@ -142,21 +142,17 @@ int main(int argc, char** argv) {
             h_csrRowPtrAT[h_csrColIndA[i] + 1]++;
         }
 
-        printf("h_csrRowPtrA: ");
-        for(int i = 0; i < h_csrRowPtrAT.size(); i++) {
-            printf("%d ", h_csrRowPtrAT[i]);
-        }
-
-        printf("\n");
         for(int i = 1; i < h_csrRowPtrAT.size(); i++) {
             h_csrRowPtrAT[i] += h_csrRowPtrAT[i - 1];
         }
         h_csrColIndAT.resize(h_csrColIndA.size());
         h_csrValAT.resize(h_csrValA.size());
+        vector<int> h_csrRowPtrAT_tmp = h_csrRowPtrAT;
+
         for(int i = 0; i < h_csrRowPtrA.size() - 1; i++) {
             for(int j = h_csrRowPtrA[i]; j < h_csrRowPtrA[i + 1]; j++) {
                 int col = h_csrColIndA[j];
-                int idx = h_csrRowPtrAT[col]++;
+                int idx = h_csrRowPtrAT_tmp[col]++;
                 h_csrColIndAT[idx] = i;
                 h_csrValAT[idx] = h_csrValA[j];
             }
