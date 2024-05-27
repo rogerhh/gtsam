@@ -77,6 +77,7 @@ int main(int argc, char** argv) {
         vector<int> h_csrColIndAT;
         vector<float> h_csrValAT;
         vector<float> h_b;
+        vector<float> h_x;
         vector<int> h_csrRowPtrD;
         vector<int> h_csrColIndD;
         vector<float> h_csrValD;
@@ -300,6 +301,23 @@ int main(int argc, char** argv) {
         printDeviceVals(d_csrRowPtrH, n + 1, "d_csrRowPtrH", "int");
         printDeviceVals(d_csrColIndH, nnzH, "d_csrColIndH", "int");
         printDeviceVals(d_csrValH, nnzH, "d_csrValH", "float");
+
+        // Solve ATA x = ATb
+        int singularity;
+
+        cusolverSpScsrlsvchol(cusolverSpHandle, n, nnzH, 
+                              descrH, d_csrValH, d_csrRowPtrH, d_csrColIndH, 
+                              d_ATb, 0.0, 0, d_x, &singularity);
+
+        h_x.resize(n);
+
+        cudaMemcpy(h_x.data(), d_x, n * sizeof(float), cudaMemcpyDeviceToHost);
+
+        printf("x: ");
+        for(int i = 0; i < n; i++) {
+            printf("%f ", h_x[i]);
+        }
+        printf("\n");
 
 
 	end = clock();
