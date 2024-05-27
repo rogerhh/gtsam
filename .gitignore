@@ -5,6 +5,7 @@
 *.DS_Store
 *.swp
 *.swo
+*.out
 *.un~
 /examples/Data/dubrovnik-3-7-pre-rewritten.txt
 /examples/Data/pose2example-rewritten.txt
