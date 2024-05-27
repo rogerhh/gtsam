@@ -213,7 +213,7 @@ int main(int argc, char** argv) {
         // Compute ATb
         cusparseSpMV_bufferSize(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
                                 &one, descrAT, descrb, &zero, descrATb, 
-                                CUDA_R_32F, CUSPARSE_CSRMV_ALG1, &bufferSize);
+                                CUDA_R_32F, CUSPARSE_MV_ALG_DEFAULT, &bufferSize);
 
         printf("bufferSize = %lu\n", bufferSize);
 
