@@ -155,6 +155,12 @@ int main(int argc, char** argv) {
             }
         }
 
+        printf("h_csrRowPtrA: ");
+        for(int i = 0; i < h_csrRowPtrAT.size(); i++) {
+            printf("%d ", h_csrRowPtrAT[i]);
+        }
+        printf("\n");
+
         // Convenience variables
         // A is m x n, AT is n x m, b is m x 1, ATb is n x 1, x is n x 1
         int m = h_csrRowPtrA.size() - 1;
