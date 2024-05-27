@@ -68,6 +68,7 @@ int main(int argc, char** argv) {
                 for(int j = 0; j < width; j++) {
                     h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height);
                     for(int ih = 0; ih < height; ih++) {
+                        printf("%d %d\n", ih, ridx[ih]);
                         h_csrColIndA.push_back(node_ridx[node][ridx[ih]]);
                         h_csrValA.push_back(1.0f);
                     }
