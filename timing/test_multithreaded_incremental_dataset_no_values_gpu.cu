@@ -201,18 +201,18 @@ int main(int argc, char** argv) {
         printDeviceVals(d_csrValAT, nnzA, "d_csrValAT", "float");
 
         // Matrix descriptors
-        cusparseSpMatDescr_t descrA;
-        cusparseCreateCsr(&descrA, m, n, nnzA, d_csrRowPtrA, d_csrColIndA, d_csrValA, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
-        cusparseSpMatDescr_t descrAT;
-        cusparseCreateCsr(&descrAT, n, m, nnzA, d_csrRowPtrAT, d_csrColIndAT, d_csrValAT, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
-        cusparseDnVecDescr_t descrb;
-        cusparseCreateDnVec(&descrb, m, d_b, CUDA_R_32F);
-        cusparseDnVecDescr_t descrATb;
-        cusparseCreateDnVec(&descrATb, n, d_ATb, CUDA_R_32F);
+        cusparseSpMatDescr_t descrSpA;
+        cusparseCreateCsr(&descrSpA, m, n, nnzA, d_csrRowPtrA, d_csrColIndA, d_csrValA, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
+        cusparseSpMatDescr_t descrSpAT;
+        cusparseCreateCsr(&descrSpAT, n, m, nnzA, d_csrRowPtrAT, d_csrColIndAT, d_csrValAT, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F);
+        cusparseDnVecDescr_t descrDnb;
+        cusparseCreateDnVec(&descrDnb, m, d_b, CUDA_R_32F);
+        cusparseDnVecDescr_t descrDnATb;
+        cusparseCreateDnVec(&descrDnATb, n, d_ATb, CUDA_R_32F);
 
         // Compute ATb
         cusparseSpMV_bufferSize(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                                &one, descrAT, descrb, &zero, descrATb, 
+                                &one, descrSpAT, descrDnb, &zero, descrDnATb, 
                                 CUDA_R_32F, CUSPARSE_MV_ALG_DEFAULT, &bufferSize);
 
         printf("bufferSize = %lu\n", bufferSize);
@@ -220,10 +220,12 @@ int main(int argc, char** argv) {
         cudaMalloc(&buffer, bufferSize);
 
         cusparseSpMV(cusparseHandle, CUSPARSE_OPERATION_NON_TRANSPOSE,
-                     &one, descrAT, descrb, &zero, descrATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer);
+                     &one, descrSpAT, descrDnb, &zero, descrDnATb, CUDA_R_32F, CUSPARSE_CSRMV_ALG1, buffer);
 
         printDeviceVals(d_b, m, "d_b", "float");
         printDeviceVals(d_ATb, n, "ATb", "float");
+
+        // Compute ATA
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
