@@ -15,7 +15,7 @@
 #include <set>
 #include <map>
 
-#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
+#include "baremetal_tests/incremental_sphere2500_steps-2-200_period-25/incremental_dataset.h"
 
 using namespace std;
 
@@ -52,8 +52,6 @@ int main(int argc, char** argv) {
     cusolverSpCreate(&cusolverSpHandle);
 
     for(int step = 0; step < num_timesteps; step++) {
-	clock_t start, end;    
-	start = clock();
         int true_step = step + timestep_start;
         printf("step = %d\n", true_step);
 
@@ -171,6 +169,9 @@ int main(int argc, char** argv) {
                 h_csrValAT[idx] = h_csrValA[j];
             }
         }
+
+	clock_t start, end;    
+	start = clock();
 
         // Convenience variables
         // A is m x n, AT is n x m, b is m x 1, ATb is n x 1, x is n x 1
