@@ -75,21 +75,21 @@ int main(int argc, char** argv) {
             }
         }
 
-        cout << "h_csrRowPtrA: ";
-        for(auto& val : h_csrRowPtrA) {
-            cout << val << " ";
+        printf("h_csrRowPtrA: ");
+        for(int i = 0; i < h_csrRowPtrA.size(); i++) {
+            printf("%d ", h_csrRowPtrA[i]);
         }
-        cout << endl;
-        cout << "h_csrColIndA: ";
-        for(auto& val : h_csrColIndA) {
-            cout << val << " ";
+        printf("\n");
+        printf("h_csrColIndA: ");
+        for(int i = 0; i < h_csrColIndA.size(); i++) {
+            printf("%d ", h_csrColIndA[i]);
         }
-        cout << endl;
-        cout << "h_csrValA: ";
-        for(auto& val : h_csrValA) {
-            cout << val << " ";
+        printf("\n");
+        printf("h_csrValA: ");
+        for(int i = 0; i < h_csrValA.size(); i++) {
+            printf("%f ", h_csrValA[i]);
         }
-        cout << endl;
+        printf("\n");
 
 	end = clock();
 	double cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
