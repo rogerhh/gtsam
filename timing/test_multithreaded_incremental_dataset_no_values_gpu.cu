@@ -115,7 +115,7 @@ int main(int argc, char** argv) {
                 }
 
                 for(int j = 0; j < width; j++) {
-                    h_b.push_back(0.0f);
+                    h_b.push_back(1.0f);
                     h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height - 1);
                     for(int ih = 0; ih < height - 1; ih++) {
                         printf("%d %d\n", ih, ridx[ih]);
