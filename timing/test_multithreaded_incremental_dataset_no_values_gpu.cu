@@ -19,7 +19,7 @@
 
 using namespace std;
 
-void printDeviceVals(float* d_vals, int n, const string& name, const string& type) {
+void printDeviceVals(void* d_vals, int n, const string& name, const string& type) {
     if(type == "int") {
         int* h_vals = (int*)malloc(n * sizeof(int));
         cudaMemcpy(h_vals, d_vals, n * sizeof(int), cudaMemcpyDeviceToHost);
