@@ -107,7 +107,8 @@ target_dataset: sphere2
 target_configs:
     - RA1
     # - RA2
-    - VIO
+    # - VIO
+    # - VIOLC
 
 #####################################################################
 #   Add Configs Here

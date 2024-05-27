@@ -2864,14 +2864,9 @@ void CholeskyEliminationTree::extractPredictedCycles(std::ostream& os, int num_t
     total_predicted_cost += clique->computeCostBacksolve(num_threads);
   }
 
-  os << "num threads " << endl 
-     << num_threads << endl
-     << "relin cost " << endl
-     << relin_cost << endl;
-  os << "cliques" << endl;
-  os << clique_count << endl;
-
   int index = 0;
+
+  int total = 0;
 
   for(RemappedKey remappedKey : orderingToKey_) {
     sharedNode node = nodes_[remappedKey];
@@ -2880,26 +2875,18 @@ void CholeskyEliminationTree::extractPredictedCycles(std::ostream& os, int num_t
     sharedClique clique = node->clique();
     if(clique->frontKey() != remappedKey) { continue; }
 
-    os << "node " << index << "\t";
-
-    os << "reorderSym: " << clique->symCost << "\t";
-    os << "AtA: " << clique->AtACost << "\tcholCost: ";
     if(clique->costStatus == COST_MARKED) {
-      os << clique->cholCost;
+      total += clique->symCost + clique->AtACost + clique->cholCost + clique->addCost + clique->backsolveCost;
     }
     else if(clique->costStatus == COST_FIXED) {
-      os << clique->syrkCost;
+      total += clique->symCost + clique->AtACost + clique->syrkCost + clique->addCost + clique->backsolveCost;
     }
     else {
-      os << 0;
     }
-
-    os << "\taddCost: " << clique->addCost 
-       << "\tbacksolveCost: " << clique->backsolveCost << endl;
 
     index++;
   }
-  os << endl;
+  os << "totalCost: " << total << endl;
 
   resetCost(allUpdatedCliques);
   resetCliqueParallelizable();

@@ -43,13 +43,15 @@ def convert_to_numeric(variable):
     else:
         raise ValueError("Variable format not recognized")
 
-def run_config(cmd, pipe, traj, lock):
+def run_config(cmd, pipe, traj, chis, lock, latencies=None, alg=None):
     print("In run_config")
     print(cmd, pipe)
     if not os.path.exists(pipe):
         os.mkfifo(pipe)
 
     p = Popen(cmd, shell=True, stdout=DEVNULL, bufsize=1, universal_newlines=True)
+
+    last_received_chi = 0
 
     with open(pipe, "r") as fifo:
         # for line in p.stdout:
@@ -68,7 +70,29 @@ def run_config(cmd, pipe, traj, lock):
             if "start" in line:
                 step = 0
             elif "end" in line:
-                pass
+                line = fifo.readline()
+                assert("chi2" in line)
+
+                chi2 = float(line.split()[2])
+                chi2_copy = chi2
+
+                if last_received_chi == 0:
+                    chi2 = 0
+
+                last_received_chi = chi2_copy
+
+                chis.append(chi2)
+
+                if alg == "ra":
+                    for _ in range(10):
+                        line = fifo.readline()
+                        if "totalCost:" in line:
+                            latency = float(line.split()[-1])
+                            latencies.append(latency)
+                            break
+                else:
+                    latencies.append(0)
+
             else:
                 arr = line.split()
                 M = np.zeros((3, 4));
@@ -94,11 +118,18 @@ def run_config(cmd, pipe, traj, lock):
     os.remove(pipe)
 
 class Updater:
-    def __init__(self, axes, lines, trajs, locks):
+    def __init__(self, labels, axes, lines, trajs, chis, locks, chi_axes=None, chi_lines=None, latencies=None, latency_axes=None, latency_lines=None):
+        self.labels = labels
         self.axes = axes
         self.trajs = trajs
         self.locks = locks
         self.lines = lines
+        self.chis = chis
+        self.chi_axes = chi_axes
+        self.chi_lines = chi_lines
+        self.latency = latencies
+        self.latency_axes = latency_axes
+        self.latency_lines = latency_lines
 
     def update(self, frame):
         for i in range(len(self.locks)):
@@ -106,6 +137,14 @@ class Updater:
             ax = self.axes[i]
             traj = self.trajs[i]
             line = self.lines[i]
+            chi = self.chis[i]
+            chi_ax = self.chi_axes[i]
+            chi_line = self.chi_lines[i]
+
+            latency = self.latency[i]
+            latency_ax = self.latency_axes[i]
+            latency_line = self.latency_lines[i]
+
             if lock.acquire(False):
 
                 x = traj["x"]
@@ -116,11 +155,26 @@ class Updater:
                 line.set_ydata(y)
                 line.set_3d_properties(z)
 
+                chi_line.set_xdata(range(len(chi)))
+                chi_line.set_ydata(chi)
+
+                latency_line.set_xdata(range(len(latency)))
+                latency_line.set_ydata(latency)
+
                 lock.release()
 
                 ax.set_xlim(min(x) - 5, max(x) + 5)
                 ax.set_ylim(min(y) - 5, max(y) + 5)
                 ax.set_zlim(min(z) - 5, max(z) + 5)
+
+                chi_ax.set_xlim(-1, len(chi) + 5)
+                chi_ax.set_ylim(1e-10, max(chi) * 5)
+
+                chi_ax.legend([labels[i]])
+
+                latency_ax.set_xlim(-1, len(latency) + 5)
+                latency_ax.set_ylim(0, max(latency) + 5)
+
 
 
 
@@ -151,10 +205,16 @@ if __name__ == "__main__":
 
     dataset = config["target_dataset"]
 
+    labels = []
     cmds = []
     pipes = []
+    algs = []
+    latency_targets = [3.33 * 10^7 for _ in cmds]
 
     for config_name in config["target_configs"]:
+        labels.append(config_name)
+        algs.append(config[config_name]["alg"])
+
         d = config[config_name]
         d.update(config["dataset"][dataset])
 
@@ -211,19 +271,30 @@ if __name__ == "__main__":
 
     threads = []
     trajs = [{"x":[], "y":[], "z":[]} for _ in cmds]
+    chis = [[] for _ in cmds]
+    latencies = [[] for _ in cmds]
     locks = [threading.Lock() for _ in cmds]
 
-    fig = plt.figure()
+    fig = plt.figure(figsize=(20, 30))
 
     num_plots = len(cmds)
-    axes = [fig.add_subplot(1, num_plots, i+1, projection="3d") for i in range(num_plots)]
+    axes = [fig.add_subplot(3, num_plots, i+1, projection="3d") for i in range(num_plots)]
     lines = [ax.plot([], [], [])[0] for ax in axes]
 
-    updater = Updater(axes, lines, trajs, locks)
+    chi_axes = [fig.add_subplot(3, num_plots, num_plots + i+1) for i in range(num_plots)]
+    chi_lines = [chi_ax.plot([], [])[0] for chi_ax in chi_axes]
 
-    for cmd, pipe, traj, lock in zip(cmds, pipes, trajs, locks):
+    latency_axes = [fig.add_subplot(3, num_plots, 2 * num_plots + i+1) for i in range(num_plots)]
+    latency_lines = [latency_ax.plot([], [])[0] for latency_ax in latency_axes]
+
+    for chi_ax in chi_axes:
+        chi_ax.set_yscale("log")
+
+    updater = Updater(labels, axes, lines, trajs, chis, locks, chi_axes=chi_axes, chi_lines=chi_lines, latencies=latencies, latency_axes=latency_axes, latency_lines=latency_lines)
+
+    for cmd, pipe, traj, chi, lock, alg, latency in zip(cmds, pipes, trajs, chis, locks, algs, latencies):
         
-        thread = threading.Thread(target=run_config, args=(cmd, pipe, traj, lock))
+        thread = threading.Thread(target=run_config, args=(cmd, pipe, traj, chi, lock, latency, alg))
         thread.start()
         threads.append(thread)
 

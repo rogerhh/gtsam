@@ -40,6 +40,9 @@ double chi2_red(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& c
         graph_dim += nlf->dim();
     }
     double dof = graph_dim - config.dim(); // kaess: changed to dim
+    if(dof <1e-10) {
+        return 0;
+    }
     return 2. * graph.error(config) / dof; // kaess: added factor 2, graph.error returns half of actual error
 }
 
@@ -483,6 +486,7 @@ int main(int argc, char *argv[]) {
                 demo_fout << "step start " << step << endl;
                 vio_estimate.print_kitti_pose3(demo_fout);
                 demo_fout << "step end" << endl;
+                demo_fout << "chi2 = " << chi2 << endl;
             }
 
 
