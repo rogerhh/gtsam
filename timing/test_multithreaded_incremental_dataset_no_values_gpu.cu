@@ -278,7 +278,7 @@ int main(int argc, char** argv) {
         cusparseXcsrgemm2Nnz(cusparseHandle, n, n, m,
                              descrAT, nnzA, d_csrRowPtrAT, d_csrColIndAT,
                              descrA, nnzA, d_csrRowPtrA, d_csrColIndA,
-                             descrD, nnzD, NULL, NULL,
+                             descrD, nnzD, d_csrRowPtrD, NULL,
                              descrH, d_csrRowPtrH, &nnzH,
                              info, buffer2);
 
