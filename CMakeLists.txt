@@ -8,6 +8,8 @@ if(NOT DEFINED CMAKE_MACOSX_RPATH)
 endif()
 
 # Set the version number for the library
+set (CMAKE_CXX_STANDARD 17)
+set (CMAKE_CXX_STANDARD_REQUIRED True)
 set (GTSAM_VERSION_MAJOR 4)
 set (GTSAM_VERSION_MINOR 1)
 set (GTSAM_VERSION_PATCH 1)

@@ -16,12 +16,12 @@ using namespace std;
 
 int main(int argc, char** argv) {
 
-    int num_timesteps;
-    cin >> num_timesteps;
+    int timestep_start, num_timesteps;
+    cin >> timestep_start >> num_timesteps;
 
     for(int step = 0; step < num_timesteps; step++) {
         int true_step = step + timestep_start;
-        printf("step = %d\n", true_step);
+        cout << "step = " << true_step << endl;
 
         int num_factors;
         cin >> num_factors;
@@ -42,6 +42,8 @@ int main(int argc, char** argv) {
         vector<int> h_csrColIndH;
         vector<float> h_csrValH;
 
+	int max_ridx = 0;
+
         for(int factor = 0; factor < num_factors; factor++) {
             int height, width;
             vector<int> ridx;
@@ -52,6 +54,10 @@ int main(int argc, char** argv) {
                 int ridx_val;
                 cin >> ridx_val;
                 ridx.push_back(ridx_val);
+
+		if(ridx_val > max_ridx) {
+		    max_ridx = ridx_val;
+		}
             }
 
             for(int i = 0; i < height - 1; i++) {
@@ -68,7 +74,7 @@ int main(int argc, char** argv) {
         }
 
         // Transpose A
-        h_csrRowPtrAT.resize(remapped_ridx.size() + 1, 0);
+        h_csrRowPtrAT.resize(max_ridx + 1, 0);
         h_csrRowPtrAT[0] = 0;
         for(int i = 0; i < h_csrColIndA.size(); i++) {
             h_csrRowPtrAT[h_csrColIndA[i] + 1]++;
