@@ -14,6 +14,8 @@ int main() {
 
     int num_total_factors = 0;
 
+    cout << num_timesteps << endl;
+
     for(int step = 0; step < num_timesteps; step++) {
         int true_step = step + timestep_start;
 
