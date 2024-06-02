@@ -12,8 +12,6 @@ int main() {
     // Copy all the factors out of the dataset
     // and remap all the factor indices
 
-    int num_total_factors = 0;
-
     cout << num_timesteps << endl;
 
     for(int step = 0; step < num_timesteps; step++) {
@@ -45,6 +43,8 @@ int main() {
 
         set<int> ridx_set;
         map<int, int> remapped_ridx;
+
+        int num_total_factors = 0;
 
         for(int node = 0; node < nnodes - 1; node++) {
             bool marked = node_marked[node];
