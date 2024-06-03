@@ -26,6 +26,8 @@ int main(int argc, char** argv) {
         int num_factors;
         cin >> num_factors;
 
+        // cout << num_factors << endl;
+
         // Host data
         vector<int> h_csrRowPtrA = {0};
         vector<int> h_csrColIndA;
@@ -50,6 +52,8 @@ int main(int argc, char** argv) {
 
             cin >> height >> width;
 
+            // cout << height << " " << width << endl;
+
             for(int i = 0; i < height - 1; i++) {
                 int ridx_val;
                 cin >> ridx_val;
@@ -60,10 +64,13 @@ int main(int argc, char** argv) {
 		}
             }
 
-            for(int i = 0; i < height - 1; i++) {
-                h_csrRowPtrA.push_back(h_csrRowPtrA.back() + width);
+            for(int i = 0; i < width; i++) {
+                h_csrRowPtrA.push_back(h_csrRowPtrA.back() + height - 1);
+                // for(int c : ridx) {
+                //     h_csrColIndA.push_back(c);
+                // }
                 h_csrColIndA.insert(h_csrColIndA.end(), ridx.begin(), ridx.end());
-                for(int j = 0; j < width; j++) {
+                for(int j = 0; j < height - 1; j++) {
                     if(j == i) {
                         h_csrValA.push_back(1.0);
                     } else {
@@ -71,10 +78,11 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+
         }
 
         // Transpose A
-        h_csrRowPtrAT.resize(max_ridx + 1, 0);
+        h_csrRowPtrAT.resize(max_ridx + 2);
         h_csrRowPtrAT[0] = 0;
         for(int i = 0; i < h_csrColIndA.size(); i++) {
             h_csrRowPtrAT[h_csrColIndA[i] + 1]++;
@@ -85,16 +93,52 @@ int main(int argc, char** argv) {
         }
         h_csrColIndAT.resize(h_csrColIndA.size());
         h_csrValAT.resize(h_csrValA.size());
-        vector<int> h_csrRowPtrAT_tmp = h_csrRowPtrAT;
+        vector<int> h_csrRowPtrA_tmp = h_csrRowPtrAT;
 
         for(int i = 0; i < h_csrRowPtrA.size() - 1; i++) {
             for(int j = h_csrRowPtrA[i]; j < h_csrRowPtrA[i + 1]; j++) {
                 int col = h_csrColIndA[j];
-                int idx = h_csrRowPtrAT_tmp[col]++;
+                int idx = h_csrRowPtrA_tmp[col]++;
                 h_csrColIndAT[idx] = i;
                 h_csrValAT[idx] = h_csrValA[j];
             }
         }
+
+        // cout << "h_csrRowPtrA: ";
+        // for(int i : h_csrRowPtrA) {
+        //     cout << i << " ";
+        // }
+        // cout << endl;
+
+        // cout << "h_csrColIndA: ";
+        // for(int i : h_csrColIndA) {
+        //     cout << i << " ";
+        // }
+        // cout << endl;
+
+        // cout << "h_csrValA: ";
+        // for(float i : h_csrValA) {
+        //     cout << i << " ";
+        // }
+        // cout << endl;
+
+        // cout << "h_csrRowPtrAT: ";
+        // for(int i : h_csrRowPtrAT) {
+        //     cout << i << " ";
+        // }
+        // cout << endl;
+
+        // cout << "h_csrColIndAT: ";
+        // for(int i : h_csrColIndAT) {
+        //     cout << i << " ";
+        // }
+        // cout << endl;
+
+        // cout << "h_csrValAT: ";
+        // for(float i : h_csrValAT) {
+        //     cout << i << " ";
+        // }
+        // cout << endl;
 
 	// clock_t start, end;    
 	// start = clock();
@@ -273,6 +317,6 @@ int main(int argc, char** argv) {
     // cusparseDestroy(cusparseHandle);
     // cusolverSpDestroy(cusolverSpHandle);
 
-    printf("Passed :)\n");
+    cout << "Passed :)" << endl;
 }
 

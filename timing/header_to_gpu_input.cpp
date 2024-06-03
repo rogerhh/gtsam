@@ -12,7 +12,7 @@ int main() {
     // Copy all the factors out of the dataset
     // and remap all the factor indices
 
-    cout << num_timesteps << endl;
+    cout << timestep_start << " " << num_timesteps << endl;
 
     for(int step = 0; step < num_timesteps; step++) {
         int true_step = step + timestep_start;
