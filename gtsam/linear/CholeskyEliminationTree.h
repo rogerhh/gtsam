@@ -131,9 +131,13 @@ public:
 
   void symbolicElimination(const RemappedKeySet& markedKeys);
 
+
   void choleskyElimination(const Values& theta);
 
   void backsolve(VectorValues* delta_ptr, double tol);
+
+  // Set up gemmini inputs
+  void setUpGemminiInputs(const Values& theta);
 
   // Reset after each iteration
   void reset();

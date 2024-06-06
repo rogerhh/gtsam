@@ -26,6 +26,7 @@
 #include <gtsam/inference/BayesTree-inst.h>
 #include <gtsam/nonlinear/LinearContainerFactor.h>
 
+#include <chrono>
 #include <algorithm>
 #include <map>
 #include <utility>
@@ -573,13 +574,16 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
 
   keyDeltaVec = update.CheckRelinearizationFull2(delta_, params_.relinearizeThreshold);
 
+
+  auto runtime_start = chrono::high_resolution_clock::now();
   const int64_t remainingCycles = 3.33 * 1e7;
-  // const int64_t remainingCycles = 1 * 1e7;
   eTree_.pickRelinKeys(keyDeltaVec, allFixedKeys, allMarginalizedKeys, remainingCycles, num_threads,
       *boost::get<double>(&params_.relinearizeThreshold), &newRelinKeys);
   relinKeys = newRelinKeys;
+  auto runtime_end = chrono::high_resolution_clock::now();
+  auto runtime_time =  chrono::duration_cast<chrono::microseconds>(runtime_end - runtime_start).count();
 
-  cout << "relinKeys size = " << relinKeys.size() << endl;
+  cout << "runtime_time = " << runtime_time << " us" << endl;
 
   if (!relinKeys.empty()) {
     // 6. Update linearization point for marked variables:
@@ -643,8 +647,17 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
       eTree_.updateOrdering(markedKeys, observedKeys, updateParams);
   }
 
+  auto sym_start = chrono::high_resolution_clock::now();
   eTree_.symbolicElimination(markedKeys);
+  auto sym_end = chrono::high_resolution_clock::now();
+
   eTree_.choleskyElimination(theta_);
+  auto chol_end = chrono::high_resolution_clock::now();
+
+  auto sym_time =  chrono::duration_cast<chrono::microseconds>(sym_end - sym_start).count();
+  auto chol_time =  chrono::duration_cast<chrono::microseconds>(chol_end - sym_end).count();
+  cout << "sym_time = " << sym_time << " us" << endl;
+  cout << "chol_time = " << chol_time << " us" << endl;
 
   const ISAM2GaussNewtonParams& gaussNewtonParams =
       boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);

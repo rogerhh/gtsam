@@ -383,7 +383,7 @@ void CholeskyEliminationTree::pickRelinKeys(
 
   remainingCycles -= new_factor_cost + backsolve_cost;
 
-  cout << "backsolve cost = " << backsolve_cost << " new_factor_cost = " << new_factor_cost << " remainingCycles = " << remainingCycles << endl;
+  // cout << "backsolve cost = " << backsolve_cost << " new_factor_cost = " << new_factor_cost << " remainingCycles = " << remainingCycles << endl;
 
   if(remainingCycles <= 0) { 
     cout << "no relin possible!" << endl;
@@ -508,20 +508,20 @@ void CholeskyEliminationTree::pickRelinKeys(
     }
   }
 
-  cout << "Remaining cycles: " << remainingCycles 
-       << " Total relin keys: " << newKeyDeltaVec.size() 
-       << " num relin: " << newRelinKeys->size() 
-       << " relin_cost " << total_relin_cost 
-       <<  " highest unpicked delta: " << highestUnpickedDelta 
-       << " force_thresh: " << force_thresh 
-       << " num_min_force_thresh_keys: " << num_min_force_thresh_keys 
-       << " total_cost: " << totalCost << endl;
+  // cout << "Remaining cycles: " << remainingCycles 
+  //      << " Total relin keys: " << newKeyDeltaVec.size() 
+  //      << " num relin: " << newRelinKeys->size() 
+  //      << " relin_cost " << total_relin_cost 
+  //      <<  " highest unpicked delta: " << highestUnpickedDelta 
+  //      << " force_thresh: " << force_thresh 
+  //      << " num_min_force_thresh_keys: " << num_min_force_thresh_keys 
+  //      << " total_cost: " << totalCost << endl;
 
-  cout << "Relin keys: ";
-  for(auto k : *newRelinKeys) {
-    cout << k << " ";
-  }
-  cout << endl;
+  // cout << "Relin keys: ";
+  // for(auto k : *newRelinKeys) {
+  //   cout << k << " ";
+  // }
+  // cout << endl;
 
 }
 
@@ -1999,6 +1999,22 @@ void CholeskyEliminationTree::backsolveClique(
 
 bool CholeskyEliminationTree::valuesChanged(const Vector& diff, double tol) {
   return diff.lpNorm<Eigen::Infinity>() >= tol;
+}
+
+void CholeskyEliminationTree::setUpGemminiInputs(const Values& theta) {
+  // 1. Go through all cliques
+  //    If marked, 
+  //        a. Make sure all factors are relinearized and set up pointers
+  //        b. Reset the CliqueColumns to 0 and set up pointers
+  //    If unmarked, check if fixed
+  //        a. if fixed, mark as fixed (Fixed means has reconstruct columns)
+  //        b. Set up pointers for CliqueColumns
+  // 2. Set up meta-pointers
+  vector<pair<sharedClique, bool>> stack(1, {root_, false});
+  while(!stack.empty()) {
+    auto& curPair = stack.back();
+    sharedClique clique = curPair.first;
+  }
 }
 
 void CholeskyEliminationTree::reset() {
