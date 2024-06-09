@@ -1,3 +1,5 @@
+#pragma once
+
 #include <stdio.h>
 #include <assert.h>
 #include <math.h>
@@ -6,29 +8,63 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "baremetal_tests/incremental_CAB7000_steps-2-3000_period-25/incremental_dataset.h"
+typedef struct lls_solver_t {
+  // Global variables that do not change step to step go here
+  float** node_workspaces = NULL;
+  pthread_mutex_t* node_locks;
+  int* node_num_children;
+  int* node_done_children;
+  int** node_children;
 
-#include "cholesky.h"
-#include "memory.h"
+  pthread_mutex_t queue_lock;
+  int node_ready_index = 0;
+  int node_ready_size = 0;
+  int* node_ready_queue;
+  int num_active_nodes = 0;
+} lls_solver;
 
-#define VALGRIND 1
+typedef struct lls_solver_args_t {
+  // Step-dependent variables go here
+  int nnodes;
 
-float** node_workspaces = NULL;
-pthread_mutex_t* node_locks;
-int* node_num_children;
-int* node_done_children;
-int** node_children;
+  bool* node_marked;
+  bool* node_fixed;
 
-pthread_mutex_t queue_lock;
-int node_ready_index = 0;
-int node_ready_size = 0;
-int* node_ready_queue;
-int num_active_nodes = 0;
+  int* node_parent;
+  int* node_height;
+  int* node_width;
+  float** node_data;
+  int* node_num_blks;
+  int** node_A_blk_start;
+  int** node_B_blk_start;
+  int** node_blk_width;
+
+  int* node_num_factors;
+  int** node_factor_height;
+  int** node_factor_width;
+  float*** node_factor_data;
+  int** node_factor_num_blks;
+  int*** node_factor_A_blk_start;
+  int*** node_factor_B_blk_start;
+  int*** node_factor_blk_width;
+
+} lls_solver_args;
 
 typedef struct worker_args_t {
     int thread_id;
     int step;
+    lls_solver_args* solver_args;
 } worker_args;
+
+void partial_lls_init(lls_solver* solver);
+
+void partial_lls_solve(lls_solver_args* solver_args);
+
+
+#include "baremetal_tests/incremental_CAB7000_steps-2-3000_period-25/incremental_dataset.h"
+
+#include "cholesky.h"
+#include "memory.h"
 
 void* worker_cholesky(void* args_ptr) {
     worker_args* args = (worker_args*) args_ptr;

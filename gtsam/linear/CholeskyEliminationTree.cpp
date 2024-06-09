@@ -2009,12 +2009,315 @@ void CholeskyEliminationTree::setUpGemminiInputs(const Values& theta) {
   //    If unmarked, check if fixed
   //        a. if fixed, mark as fixed (Fixed means has reconstruct columns)
   //        b. Set up pointers for CliqueColumns
+  //
+  //    For marked and fixed clique, need to set up blk pointers
   // 2. Set up meta-pointers
-  vector<pair<sharedClique, bool>> stack(1, {root_, false});
+  //
+  // Note: In this function, node means clique
+  const int MAX_BLK_HEIGHT = 24;
+  
+  vector<sharedClique> reverseCliques;
+  vector<sharedClique> stack(1, root_);
+  unordered_map<sharedClique, int> cliqueToIndex;
+
   while(!stack.empty()) {
-    auto& curPair = stack.back();
-    sharedClique clique = curPair.first;
+    sharedClique clique = stack.back();
+    stack.pop_back();
+
+    reverseCliques.push_back(clique);
+
+    for(sharedClique child : clique->children) {
+      stack.push_back(child);
+    }
   }
+
+  vector<int> key_start_row(nodes_.size());
+
+  int nnodes = reverseCliques.size();
+  vector<int> node_marked(nnodes, false);
+  vector<int> node_fixed(nnodes, false);
+  vector<int> node_parent(nnodes, -1);
+  vector<int> node_height(nnodes);
+  vector<int> node_width(nnodes);
+  vector<float*> node_data(nnodes);
+  vector<int> node_num_blks(nnodes);
+  vector<vector<int>> node_A_blk_start(nnodes);
+  vector<vector<int>> node_B_blk_start(nnodes);
+  vector<vector<int>> node_B_blk_width(nnodes);
+
+  vector<int> node_num_factors(nnodes, 0);
+  vector<vector<int>> node_factor_height(nnodes);
+  vector<vector<int>> node_factor_width(nnodes);
+  vector<vector<vector<float>>> node_factor_data(nnodes);
+  vector<vector<int>> node_factor_num_blks(nnodes);
+  vector<vector<vector<int>>> node_factor_A_blk_start(nnodes);
+  vector<vector<vector<int>>> node_factor_B_blk_start(nnodes);
+  vector<vector<vector<int>>> node_factor_blk_width(nnodes);
+
+  for(int node_i = 0; node_i < nnodes; node_i++) {
+      int index = nnodes - 1 - node_i;
+      sharedClique clique = reverseCliques[node_i];
+      cliqueToIndex.insert({clique, index});
+
+      BlockIndexVector& blockIndices = clique->blockIndices;
+
+      size_t totalHeight = clique->height();
+      size_t diagWidth = clique->width();
+      size_t subdiagonalHeight = clique->subdiagonalHeight();
+
+      if(clique->parent()) {
+        node_parent[index] = cliqueToIndex.at(clique->parent());
+      }
+      node_height[index] = totalHeight;
+      node_width[index] = diagWidth;
+
+      if(clique->marked()) {
+        node_marked[index] = true;
+
+        // Set up an empty CliqueColumn
+        size_t r = clique->height(), c = clique->width();
+        std::shared_ptr<vector<GEMMINI_TYPE>> matrixSource 
+            = std::make_shared<vector<GEMMINI_TYPE>>(r * c);
+        std::shared_ptr<BlockIndexVector> blockIndicesSource 
+            = std::make_shared<BlockIndexVector>(clique->blockIndices);
+        clique->gatherSources.clear();
+        clique->gatherSources.push_back(LocalCliqueColumns(matrixSource, 
+                                                           blockIndicesSource, 
+                                                           0, clique->cliqueSize()));
+        node_data[index] = clique->gatherSources.front().get_ptr();
+      }
+      else {
+        // Reorder fixed nodes
+        if(clique->orderingVersion != orderingVersion_) {
+          // Reorder each node in the clique
+          clique->reorderClique();
+        }
+
+        vector<Key> reconstructCols;
+        clique->checkEditOrReconstruct(RECONSTRUCT, &reconstructCols);
+
+        if(!reconstructCols.empty()) {
+            node_fixed[index] = true;
+        }
+
+        node_data[index] = clique->gatherSources.front().get_ptr();
+      }
+
+      if(clique->parent()) {
+        BlockIndexVector& parentBlockIndices = clique->parent()->blockIndices;
+        // Group blocks here
+        for(auto&[key, row, height] : parentBlockIndices) {
+          key_start_row[key] = row;
+        }
+        
+        int curNextRow = -1;
+        int curHeight = 0;
+        for(int i = clique->cliqueSize(); i < blockIndices.size() - 1; i++) {
+          auto&[key, row, height] = blockIndices[i];
+
+          int parentRow = key_start_row[key];
+          if(parentRow == curNextRow && curHeight + height <= MAX_BLK_HEIGHT) {
+              curHeight += height;
+              node_B_blk_width[index].back() = curHeight;
+          }
+          else {
+              curHeight = height;
+              node_A_blk_start[index].push_back(row);
+              node_B_blk_start[index].push_back(parentRow);
+              node_B_blk_width[index].push_back(height);
+          }
+          curNextRow = parentRow + height;
+        }
+      }
+
+      if(!clique->isLastRow() && (node_marked[index] || node_fixed[index])) {
+
+        // Group factor blocks
+        for(auto&[key, row, height] : blockIndices) {
+            key_start_row[key] = row;
+        }
+
+        for(sharedNode node : clique->nodes) {
+        for(sharedFactorWrapper factorWrapper : node->factors) {
+          // Node must be lowest node in factor
+          // We need this to ensure there is an allocated entry in the workspace
+          // for this AtA bock
+          if(node->key != factorWrapper->lowestKey()) {
+              continue;
+          }
+          else if(factorWrapper->status() == REMOVED) {
+              continue;
+          }
+          
+          // Status of the factor before constructing lambda
+          // This allows us to change factorWrapper->status() without worrying about the logic
+          FactorStatus factorStatus = factorWrapper->status();
+
+          // Then relinearize factor to linear factor
+          bool unlinearized = factorWrapper->linearizeIfNeeded(theta);
+
+          // Determine which keys are needed
+          const BlockIndexVector& factorBlockIndices = factorWrapper->blockIndices();
+          vector<RemappedKey> factorKeys = factorWrapper->remappedKeys();
+          sort(factorKeys.begin(), factorKeys.end(), orderingLess_);
+
+          ColMajorMatrix<GEMMINI_TYPE>& factorMatrix = factorWrapper->getCachedMatrix();
+          int factorHeight = factorMatrix.rows();
+          int factorWidth = factorMatrix.cols();
+
+
+          int factor_num_blks = 0;
+          vector<int> factor_A_blk_start;
+          vector<int> factor_B_blk_start;
+          vector<int> factor_blk_width;
+          vector<float> factorData(factorHeight * factorWidth, 0);
+
+          bool hasMarkedKey = false;
+          int curRow = 0;
+          int curNextRow = -1;
+          int curBlkWidth = 0;
+          for(RemappedKey factorKey : factorKeys) {
+
+            for(int key_i = 0; key_i < factorBlockIndices.size() - 1; key_i++) {
+              const auto&[key, col, width] = factorBlockIndices[key_i];
+
+              if(key == factorKey) {
+                if(cliques_[factorKey]->marked()) {
+                  hasMarkedKey = true;
+                  for(int j = 0; j < width; j++) {
+                    for(int i = 0; i < factorHeight; i++) {
+                        factorData[i * factorWidth + curRow + j] = factorMatrix(i, col + j);
+                    }
+                  }
+                }
+
+                int destRow = key_start_row[factorKey];
+                if(destRow == curNextRow && curBlkWidth + width < MAX_BLK_HEIGHT) {
+                  curNextRow = destRow + width;
+                  curBlkWidth += width;
+                  factor_blk_width.back() = curBlkWidth;
+                }
+                else {
+                  curNextRow = destRow + width;
+                  curBlkWidth = width;
+                  factor_A_blk_start.push_back(curRow);
+                  factor_B_blk_start.push_back(destRow);
+                  factor_blk_width.push_back(width);
+                }
+
+                curRow += width;
+
+                break;
+              }
+            }
+          }
+
+          if(hasMarkedKey) {
+            node_num_factors[index]++;
+            node_factor_height[index].push_back(factorWidth);
+            node_factor_width[index].push_back(factorHeight);
+            node_factor_data[index].emplace_back(factorData);
+            node_factor_num_blks[index].push_back(factor_A_blk_start.size());
+            node_factor_A_blk_start[index].emplace_back(factor_A_blk_start);
+            node_factor_B_blk_start[index].emplace_back(factor_B_blk_start);
+            node_factor_blk_width[index].emplace_back(factor_blk_width);
+          }
+
+        }
+        }
+
+      }
+    
+  }
+
+  cout << "node_marked: ";
+  for(auto i : node_marked) {
+    cout << i << " ";
+  }
+  cout << endl;
+  cout << "node_fixed: ";
+  for(auto i : node_fixed) {
+    cout << i << " ";
+  }
+  cout << endl;
+  cout << "node_parent: ";
+  for(auto i : node_parent) {
+    cout << i << " ";
+  }
+  cout << endl;
+  cout << "node_height: ";
+  for(auto i : node_height) {
+    cout << i << " ";
+  }
+  cout << endl;
+  cout << "node_width: ";
+  for(auto i : node_width) {
+    cout << i << " ";
+  }
+  cout << endl;
+  cout << "node_data: ";
+  for(int node = 0; node < nnodes; node++) {
+    float* data = node_data[node];
+    int height = node_height[node];
+    int width = node_width[node];
+
+    for(int i = 0; i < height; i++) {
+      for(int j = 0; j < width; j++) {
+        cout << data[i + j * height] << " ";
+      }
+      cout << endl;
+    }
+    cout << endl;
+
+    cout << "node_num_blks: " << node_num_blks[node] << endl; 
+    cout << "node_A_blk_start: ";
+    for(int i : node_A_blk_start[node]) {
+      cout << i << " ";
+    }
+    cout << endl;
+    cout << "node_B_blk_start: ";
+    for(int i : node_A_blk_start[node]) {
+      cout << i << " ";
+    }
+    cout << endl;
+    cout << "node_blk_width: ";
+    for(int i : node_A_blk_start[node]) {
+      cout << i << " ";
+    }
+    cout << endl;
+    cout << "node_num_factors: " << node_num_factors[node] << endl;
+    for(int f = 0; f < node_num_factors[node]; f++) {
+      int h = node_factor_height[node][f];
+      int w = node_factor_width[node][f];
+      cout << h << " " << w << endl;
+      for(int i = 0; i < h; i++) {
+        for(int j = 0; j < w; j++) {
+          cout << node_factor_data[node][f][j * h + i] << " ";
+        }
+        cout << endl;
+      }
+      cout << "factor_A_blk_start: ";
+      for(int i : node_factor_A_blk_start[node][f]) {
+        cout << i << " ";
+      }
+      cout << endl;
+      cout << "factor_B_blk_start: ";
+      for(int i : node_factor_B_blk_start[node][f]) {
+        cout << i << " ";
+      }
+      cout << endl;
+      cout << "factor_blk_width: ";
+      for(int i : node_factor_blk_width[node][f]) {
+        cout << i << " ";
+      }
+      cout << endl;
+    }
+
+  }
+
+
+  exit(1);
+
 }
 
 void CholeskyEliminationTree::reset() {

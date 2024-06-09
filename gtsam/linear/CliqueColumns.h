@@ -237,6 +237,12 @@ public:
     }
 
     std::shared_ptr<BlockIndexVector> blockIndicesSource() { return blockIndicesSource_; }
+
+    GEMMINI_TYPE* get_ptr() {
+      assert(ownsData());
+
+      return matrixSource_->data();
+    }
 };
 
 }   // namespace gtsam
