@@ -21,6 +21,7 @@
 
 extern "C" {
 #include <gtsam/linear/gemmini_functions.h>
+#include <gtsam/linear/gemmini_solver.h>
 }
 
 namespace gtsam {
@@ -97,8 +98,11 @@ private:
 
   CholeskyEliminationTree& operator=(const CholeskyEliminationTree& other);
 
+  lls_solver gemmini_lls_solver;
+
 public:
   CholeskyEliminationTree();
+  ~CholeskyEliminationTree();
 
   void addVariables(const Values& newTheta);
 
@@ -136,8 +140,8 @@ public:
 
   void backsolve(VectorValues* delta_ptr, double tol);
 
-  // Set up gemmini inputs
-  void setUpGemminiInputs(const Values& theta);
+  // Use gemmini to solve the least squares problem
+  void gemminiSolve(const Values& theta, VectorValues* delta_ptr);
 
   // Reset after each iteration
   void reset();

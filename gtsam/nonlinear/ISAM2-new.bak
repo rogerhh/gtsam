@@ -651,7 +651,7 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
   eTree_.symbolicElimination(markedKeys);
   auto sym_end = chrono::high_resolution_clock::now();
 
-  eTree_.setUpGemminiInputs(theta_);
+  eTree_.gemminiSolve(theta_, &delta_);
   // eTree_.choleskyElimination(theta_);
   auto chol_end = chrono::high_resolution_clock::now();
 
