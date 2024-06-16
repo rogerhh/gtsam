@@ -10,10 +10,12 @@
 
 typedef struct lls_solver_t {
   // Global variables that do not change step to step go here
+  int num_threads;
 } lls_solver;
 
 typedef struct lls_solver_args_t {
   // Step-dependent variables go here
+  bool no_values;
   int step;
   int nnodes;
 

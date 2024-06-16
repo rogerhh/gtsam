@@ -18,6 +18,7 @@
 #include <utility>
 #include <iostream>
 #include <boost/optional.hpp>
+#include <mutex>
 
 extern "C" {
 #include <gtsam/linear/gemmini_functions.h>
@@ -141,10 +142,57 @@ public:
   void backsolve(VectorValues* delta_ptr, double tol);
 
   // Use gemmini to solve the least squares problem
-  void gemminiSolve(const Values& theta, VectorValues* delta_ptr);
+  const int MAX_BLK_HEIGHT = 24;
+  struct GemminiSetupArgs {
+      int thread_id;
+
+      const Values* theta;
+
+      bool no_numeric, no_values;
+
+      std::mutex* node_list_lock;
+      int* cur_node_idx;
+      int nnodes;
+
+      bool* node_marked;
+      bool* node_fixed;
+
+      std::vector<sharedClique>* reverseCliques;
+      std::unordered_map<sharedClique, int>* cliqueToIndex;
+
+      std::vector<int>* node_parent;
+      std::vector<int>* node_height;
+      std::vector<int>* node_width;
+      std::vector<float*>* node_data;
+      std::vector<int>* node_num_blks;
+      std::vector<std::vector<int>>* node_A_blk_start;
+      std::vector<std::vector<int>>* node_B_blk_start;
+      std::vector<std::vector<int>>* node_blk_width;
+      std::vector<std::vector<int>>* node_ridx;
+
+      std::vector<int>* node_num_factors;
+      std::vector<std::vector<int>>* node_factor_height;
+      std::vector<std::vector<int>>* node_factor_width;
+      std::vector<std::vector<std::vector<float>>>* node_factor_data;
+      std::vector<std::vector<int>>* node_factor_num_blks;
+      std::vector<std::vector<std::vector<int>>>* node_factor_A_blk_start;
+      std::vector<std::vector<std::vector<int>>>* node_factor_B_blk_start;
+      std::vector<std::vector<std::vector<int>>>* node_factor_blk_width;
+
+      std::vector<int>* global_key_start_row;
+  };
+
+  void workerGemminiSetUpNode(GemminiSetupArgs args);
+
+  void gemminiSolve(const Values& theta, VectorValues* delta_ptr, int num_threads, bool no_numeric = false, bool no_values = true);
+
+  void backsolve_reset();
 
   // Reset after each iteration
   void reset();
+
+  void injectFullTree(std::istream& is);
+  void injectDelta(std::istream& is, VectorValues* delta_ptr);
 
   // Add all ancestors of unmappedKey to additionalKeys. This is used in marginalization
   void getAffectedKeys(Key unmappedKey, std::set<Key>& additionalKeys) const;

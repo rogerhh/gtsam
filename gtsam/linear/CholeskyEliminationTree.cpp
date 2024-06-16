@@ -24,6 +24,9 @@
 #include <stdexcept>
 #include <cstdlib>
 #include <queue>
+#include <thread>
+#include <mutex>
+#include <sched.h>
 
 extern "C" {
   #include <gtsam/linear/gemmini_solver.h>
@@ -1939,6 +1942,42 @@ void CholeskyEliminationTree::backsolve(VectorValues* delta_ptr, double tol) {
 // #endif
 }
 
+void CholeskyEliminationTree::backsolve_reset() {
+  // cout << "[CholeskyEliminationTree] backwardSolve()" << endl;
+  // Do a pre-order traversal from top ot bottom
+  // For each node, first process the belowDiagonalBlocks, then do solve on the transpose of the diagonal
+  vector<pair<sharedClique, bool>> stack(1, {root_, false});
+  // Already solved delta. Used to avoid VectorValues.at(key)
+  vector<Vector> cachedDelta(nodes_.size());
+  while(!stack.empty()) {
+    auto& curPair = stack.back();
+    sharedClique clique = curPair.first;
+    bool& expanded = curPair.second;
+
+    if(!expanded) {
+      expanded = true;
+      if(clique->orderingVersion != orderingVersion_) {
+        clique->reorderClique();
+      }
+
+      for(sharedClique child : clique->children) {
+          stack.push_back({child, false});
+      }
+    }
+    else {
+      stack.pop_back();
+
+      clique->resetAfterBacksolve();
+    }
+  }
+
+  deallocateStack();
+
+// #ifdef DEBUG
+  checkInvariant_afterBackSolve();
+// #endif
+}
+
 void CholeskyEliminationTree::backsolveClique(
     sharedClique clique, 
     VectorValues* delta_ptr, 
@@ -2010,7 +2049,261 @@ bool CholeskyEliminationTree::valuesChanged(const Vector& diff, double tol) {
   return diff.lpNorm<Eigen::Infinity>() >= tol;
 }
 
-void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* delta_ptr) {
+void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
+  // Convenience variables
+  int thread_id = args.thread_id;
+
+  const Values& theta = *args.theta;
+  bool no_numeric = args.no_numeric;
+  bool no_values = args.no_values;
+  mutex& node_list_lock = *args.node_list_lock;
+  int* cur_node_idx = args.cur_node_idx;
+  int nnodes = args.nnodes;
+
+  bool* node_marked = args.node_marked;
+  bool* node_fixed = args.node_fixed;
+
+  vector<sharedClique>& reverseCliques = *args.reverseCliques;
+  unordered_map<sharedClique, int>& cliqueToIndex = *args.cliqueToIndex;
+  vector<int>& node_parent = *args.node_parent;
+  vector<int>& node_height = *args.node_height;
+  vector<int>& node_width = *args.node_width;
+  vector<float*>& node_data = *args.node_data;
+  vector<int>& node_num_blks = *args.node_num_blks;
+  vector<vector<int>>& node_A_blk_start = *args.node_A_blk_start;
+  vector<vector<int>>& node_B_blk_start = *args.node_B_blk_start;
+  vector<vector<int>>& node_blk_width = *args.node_blk_width;
+  vector<vector<int>>& node_ridx = *args.node_ridx;
+
+  vector<int>& node_num_factors = *args.node_num_factors;
+  vector<vector<int>>& node_factor_height = *args.node_factor_height;
+  vector<vector<int>>& node_factor_width = *args.node_factor_width;
+  vector<vector<vector<float>>>& node_factor_data = *args.node_factor_data;
+  vector<vector<int>>& node_factor_num_blks = *args.node_factor_num_blks;
+  vector<vector<vector<int>>>& node_factor_A_blk_start = *args.node_factor_A_blk_start;
+  vector<vector<vector<int>>>& node_factor_B_blk_start = *args.node_factor_B_blk_start;
+  vector<vector<vector<int>>>& node_factor_blk_width = *args.node_factor_blk_width;
+
+  vector<int>& global_key_start_row = *args.global_key_start_row;
+  vector<int> key_start_row(nodes_.size());
+
+
+  const int NODE_BACTH_SIZE = 1;
+
+  while(true) {
+
+    int start_node_idx;
+
+    node_list_lock.lock();
+    start_node_idx = *cur_node_idx;
+    *cur_node_idx += NODE_BACTH_SIZE;
+    node_list_lock.unlock();
+
+    if(start_node_idx >= nnodes) { break; }
+
+    for(int node_idx = 0; node_idx < NODE_BACTH_SIZE; node_idx++) {
+      int node_i = start_node_idx + node_idx;
+      int index = nnodes - 1 - node_i;
+
+      if(node_i >= nnodes) { break; }
+
+      sharedClique clique = reverseCliques[node_i];
+
+      BlockIndexVector& blockIndices = clique->blockIndices;
+      int max_num_blocks = blockIndices.size();
+
+      // initialize values
+      node_marked[index] = false;
+      node_fixed[index] = false;
+
+      size_t totalHeight = clique->height();
+      size_t diagWidth = clique->width();
+      size_t subdiagonalHeight = clique->subdiagonalHeight();
+
+      if(clique->parent()) {
+        node_parent[index] = cliqueToIndex.at(clique->parent());
+      }
+      node_height[index] = totalHeight;
+      node_width[index] = diagWidth;
+
+      if(clique->marked()) {
+        node_marked[index] = true;
+
+        // Set up an empty CliqueColumn
+        size_t r = clique->height(), c = clique->width();
+        std::shared_ptr<vector<GEMMINI_TYPE>> matrixSource 
+          = std::make_shared<vector<GEMMINI_TYPE>>(r * c);
+        std::shared_ptr<BlockIndexVector> blockIndicesSource 
+          = std::make_shared<BlockIndexVector>(clique->blockIndices);
+        clique->gatherSources.clear();
+        clique->gatherSources.push_back(LocalCliqueColumns(matrixSource, 
+              blockIndicesSource, 
+              0, clique->cliqueSize()));
+        node_data[index] = clique->gatherSources.front().get_ptr();
+      }
+      else {
+        // Reorder fixed nodes
+        if(clique->orderingVersion != orderingVersion_) {
+          // Reorder each node in the clique
+          clique->reorderClique();
+        }
+
+        vector<Key> reconstructCols;
+        clique->checkEditOrReconstruct(RECONSTRUCT, &reconstructCols);
+
+        if(!reconstructCols.empty()) {
+          node_fixed[index] = true;
+        }
+
+        node_data[index] = clique->gatherSources.front().get_ptr();
+      }
+      if(!node_marked[index] && !node_fixed[index]) { continue; }
+
+      if(clique->parent()) {
+        BlockIndexVector& parentBlockIndices = clique->parent()->blockIndices;
+        // Group blocks here
+        for(auto&[key, row, height] : parentBlockIndices) {
+          key_start_row[key] = row;
+        }
+
+        int curNextRow = -1;
+        int curHeight = 0;
+        int C_startRow = get<BLOCK_INDEX_ROW>(blockIndices[clique->cliqueSize()]);
+        for(int i = clique->cliqueSize(); i < blockIndices.size() - 1; i++) {
+          auto&[key, row, height] = blockIndices[i];
+
+          int parentRow = key_start_row[key];
+          if(parentRow == curNextRow && curHeight + height <= MAX_BLK_HEIGHT) {
+            curHeight += height;
+            node_blk_width[index].back() = curHeight;
+          }
+          else {
+            curHeight = height;
+            node_A_blk_start[index].push_back(row - C_startRow);
+            node_B_blk_start[index].push_back(parentRow);
+            node_blk_width[index].push_back(height);
+          }
+          curNextRow = parentRow + height;
+        }
+        node_num_blks[index] = node_A_blk_start[index].size();
+      }
+
+      if(!clique->isLastRow()) {
+        // Set ridx
+        for(auto&[key, row, height] : blockIndices) {
+          for(int i = 0; i < height; i++) {
+            node_ridx[index].push_back(global_key_start_row[key] + i);
+          }
+        }
+
+        // Group factor blocks
+        for(auto&[key, row, height] : blockIndices) {
+          key_start_row[key] = row;
+        }
+
+        for(sharedNode node : clique->nodes) {
+          for(sharedFactorWrapper factorWrapper : node->factors) {
+            // Node must be lowest node in factor
+            // We need this to ensure there is an allocated entry in the workspace
+            // for this AtA bock
+            if(node->key != factorWrapper->lowestKey()) {
+              continue;
+            }
+            else if(factorWrapper->status() == REMOVED) {
+              continue;
+            }
+
+            // Status of the factor before constructing lambda
+            // This allows us to change factorWrapper->status() without worrying about the logic
+            FactorStatus factorStatus = factorWrapper->status();
+
+            // Then relinearize factor to linear factor
+            bool unlinearized = factorWrapper->linearizeIfNeeded(theta);
+
+            // Determine which keys are needed
+            const BlockIndexVector& factorBlockIndices = factorWrapper->blockIndices();
+            vector<RemappedKey> factorKeys = factorWrapper->remappedKeys();
+            sort(factorKeys.begin(), factorKeys.end(), orderingLess_);
+
+            ColMajorMatrix<GEMMINI_TYPE>& factorMatrix = factorWrapper->getCachedMatrix();
+            int factorHeight = factorMatrix.rows();
+            int factorWidth = factorMatrix.cols();
+
+            int factor_num_blks = 0;
+            vector<int> factor_A_blk_start;
+            vector<int> factor_B_blk_start;
+            vector<int> factor_blk_width;
+            vector<float> factorData(factorHeight * factorWidth, 0);
+
+            bool hasMarkedKey = false;
+            int curRow = 0;
+            int curNextRow = -1;
+            int curBlkWidth = 0;
+            for(RemappedKey factorKey : factorKeys) {
+
+              for(int key_i = 0; key_i < factorBlockIndices.size(); key_i++) {
+                const auto&[key, col, width] = factorBlockIndices[key_i];
+
+                if(key == factorKey) {
+                  if(cliques_[factorKey]->marked()) {
+                    if(factorKey != 0) {
+                      hasMarkedKey = true;
+                    }
+                    if(!no_values) {
+                      for(int j = 0; j < width; j++) {
+                        for(int i = 0; i < factorHeight; i++) {
+                          factorData[i * factorWidth + curRow + j] = factorMatrix(i, col + j);
+                        }
+                      }
+                    }
+                  }
+
+                  if(key != 0) {
+                    // Only form blocks for rows that are not the last
+                    int destRow = key_start_row[factorKey];
+                    if(destRow == curNextRow && curBlkWidth + width < MAX_BLK_HEIGHT) {
+                      curNextRow = destRow + width;
+                      curBlkWidth += width;
+                      factor_blk_width.back() = curBlkWidth;
+                    }
+                    else {
+                      curNextRow = destRow + width;
+                      curBlkWidth = width;
+                      factor_A_blk_start.push_back(curRow);
+                      factor_B_blk_start.push_back(destRow);
+                      factor_blk_width.push_back(width);
+                    }
+                  }
+
+                  curRow += width;
+
+                  break;
+                }
+              }
+            }
+
+            if(hasMarkedKey) {
+              node_num_factors[index]++;
+              node_factor_height[index].push_back(factorWidth);
+              node_factor_width[index].push_back(factorHeight);
+              node_factor_data[index].emplace_back(factorData);
+              node_factor_num_blks[index].push_back(factor_A_blk_start.size());
+              node_factor_A_blk_start[index].emplace_back(factor_A_blk_start);
+              node_factor_B_blk_start[index].emplace_back(factor_B_blk_start);
+              node_factor_blk_width[index].emplace_back(factor_blk_width);
+            }
+
+          }
+        }
+
+      }
+    }
+
+  }
+
+} 
+
+void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* delta_ptr, int num_threads, bool no_numeric, bool no_values) {
   // 1. Go through all cliques
   //    If marked, 
   //        a. Make sure all factors are relinearized and set up pointers
@@ -2023,7 +2316,6 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   // 2. Set up meta-pointers
   //
   // Note: In this function, node means clique
-  const int MAX_BLK_HEIGHT = 24;
   
   vector<sharedClique> reverseCliques;
   vector<sharedClique> stack(1, root_);
@@ -2071,7 +2363,9 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   int curGlobalRow = 0;
   int totalNumRow = 0;
   for(int node_i = nnodes - 1; node_i >= 0; node_i--) {
+    int index = nnodes - 1 - node_i;
     sharedClique clique = reverseCliques[node_i];
+    cliqueToIndex.insert({clique, index});
     for(sharedNode node : clique->nodes) {
       global_key_start_row[node->key] = curGlobalRow;
       curGlobalRow += node->width;
@@ -2081,205 +2375,48 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
 
   vector<float> x_data(totalNumRow);
 
-  for(int node_i = 0; node_i < nnodes; node_i++) {
-      int index = nnodes - 1 - node_i;
-      sharedClique clique = reverseCliques[node_i];
-      cliqueToIndex.insert({clique, index});
+  // Start threads to set up node data
+  mutex node_list_lock;
+  int cur_node_idx = 0;
 
-      BlockIndexVector& blockIndices = clique->blockIndices;
-      int max_num_blocks = blockIndices.size();
+  GemminiSetupArgs setup_args{0, 
+                              &theta, no_numeric, no_values, 
+                              &node_list_lock, &cur_node_idx, nnodes, 
+                              node_marked, node_fixed,
+                              &reverseCliques, &cliqueToIndex,
+                              &node_parent, &node_height, &node_width, &node_data,
+                              &node_num_blks, &node_A_blk_start, &node_B_blk_start, 
+                              &node_blk_width, &node_ridx,
+                              &node_num_factors, 
+                              &node_factor_height, &node_factor_width, &node_factor_data,
+                              &node_factor_num_blks, 
+                              &node_factor_A_blk_start, &node_factor_B_blk_start,
+                              &node_factor_blk_width,
+                              &global_key_start_row};
 
-      // initialize values
-      node_marked[index] = false;
-      node_fixed[index] = false;
+  vector<GemminiSetupArgs> setup_args_list(num_threads, setup_args);
+  vector<thread> threads;
 
-      size_t totalHeight = clique->height();
-      size_t diagWidth = clique->width();
-      size_t subdiagonalHeight = clique->subdiagonalHeight();
+  auto setup_start = chrono::high_resolution_clock::now();
 
-      if(clique->parent()) {
-        node_parent[index] = cliqueToIndex.at(clique->parent());
-      }
-      node_height[index] = totalHeight;
-      node_width[index] = diagWidth;
+  vector<cpu_set_t> cpu_sets(num_threads);
 
-      if(clique->marked()) {
-        node_marked[index] = true;
+  for(int t = 0; t < num_threads; t++) {
+    CPU_ZERO(&(cpu_sets[t]));
+    CPU_SET(t, &(cpu_sets[t]));
+    setup_args_list[t].thread_id = t;
+    threads.emplace_back(&CholeskyEliminationTree::workerGemminiSetUpNode, this, setup_args_list[t]);
+    pthread_setaffinity_np(threads[t].native_handle(), sizeof(cpu_set_t), &cpu_sets[t]);
+  }
 
-        // Set up an empty CliqueColumn
-        size_t r = clique->height(), c = clique->width();
-        std::shared_ptr<vector<GEMMINI_TYPE>> matrixSource 
-            = std::make_shared<vector<GEMMINI_TYPE>>(r * c);
-        std::shared_ptr<BlockIndexVector> blockIndicesSource 
-            = std::make_shared<BlockIndexVector>(clique->blockIndices);
-        clique->gatherSources.clear();
-        clique->gatherSources.push_back(LocalCliqueColumns(matrixSource, 
-                                                           blockIndicesSource, 
-                                                           0, clique->cliqueSize()));
-        node_data[index] = clique->gatherSources.front().get_ptr();
-      }
-      else {
-        // Reorder fixed nodes
-        if(clique->orderingVersion != orderingVersion_) {
-          // Reorder each node in the clique
-          clique->reorderClique();
-        }
-
-        vector<Key> reconstructCols;
-        clique->checkEditOrReconstruct(RECONSTRUCT, &reconstructCols);
-
-        if(!reconstructCols.empty()) {
-            node_fixed[index] = true;
-        }
-
-        node_data[index] = clique->gatherSources.front().get_ptr();
-      }
-
-      if(!node_marked[index] && !node_fixed[index]) { continue; }
-
-      if(clique->parent()) {
-        BlockIndexVector& parentBlockIndices = clique->parent()->blockIndices;
-        // Group blocks here
-        for(auto&[key, row, height] : parentBlockIndices) {
-          key_start_row[key] = row;
-        }
-        
-        int curNextRow = -1;
-        int curHeight = 0;
-        int C_startRow = get<BLOCK_INDEX_ROW>(blockIndices[clique->cliqueSize()]);
-        for(int i = clique->cliqueSize(); i < blockIndices.size() - 1; i++) {
-          auto&[key, row, height] = blockIndices[i];
-
-          int parentRow = key_start_row[key];
-          if(parentRow == curNextRow && curHeight + height <= MAX_BLK_HEIGHT) {
-              curHeight += height;
-              node_blk_width[index].back() = curHeight;
-          }
-          else {
-              curHeight = height;
-              node_A_blk_start[index].push_back(row - C_startRow);
-              node_B_blk_start[index].push_back(parentRow);
-              node_blk_width[index].push_back(height);
-          }
-          curNextRow = parentRow + height;
-        }
-        node_num_blks[index] = node_A_blk_start[index].size();
-      }
-
-      if(!clique->isLastRow()) {
-        // Set ridx
-        for(auto&[key, row, height] : blockIndices) {
-            for(int i = 0; i < height; i++) {
-                node_ridx[index].push_back(global_key_start_row[key] + i);
-            }
-        }
-
-        // Group factor blocks
-        for(auto&[key, row, height] : blockIndices) {
-            key_start_row[key] = row;
-        }
-
-        for(sharedNode node : clique->nodes) {
-        for(sharedFactorWrapper factorWrapper : node->factors) {
-          // Node must be lowest node in factor
-          // We need this to ensure there is an allocated entry in the workspace
-          // for this AtA bock
-          if(node->key != factorWrapper->lowestKey()) {
-              continue;
-          }
-          else if(factorWrapper->status() == REMOVED) {
-              continue;
-          }
-          
-          // Status of the factor before constructing lambda
-          // This allows us to change factorWrapper->status() without worrying about the logic
-          FactorStatus factorStatus = factorWrapper->status();
-
-          // Then relinearize factor to linear factor
-          bool unlinearized = factorWrapper->linearizeIfNeeded(theta);
-
-          // Determine which keys are needed
-          const BlockIndexVector& factorBlockIndices = factorWrapper->blockIndices();
-          vector<RemappedKey> factorKeys = factorWrapper->remappedKeys();
-          sort(factorKeys.begin(), factorKeys.end(), orderingLess_);
-
-          ColMajorMatrix<GEMMINI_TYPE>& factorMatrix = factorWrapper->getCachedMatrix();
-          int factorHeight = factorMatrix.rows();
-          int factorWidth = factorMatrix.cols();
-
-
-          int factor_num_blks = 0;
-          vector<int> factor_A_blk_start;
-          vector<int> factor_B_blk_start;
-          vector<int> factor_blk_width;
-          vector<float> factorData(factorHeight * factorWidth, 0);
-
-          bool hasMarkedKey = false;
-          int curRow = 0;
-          int curNextRow = -1;
-          int curBlkWidth = 0;
-          for(RemappedKey factorKey : factorKeys) {
-
-            for(int key_i = 0; key_i < factorBlockIndices.size(); key_i++) {
-              const auto&[key, col, width] = factorBlockIndices[key_i];
-
-              if(key == factorKey) {
-                if(cliques_[factorKey]->marked()) {
-                  if(factorKey != 0) {
-                    hasMarkedKey = true;
-                  }
-                  for(int j = 0; j < width; j++) {
-                    for(int i = 0; i < factorHeight; i++) {
-                        factorData[i * factorWidth + curRow + j] = factorMatrix(i, col + j);
-                    }
-                  }
-                }
-
-                if(key != 0) {
-                  // Only form blocks for rows that are not the last
-                  int destRow = key_start_row[factorKey];
-                  if(destRow == curNextRow && curBlkWidth + width < MAX_BLK_HEIGHT) {
-                    curNextRow = destRow + width;
-                    curBlkWidth += width;
-                    factor_blk_width.back() = curBlkWidth;
-                  }
-                  else {
-                    curNextRow = destRow + width;
-                    curBlkWidth = width;
-                    factor_A_blk_start.push_back(curRow);
-                    factor_B_blk_start.push_back(destRow);
-                    factor_blk_width.push_back(width);
-                  }
-                }
-
-                curRow += width;
-
-                break;
-              }
-            }
-          }
-
-          if(hasMarkedKey) {
-            node_num_factors[index]++;
-            node_factor_height[index].push_back(factorWidth);
-            node_factor_width[index].push_back(factorHeight);
-            node_factor_data[index].emplace_back(factorData);
-            node_factor_num_blks[index].push_back(factor_A_blk_start.size());
-            node_factor_A_blk_start[index].emplace_back(factor_A_blk_start);
-            node_factor_B_blk_start[index].emplace_back(factor_B_blk_start);
-            node_factor_blk_width[index].emplace_back(factor_blk_width);
-          }
-
-        }
-        }
-
-      }
-    
+  for(int t = 0; t < num_threads; t++) {
+    threads[t].join();
   }
 
 
   lls_solver_args solver_args;
 
+  solver_args.no_values = no_values;
   solver_args.step = nodes_.size() - 1;
   solver_args.nnodes = nnodes;
   solver_args.node_marked = node_marked;
@@ -2339,16 +2476,29 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   solver_args.node_factor_B_blk_start = node_factor_B_blk_start_vec.data();
   solver_args.node_factor_blk_width = node_factor_blk_width_vec.data();
 
-  lls_solver_solve(&gemmini_lls_solver, &solver_args);
+  auto setup_end = chrono::high_resolution_clock::now();
+
+  if(!no_numeric) {
+    gemmini_lls_solver.num_threads = num_threads;
+    lls_solver_solve(&gemmini_lls_solver, &solver_args);
+  }
+
+  auto chol_end = chrono::high_resolution_clock::now();
+
+  auto setup_time =  chrono::duration_cast<chrono::microseconds>(setup_end - setup_start).count();
+  auto chol_time =  chrono::duration_cast<chrono::microseconds>(chol_end - setup_end).count();
+
+  cout << "Setup time: " << setup_time << " us" << endl;
+  cout << "Chol time: " << chol_time << " us" << endl;
 
   for(sharedClique clique : reverseCliques) {
       if(!clique->isLastRow()) {
-        const auto& blockIndices = clique->blockIndices;
-        for(int i = 0; i < clique->cliqueSize(); i++) {
-          auto&[key, row, height] = blockIndices[i];
-            Key unmappedKey = unmapKey(key);
-            delta_ptr->at(unmappedKey) = Eigen::Map<Eigen::Matrix<GEMMINI_TYPE, Eigen::Dynamic, 1>>(x_data.data() + global_key_start_row[key], height).cast<double>();
-        }
+          const auto& blockIndices = clique->blockIndices;
+          for(int i = 0; i < clique->cliqueSize(); i++) {
+              auto&[key, row, height] = blockIndices[i];
+              Key unmappedKey = unmapKey(key);
+              delta_ptr->at(unmappedKey) = Eigen::Map<Eigen::Matrix<GEMMINI_TYPE, Eigen::Dynamic, 1>>(x_data.data() + global_key_start_row[key], height).cast<double>();
+          }
       }
   }
 
@@ -2962,6 +3112,37 @@ NonlinearFactor::shared_ptr CholeskyEliminationTree::nonlinearFactorAt(FactorInd
   size_t realFactorIndex = factorIndexTransformMap_[factorIndex];
   return factors_[realFactorIndex]->nonlinearFactor(); 
 }
+
+void CholeskyEliminationTree::injectFullTree(istream& is) {
+  string line;
+  getline(is, line);
+
+  throw std::runtime_error("Not implemented yet");
+}
+
+void CholeskyEliminationTree::injectDelta(istream& is, VectorValues* delta_ptr) {
+  string line;
+  getline(is, line);
+
+  int numKeys;
+  is >> numKeys;
+
+  if(numKeys != orderingToKey_.size() - 1) {
+    throw std::runtime_error("Number of keys in delta does not match number of keys in tree " + to_string(numKeys) + " " + to_string(orderingToKey_.size() - 1));
+  }
+
+  for(RemappedKey remappedKey = 1; remappedKey < orderingToKey_.size(); remappedKey++) {
+    Key unmappedKey = unmapKey(remappedKey);
+    int width = colWidth(remappedKey);
+    Eigen::VectorXd delta(width);
+    for(int i = 0; i < width; i++) {
+      is >> delta(i);
+    }
+    delta_ptr->at(unmappedKey) = delta;
+  }
+
+}
+
 
 void CholeskyEliminationTree::extractSubtree(std::ostream& os, int size) const {
   queue<sharedClique> q;

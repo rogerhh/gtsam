@@ -59,6 +59,10 @@ int main(int argc, char *argv[]) {
     bool print_pred = false;
     bool print_traj = false;
     bool print_values = false;
+    bool print_delta = false;
+    string inject_delta_dir = "";
+    string skip_steps_file = "";
+    float ra_latency_ms = 33.3;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -78,6 +82,10 @@ int main(int argc, char *argv[]) {
         {"print_dataset", no_argument, 0, 150},
         {"print_pred", no_argument, 0, 151},
         {"print_traj", no_argument, 0, 152},
+        {"inject_delta_dir", required_argument, 0, 155},
+        {"print_delta", no_argument, 0, 156},
+        {"skip_steps_file", required_argument, 0, 157},
+        {"ra_latency_ms", required_argument, 0, 158},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -131,6 +139,18 @@ int main(int argc, char *argv[]) {
             case 152:
                 print_traj = true;
                 break;
+            case 155:
+                inject_delta_dir = string(optarg);
+                break;
+            case 156:
+                print_delta = true;
+                break;
+            case 157:
+                skip_steps_file = string(optarg);
+                break;
+            case 158:
+                ra_latency_ms = atof(optarg);
+                break;
             default:
                 cerr << "Unrecognized option" << endl;
                 exit(1);
@@ -147,6 +167,23 @@ int main(int argc, char *argv[]) {
         int t;
         while(num_threads_fin >> t) {
             step_num_threads.push_back(t);
+        }
+    }
+
+    enum StepStatus {WITH_VALUE = 0, NO_NUMERIC = 1, NO_VALUE = 2, WITH_VALUE_GEMMINI = 3};
+
+    vector<StepStatus> skip_steps_status;
+    if(skip_steps_file != "") {
+        ifstream skip_steps_fin(skip_steps_file);
+        if(skip_steps_fin.is_open()) {
+            int num_steps;
+            skip_steps_fin >> num_steps;
+            skip_steps_status.resize(num_steps, WITH_VALUE);
+            for(int i = 0; i < num_steps; i++) {
+                int status;
+                skip_steps_fin >> status;
+                skip_steps_status[i] = static_cast<StepStatus>(status);
+            }
         }
     }
 
@@ -187,6 +224,35 @@ int main(int argc, char *argv[]) {
     Values newVariables;
     NonlinearFactorGraph newFactors;
     for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
+
+        StepStatus step_status = step < skip_steps_status.size()? 
+                                    skip_steps_status[step] : WITH_VALUE;
+        cout << "step = " << step << ", step_status = " << step_status << endl;
+
+        bool use_gemmini = false, no_numeric = false, no_values;
+        switch(step_status) {
+            case NO_NUMERIC: 
+                use_gemmini = true;
+                no_numeric = true;
+                no_values = false;
+                break;
+            case NO_VALUE:
+                use_gemmini = true;
+                no_numeric = false;
+                no_values = true;
+                break;
+            case WITH_VALUE_GEMMINI:
+                use_gemmini = true;
+                no_numeric = false;
+                no_values = false;
+                break;
+            case WITH_VALUE:
+            default:
+                use_gemmini = false;
+                no_numeric = false;
+                no_values = false;
+                break;
+        }
 
         // Collect measurements and new variables for the current step
         if(step == 1) {
@@ -269,71 +335,32 @@ int main(int argc, char *argv[]) {
             }
 
             cout << "num_threads = " << num_threads << endl;
-            isam2.update_resource_aware(newFactors, newVariables, params, num_threads);
+            isam2.update_resource_aware(newFactors, newVariables, params, 
+                                        ra_latency_ms, num_threads,
+                                        unordered_set<Key>(), unordered_set<Key>(), 
+                                        use_gemmini, no_numeric, no_values);
             auto update_end = chrono::high_resolution_clock::now();
+
+            // Inject delta
+            if(step_status != WITH_VALUE && step_status != WITH_VALUE_GEMMINI) {
+                string delta_infile = inject_delta_dir + "/step-" + to_string(step) + "-delta.out";
+                ifstream delta_fin(delta_infile);
+
+                if(!delta_fin.is_open()) {
+                    cerr << "Cannot open file: " << delta_infile << endl;
+                    exit(1);
+                }
+                cout << "injecting delta" << endl;
+                isam2.injectDelta(delta_fin);
+            }
+
             estimate = isam2.calculateEstimate();
             auto calc_end = chrono::high_resolution_clock::now();
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
 
-            if(step % print_frequency == 0) {
-                // estimate = isam2.calculateEstimate();
-                // cout << "Theta = " << endl;
-                // estimate.print();
-            }
-            if(step >= num_steps) {
-                break;
-            }
-            
             last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             cout << "chi2 = " << last_chi2 << endl;
-
-            // last_chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
-            // print_count++;
-            // if(print_frequency != 0 && print_count % print_frequency == 0) {
-            //     cout << "step = " << step << ", Chi2 = " << last_chi2 
-            //          << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
-            // }
-
-            // if(K > 1) {
-            //     NonlinearFactorGraph dummy_nfg;
-            //     Values dummy_vals;
-            //     int iter = 0;
-
-            //     while(1) {
-            //         if(last_chi2 <= epsilon) {
-            //             break;
-            //         }
-            //         auto start = chrono::high_resolution_clock::now();
-            //         isam2.update(dummy_nfg, dummy_vals);
-            //         auto update_end = chrono::high_resolution_clock::now();
-            //         estimate = isam2.calculateEstimate();
-            //         auto calc_end = chrono::high_resolution_clock::now();
-            //         d1 += chrono::duration_cast<chrono::microseconds>
-            //                     (update_end - start).count();
-            //         d2 += chrono::duration_cast<chrono::microseconds>
-            //                     (calc_end - update_end).count();
-
-            //         double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
-
-            //         if(print_frequency != 0 && print_count % print_frequency == 0) {
-            //             cout << "step = " << step << ", Chi2 = " << last_chi2 
-            //                 << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
-            //         }
-
-            //         if(abs(last_chi2 - chi2) < d_error) {
-            //             break;
-            //         }
-
-            //         last_chi2 = chi2;
-            //         iter++;
-            //         if(iter >= max_iter) {
-            //             cout << "Nonlinear optimization exceed max iterations: " 
-            //                  << iter << " >= " << max_iter << ", chi2 = " << chi2 << endl;
-            //             break;
-            //         }
-            //     }
-            // }
 
             newVariables.clear();
             newFactors = NonlinearFactorGraph();
@@ -353,6 +380,18 @@ int main(int argc, char *argv[]) {
                   if(print_values) {
                     isam2.extractDelta(fout);
                   }
+                }
+
+                if(print_delta) {
+                  string outfile = dataset_outdir + "/step-" + to_string(step) + "-delta.out";
+                  ofstream fout(outfile);
+
+                  if(!fout.is_open()) {
+                    cerr << "Cannot open file: " << outfile << endl;
+                    exit(1);
+                  }
+
+                  isam2.extractDelta(fout);
                 }
 
                 if(print_pred) {
@@ -381,6 +420,16 @@ int main(int argc, char *argv[]) {
                   estimate.print_kitti_pose3(traj_fout);
                 }
               }
+
+            }
+
+            if(step % print_frequency == 0) {
+                // estimate = isam2.calculateEstimate();
+                // cout << "Theta = " << endl;
+                // estimate.print();
+            }
+            if(step >= num_steps) {
+                break;
             }
         }
         K_count++;

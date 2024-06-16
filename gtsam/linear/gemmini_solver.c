@@ -18,7 +18,6 @@ int num_active_nodes = 0;
 typedef struct worker_args_t {
     int thread_id;
     int step;
-    bool no_values;
     lls_solver_args* solver_args;
 } worker_args;
 
@@ -26,9 +25,9 @@ void* worker_cholesky(void* args_ptr) {
 
     worker_args* args = (worker_args*) args_ptr;
     int thread_id = args->thread_id;
-    bool no_values = args->no_values;
 
     lls_solver_args* solver_args = args->solver_args;
+    bool no_values = solver_args->no_values;
     int step = solver_args->step;
     int true_step = step;
     int nnodes = solver_args->nnodes;
@@ -160,6 +159,7 @@ void* worker_cholesky(void* args_ptr) {
         }
 
         if(marked) {
+            printf("no_values = %d\n", no_values);
             if(no_values) {
                 // Manually insert 1 in the diagonal
                 float* ABC_col = ABC;
@@ -245,9 +245,9 @@ void* worker_cholesky(void* args_ptr) {
 void* worker_backsolve(void* args_ptr) {
     worker_args* args = (worker_args*) args_ptr;
     int thread_id = args->thread_id;
-    bool no_values = args->no_values;
 
     lls_solver_args* solver_args = args->solver_args;
+    bool no_values = solver_args->no_values;
     int step = solver_args->step;
     int true_step = step;
     int nnodes = solver_args->nnodes;
@@ -330,6 +330,8 @@ void lls_solver_destroy(lls_solver* solver) {
 void lls_solver_solve(lls_solver* solver, lls_solver_args* solver_args) {
 
     // Initialize variables
+    const int num_threads = solver->num_threads;
+
     int step = solver_args->step;
     int nnodes = solver_args->nnodes;
     bool* node_marked = solver_args->node_marked;
@@ -404,14 +406,12 @@ void lls_solver_solve(lls_solver* solver, lls_solver_args* solver_args) {
     node_workspaces = malloc(nnodes * sizeof(float*));
     memset(node_workspaces, 0, nnodes * sizeof(float*));
 
-    const int num_threads = 2;
     pthread_t threads[num_threads];
     worker_args args[num_threads];
     for(int thread = 0; thread < num_threads; thread++) {
         args[thread].thread_id = thread;
         args[thread].step = step;
         args[thread].solver_args = solver_args;
-        args[thread].no_values = false;
         pthread_create(&threads[thread], NULL, worker_cholesky, &args[thread]);
     }
 

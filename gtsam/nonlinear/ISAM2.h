@@ -193,9 +193,21 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
                              const NonlinearFactorGraph& newFactors,
                              const Values& newTheta,
                              const ISAM2UpdateParams& updateParams,
+                             const float latency_ms = 33.3,
                              const int num_threads = 1,
                              const std::unordered_set<Key>& allFixedKeys = std::unordered_set<Key>(),
-                             const std::unordered_set<Key>& allMarginalizedKeys = std::unordered_set<Key>());
+                             const std::unordered_set<Key>& allMarginalizedKeys = std::unordered_set<Key>(),
+                             bool use_gemmini = false,
+                             bool no_numeric = false,
+                             bool no_values = false);
+
+  void injectFullTree(std::istream& is) {
+    eTree_.injectFullTree(is);
+  }
+
+  void injectDelta(std::istream& is) {
+    eTree_.injectDelta(is, &delta_);
+  }
 
   /** Marginalize out variables listed in leafKeys.  These keys must be leaves
    * in the BayesTree.  Throws MarginalizeNonleafException if non-leaves are
