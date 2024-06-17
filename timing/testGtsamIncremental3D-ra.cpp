@@ -343,7 +343,7 @@ int main(int argc, char *argv[]) {
 
             // Inject delta
             if(step_status != WITH_VALUE) {
-                string delta_infile = inject_delta_dir + "/step-" + to_string(step) + "-delta.out";
+                string delta_infile = inject_delta_dir + "/step-" + to_string(step) + "_delta.out";
                 ifstream delta_fin(delta_infile);
 
                 if(!delta_fin.is_open()) {

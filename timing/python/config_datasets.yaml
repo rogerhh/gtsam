@@ -80,17 +80,17 @@ metadata:
     recompile: true     # True if C++ sources changed
     make_flags: "-j4"
     target_binary:
-        - testGtsamIncremental
-        - testGtsamIncremental3D
-        - testGtsamIncremental-ra
-        - testGtsamIncremental3D-ra
-        - testGtsamIncremental-vio
-        - testGtsamIncremental3D-vio
-        - testGtsamIncremental-treegen
-        - testGtsamIncremental3D-treegen
-        - testGtsamIncremental-datasetgen
+      # - testGtsamIncremental
+      # - testGtsamIncremental3D
+      # - testGtsamIncremental-ra
+      # - testGtsamIncremental3D-ra
+      # - testGtsamIncremental-vio
+      # - testGtsamIncremental3D-vio
+      #  - testGtsamIncremental-treegen
+      #  - testGtsamIncremental3D-treegen
+      #  - testGtsamIncremental-datasetgen
         - testGtsamIncremental3D-datasetgen
-        - testGtsamIncremental3D-lru
+      #  - testGtsamIncremental3D-lru
 
 # Resource aware
 RA:
@@ -191,7 +191,7 @@ VIO:
     # - CAB1
     # - CAB1-smallnoise
     # - CAB7000
-    - CAB7000-smallnoise
+    # - CAB7000-smallnoise
     # - CSAIL
     # - sphere2500
     # - sphere2
@@ -208,7 +208,7 @@ VIO:
 # Legacy output directors
 Legacy:
     runs:
-    # - seah_sphere
+    - seah_sphere
     # - seah_incremental_CAB7000
     # - seah_incremental_CAB464
     # - seah_incremental_CAB1_num_threads-1
