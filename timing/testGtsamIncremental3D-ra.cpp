@@ -234,7 +234,7 @@ int main(int argc, char *argv[]) {
             case NO_NUMERIC: 
                 use_gemmini = true;
                 no_numeric = true;
-                no_values = false;
+                no_values = true;
                 break;
             case NO_VALUE:
                 use_gemmini = true;
@@ -342,7 +342,7 @@ int main(int argc, char *argv[]) {
             auto update_end = chrono::high_resolution_clock::now();
 
             // Inject delta
-            if(step_status != WITH_VALUE && step_status != WITH_VALUE_GEMMINI) {
+            if(step_status != WITH_VALUE) {
                 string delta_infile = inject_delta_dir + "/step-" + to_string(step) + "-delta.out";
                 ifstream delta_fin(delta_infile);
 

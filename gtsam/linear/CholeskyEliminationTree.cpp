@@ -6,6 +6,7 @@
 * @date    Feb. 8, 2023
 */
 
+#include <chrono>
 #include <gtsam/base/types.h>
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
@@ -790,6 +791,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
   //                     node->lambdaStructure.find(node->key),
   //                     node->lambdaStructure.end());
 
+
   // Merge column structure from children cliques
   for(sharedClique childClique : clique->children) {
       if(childClique->orderingVersion != orderingVersion_) {
@@ -801,27 +803,6 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
 
   clique->populateBlockIndices(colStructure);
 
-  // if(clique->nodes.front()->key != 0 &&
-  //     clique->children.size() == 1) {
-  //   // Clique 0 cannot be merged and will always be root
-  //   sharedClique childClique = *(clique->children.begin());
-  //   if(childClique->marked() 
-  //       && colStructure.size() == childClique->blockIndices.size() - childClique->cliqueSize()) {
-  //     clique->mergeClique2(childClique);
-  //     // Need to update clique pointer to current clique, which is the child clique
-  //     assert(childClique.unique());
-  //     childClique.reset();
-
-  //   }
-  //   // gemmini-integrate: trying to merge more cliques together
-  //   else if(childClique->marked() 
-  //       && childClique->cliqueSize() < 4) {
-  //     clique->mergeClique2(childClique);
-  //     // Need to update clique pointer to current clique, which is the child clique
-  //     assert(childClique.unique());
-  //     childClique.reset();
-  //   }
-  // }
   
   if(clique->nodes.front()->key != 0) {
     // Clique 0 cannot be merged and will always be root
@@ -866,6 +847,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
     }
     root_ = clique;
   }
+
 }
 
 void CholeskyEliminationTree::remapConstrainedKeys(
@@ -2049,6 +2031,10 @@ bool CholeskyEliminationTree::valuesChanged(const Vector& diff, double tol) {
   return diff.lpNorm<Eigen::Infinity>() >= tol;
 }
 
+int64_t setup_node1_time = 0;
+int64_t setup_node2_time = 0;
+int64_t setup_node3_time = 0;
+
 void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
   // Convenience variables
   int thread_id = args.thread_id;
@@ -2230,10 +2216,14 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
             int factorWidth = factorMatrix.cols();
 
             int factor_num_blks = 0;
-            vector<int> factor_A_blk_start;
-            vector<int> factor_B_blk_start;
-            vector<int> factor_blk_width;
-            vector<float> factorData(factorHeight * factorWidth, 0);
+            node_factor_data[index].emplace_back(factorHeight * factorWidth, 0);
+            node_factor_A_blk_start[index].emplace_back();
+            node_factor_B_blk_start[index].emplace_back();
+            node_factor_blk_width[index].emplace_back();
+            vector<float>& factorData = node_factor_data[index].back();
+            vector<int>& factor_A_blk_start = node_factor_A_blk_start[index].back();
+            vector<int>& factor_B_blk_start = node_factor_B_blk_start[index].back();
+            vector<int>& factor_blk_width = node_factor_blk_width[index].back();
 
             bool hasMarkedKey = false;
             int curRow = 0;
@@ -2286,17 +2276,14 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
               node_num_factors[index]++;
               node_factor_height[index].push_back(factorWidth);
               node_factor_width[index].push_back(factorHeight);
-              node_factor_data[index].emplace_back(factorData);
               node_factor_num_blks[index].push_back(factor_A_blk_start.size());
-              node_factor_A_blk_start[index].emplace_back(factor_A_blk_start);
-              node_factor_B_blk_start[index].emplace_back(factor_B_blk_start);
-              node_factor_blk_width[index].emplace_back(factor_blk_width);
             }
 
           }
         }
 
       }
+
     }
 
   }
@@ -2397,9 +2384,11 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   vector<GemminiSetupArgs> setup_args_list(num_threads, setup_args);
   vector<thread> threads;
 
-  auto setup_start = chrono::high_resolution_clock::now();
-
   vector<cpu_set_t> cpu_sets(num_threads);
+
+  setup_node1_time = 0;
+  setup_node2_time = 0;
+  setup_node3_time = 0;
 
   for(int t = 0; t < num_threads; t++) {
     CPU_ZERO(&(cpu_sets[t]));
@@ -2412,7 +2401,6 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   for(int t = 0; t < num_threads; t++) {
     threads[t].join();
   }
-
 
   lls_solver_args solver_args;
 
@@ -2476,20 +2464,10 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   solver_args.node_factor_B_blk_start = node_factor_B_blk_start_vec.data();
   solver_args.node_factor_blk_width = node_factor_blk_width_vec.data();
 
-  auto setup_end = chrono::high_resolution_clock::now();
-
   if(!no_numeric) {
     gemmini_lls_solver.num_threads = num_threads;
     lls_solver_solve(&gemmini_lls_solver, &solver_args);
   }
-
-  auto chol_end = chrono::high_resolution_clock::now();
-
-  auto setup_time =  chrono::duration_cast<chrono::microseconds>(setup_end - setup_start).count();
-  auto chol_time =  chrono::duration_cast<chrono::microseconds>(chol_end - setup_end).count();
-
-  cout << "Setup time: " << setup_time << " us" << endl;
-  cout << "Chol time: " << chol_time << " us" << endl;
 
   for(sharedClique clique : reverseCliques) {
       if(!clique->isLastRow()) {

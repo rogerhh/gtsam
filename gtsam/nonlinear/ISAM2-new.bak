@@ -579,15 +579,10 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
   keyDeltaVec = update.CheckRelinearizationFull2(delta_, params_.relinearizeThreshold);
 
 
-  auto runtime_start = chrono::high_resolution_clock::now();
   const int64_t remainingCycles = latency_ms >= 0? latency_ms * 1e6 : INT64_MAX;
   eTree_.pickRelinKeys(keyDeltaVec, allFixedKeys, allMarginalizedKeys, remainingCycles, num_threads,
       *boost::get<double>(&params_.relinearizeThreshold), &newRelinKeys);
   relinKeys = newRelinKeys;
-  auto runtime_end = chrono::high_resolution_clock::now();
-  auto runtime_time =  chrono::duration_cast<chrono::microseconds>(runtime_end - runtime_start).count();
-
-  cout << "runtime_time = " << runtime_time << " us" << endl;
 
   if (!relinKeys.empty()) {
     // 6. Update linearization point for marked variables:
@@ -651,9 +646,7 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
       eTree_.updateOrdering(markedKeys, observedKeys, updateParams);
   }
 
-  auto sym_start = chrono::high_resolution_clock::now();
   eTree_.symbolicElimination(markedKeys);
-  auto sym_end = chrono::high_resolution_clock::now();
 
   // If no numeric, go through the gemmini set up anyways to set correct data structures
   if(no_numeric || use_gemmini) {
@@ -667,14 +660,6 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
 
     eTree_.backsolve(&delta_, gaussNewtonParams.wildfireThreshold);
   }
-
-  auto chol_end = chrono::high_resolution_clock::now();
-
-  auto sym_time =  chrono::duration_cast<chrono::microseconds>(sym_end - sym_start).count();
-  auto chol_time =  chrono::duration_cast<chrono::microseconds>(chol_end - sym_end).count();
-
-  cout << "sym_time = " << sym_time << " us" << endl;
-  cout << "chol_time = " << chol_time << " us" << endl;
 
   // delta_.print();
 

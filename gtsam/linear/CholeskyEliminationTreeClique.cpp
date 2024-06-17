@@ -298,8 +298,8 @@ void CholeskyEliminationTree::Clique::mergeClique2(sharedClique childClique) {
     // First merge blockIndices
     int i1 = 0, i2 = 0;
     BlockIndexVector thisBlockIndices = std::move(this->blockIndices);
-    BlockIndexVector childBlockIndices = childClique->blockIndices;
-    this->blockIndices.clear();
+    const BlockIndexVector& childBlockIndices = childClique->blockIndices;
+    this->blockIndices.reserve(thisBlockIndices.size() + childBlockIndices.size());
     int curRow = 0;
     while(i1 < childBlockIndices.size() && i2 < thisBlockIndices.size()) {
       auto&[k1, _1, h1] = childBlockIndices[i1];
