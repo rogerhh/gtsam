@@ -141,6 +141,18 @@ uint64_t predict_syrk(int supernode_width, int supernode_height, bool next_memse
   return C_time + next_memset_time;
 }
 
+uint64_t predict_restore(int supernode_width, int supernode_height) {
+  uint64_t C_time = 0;
+  int min_bw = MIN(DRAM_BITS, TL_BITS);
+  int eff_height = ceil_divide_int(supernode_height, DIM)*DIM;
+  int eff_width = ceil_divide_int(supernode_width, DIM)*DIM;
+  uint64_t C_comp_time = (eff_height * eff_width * eff_width) / (DIM  * DIM);
+  uint64_t C_mem_time = ((eff_width * 32) / min_bw * eff_height * 2 + (eff_width* 32) / min_bw * eff_height * 2);
+  C_mem_time += (eff_height * 32) / DRAM_BITS * eff_height; // DRAM -> L2
+  C_time += MAX(C_comp_time, C_mem_time) + MIN(C_comp_time, C_mem_time);
+  return C_time;
+}
+
 uint64_t predict_node_add(int supernode_height, int supernode_width){
   int min_bw = MIN(DRAM_BITS, TL_BITS);
   int C_dim = supernode_height - supernode_width;
