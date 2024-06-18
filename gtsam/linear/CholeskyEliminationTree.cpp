@@ -191,6 +191,7 @@ int64_t CholeskyEliminationTree::computeCost(
     clique->nextCostStatus = COST_MARKED;
     updatedCliques->push_back(clique);
 
+    /*
     // Go down unmarked descendants of the marked node
     vector<sharedClique> stack;
     for(sharedClique childClique : clique->children) {
@@ -225,8 +226,8 @@ int64_t CholeskyEliminationTree::computeCost(
         cout << "Unexpected cost status for clique: " << *curClique << " status: " << curClique->nextCostStatus << " parent: " << *curClique->parent() << endl;
         exit(1);
       }
-
     }
+    */
     clique = clique->parent();
   }
 
@@ -367,6 +368,10 @@ void CholeskyEliminationTree::pickRelinKeys(
 
   vector<sharedClique> allUpdatedCliques;
 
+  Clique::model1_cycles = 0;
+  Clique::model2_cycles = 0;
+  auto tree_sel1_start = chrono::high_resolution_clock::now();
+
   int64_t new_factor_cost = 0;
 
   for(RemappedKey remappedKey : affectedOldRemappedKeys) {
@@ -376,23 +381,29 @@ void CholeskyEliminationTree::pickRelinKeys(
 
     commitCost(updatedCliques, &allUpdatedCliques);
   }
+  auto tree_sel1_end = chrono::high_resolution_clock::now();
 
-  // Compute cost of backsolve
+  // // Compute cost of backsolve
   int64_t backsolve_cost = 0;
-  for(sharedNode node : nodes_) {
-    if(!node) { continue; }
-
-    if(isNewKey(node->key)) { continue; }
-
-    Key unmappedKey = unmapKey(node->key);
-
-    if(isMarginalizedKey(unmappedKey)) { continue; }
-
-    sharedClique clique = node->clique();
-    if(clique->frontKey() != node->key) { continue; }
-    if(node->key == 0 || clique == root_) { continue; }
+  for(sharedClique clique : allUpdatedCliques) {
+    if(clique == root_) { continue; }
     backsolve_cost += clique->computeCostBacksolve(num_threads);
   }
+
+  // for(sharedNode node : nodes_) {
+  //   if(!node) { continue; }
+
+  //   if(isNewKey(node->key)) { continue; }
+
+  //   Key unmappedKey = unmapKey(node->key);
+
+  //   if(isMarginalizedKey(unmappedKey)) { continue; }
+
+  //   sharedClique clique = node->clique();
+  //   if(clique->frontKey() != node->key) { continue; }
+  //   if(node->key == 0 || clique == root_) { continue; }
+  //   backsolve_cost += clique->computeCostBacksolve(num_threads);
+  // }
 
   remainingCycles -= new_factor_cost + backsolve_cost;
 
@@ -404,6 +415,11 @@ void CholeskyEliminationTree::pickRelinKeys(
     return; 
   }
 
+  auto tree_sel2_end = chrono::high_resolution_clock::now();
+  cout << "model1_cycles = " << Clique::model1_cycles << endl;
+  cout << "model2_cycles = " << Clique::model2_cycles << endl;
+  cout << "tree_sel1_cycles = " << chrono::duration_cast<chrono::nanoseconds>(tree_sel1_end - tree_sel1_start).count() << endl;
+  cout << "tree_sel2_cycles = " << chrono::duration_cast<chrono::nanoseconds>(tree_sel2_end - tree_sel1_end).count() << endl;
 
   vector<pair<Key, double>> newKeyDeltaVec;
   newKeyDeltaVec.reserve(KeyDeltaVec.size());
@@ -734,9 +750,12 @@ void CholeskyEliminationTree::markKey(const RemappedKey key, RemappedKeySet* mar
   } while(curClique != nullptr);
 }
 
+uint64_t sym1_cycles = 0;
+uint64_t sym2_cycles = 0;
+
 void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKeys) {
   // cout << "[CholeskyEliminationTree] symbolicElimination()" << endl;
-
+  
   root_ = nullptr;
 
   // cout << "markedKeys: ";
@@ -750,6 +769,19 @@ void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKe
   sortedMarkedKeys.reserve(markedKeys.size());
   sortedMarkedKeys.insert(sortedMarkedKeys.begin(), markedKeys.begin(), markedKeys.end());
   sort(sortedMarkedKeys.begin(), sortedMarkedKeys.end(), orderingLess_);
+
+  
+  sym1_cycles = 0;
+  sym2_cycles = 0;
+  Clique::merge1_cycles = 0;
+  Clique::merge2_cycles = 0;
+  Clique::merge3_cycles = 0;
+  Clique::merge4_cycles = 0;
+  Clique::merge5_cycles = 0;
+  Clique::merge6_cycles = 0;
+  Clique::gather1_cycles = 0;
+  Clique::gather2_cycles = 0;
+  Clique::gather3_cycles = 0;
 
   for(const RemappedKey key : sortedMarkedKeys) {
     symbolicEliminateKey(key);
@@ -765,8 +797,21 @@ void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKe
 
   allocateStack();
 
+  cout << "merge1_cycles = " << Clique::merge1_cycles << endl;
+  cout << "merge2_cycles = " << Clique::merge2_cycles << endl;
+  cout << "merge3_cycles = " << Clique::merge3_cycles << endl;
+  cout << "merge4_cycles = " << Clique::merge4_cycles << endl;
+  cout << "merge5_cycles = " << Clique::merge5_cycles << endl;
+  cout << "merge6_cycles = " << Clique::merge6_cycles << endl;
+  cout << "gather1_cycles = " << Clique::gather1_cycles << endl;
+  cout << "gather2_cycles = " << Clique::gather2_cycles << endl;
+  cout << "gather3_cycles = " << Clique::gather3_cycles << endl;
+  cout << "LocalCliqueColumns size = " << sizeof(LocalCliqueColumns) << endl;
+  cout << "sym1_cycles = " << sym1_cycles << endl;
+  cout << "sym2_cycles = " << sym2_cycles << endl;
+
 // #ifdef DEBUG
-  checkInvariant_afterSymbolic();
+// checkInvariant_afterSymbolic();
 // #endif
 }
 
@@ -780,6 +825,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
   assert(clique->marked() == true);
 
   // Add keys induced by raw factors but only keys that are higher than this key
+  auto sym1_start = chrono::high_resolution_clock::now();
   vector<RemappedKey> colStructure;
   for(const auto& [otherKey, count] : node->lambdaStructure) {
     if(!orderingLess_(otherKey, node->key)) {
@@ -801,7 +847,12 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
       childClique->mergeColStructure(&colStructure);
   }
 
+  auto sym1_end = chrono::high_resolution_clock::now();
   clique->populateBlockIndices(colStructure);
+  auto sym2_end = chrono::high_resolution_clock::now();
+
+  sym1_cycles += chrono::duration_cast<chrono::nanoseconds>(sym1_end - sym1_start).count();
+  sym2_cycles += chrono::duration_cast<chrono::nanoseconds>(sym2_end - sym1_end).count();
 
   
   if(clique->nodes.front()->key != 0) {
@@ -2034,6 +2085,7 @@ bool CholeskyEliminationTree::valuesChanged(const Vector& diff, double tol) {
 int64_t setup_node1_time = 0;
 int64_t setup_node2_time = 0;
 int64_t setup_node3_time = 0;
+int num_linearized_factors = 0;
 
 void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
   // Convenience variables
@@ -2042,6 +2094,7 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
   const Values& theta = *args.theta;
   bool no_numeric = args.no_numeric;
   bool no_values = args.no_values;
+  bool no_setup = args.no_setup;
   mutex& node_list_lock = *args.node_list_lock;
   int* cur_node_idx = args.cur_node_idx;
   int nnodes = args.nnodes;
@@ -2204,7 +2257,18 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
             FactorStatus factorStatus = factorWrapper->status();
 
             // Then relinearize factor to linear factor
-            bool unlinearized = factorWrapper->linearizeIfNeeded(theta);
+            bool unlinearized;
+            if(!no_setup) {
+                unlinearized = factorWrapper->linearizeIfNeeded(theta);
+            }
+            else {
+                unlinearized = factorWrapper->fakeLinearizeIfNeeded(theta);
+                continue;
+            }
+
+            if(unlinearized) {
+                num_linearized_factors++;
+            }
 
             // Determine which keys are needed
             const BlockIndexVector& factorBlockIndices = factorWrapper->blockIndices();
@@ -2290,7 +2354,7 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
 
 } 
 
-void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* delta_ptr, int num_threads, bool no_numeric, bool no_values) {
+void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* delta_ptr, int num_threads, bool no_numeric, bool no_values, bool no_setup) {
   // 1. Go through all cliques
   //    If marked, 
   //        a. Make sure all factors are relinearized and set up pointers
@@ -2367,7 +2431,7 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   int cur_node_idx = 0;
 
   GemminiSetupArgs setup_args{0, 
-                              &theta, no_numeric, no_values, 
+                              &theta, no_numeric, no_values, no_setup,
                               &node_list_lock, &cur_node_idx, nnodes, 
                               node_marked, node_fixed,
                               &reverseCliques, &cliqueToIndex,
@@ -2389,6 +2453,7 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   setup_node1_time = 0;
   setup_node2_time = 0;
   setup_node3_time = 0;
+  num_linearized_factors = 0;
 
   for(int t = 0; t < num_threads; t++) {
     CPU_ZERO(&(cpu_sets[t]));
@@ -2401,6 +2466,8 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   for(int t = 0; t < num_threads; t++) {
     threads[t].join();
   }
+
+  cout << "num_linearized_factors = " << num_linearized_factors << endl;
 
   lls_solver_args solver_args;
 

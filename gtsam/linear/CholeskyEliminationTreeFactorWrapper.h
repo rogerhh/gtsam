@@ -195,6 +195,18 @@ public:
     }
     return false;
   }
+  
+  // Linearize the factor but set all matrix entries to 0
+  bool fakeLinearizeIfNeeded(const Values& theta) {
+
+    assert(status_ != REMOVING && status_ != REMOVED);
+    if(status_ == UNLINEARIZED || status_ == RELINEARIZE) {
+      status_ = LINEARIZED;
+      
+      return true;
+    }
+    return false;
+  }
 
   sharedFactor nonlinearFactor() { return nonlinearFactor_; }
 

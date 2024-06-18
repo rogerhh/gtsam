@@ -536,7 +536,8 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
                                          const unordered_set<Key>& allMarginalizedKeys,
                                          bool use_gemmini,
                                          bool no_numeric,
-                                         bool no_values) {
+                                         bool no_values,
+                                         bool no_setup) {
   // 1. Add new factors to list of factors and mark the variables involved
   // 2. Mark the variables that need to be relinearized (linearize when doing Cholesky for locality)
   // 3. Find all affected variables in the etree by traversing back up the tree from 
@@ -649,8 +650,9 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
   eTree_.symbolicElimination(markedKeys);
 
   // If no numeric, go through the gemmini set up anyways to set correct data structures
+  cout << "no_setup = " << no_setup << endl;
   if(no_numeric || use_gemmini) {
-      eTree_.gemminiSolve(theta_, &delta_, num_threads, no_numeric, no_values);
+      eTree_.gemminiSolve(theta_, &delta_, num_threads, no_numeric, no_values, no_setup);
       eTree_.backsolve_reset();
   }
   else {

@@ -67,7 +67,7 @@ string findExampleDataFile(const string &name) {
   vector<string> rootsToSearch;
 
   // Constants below are defined by CMake, see gtsam/gtsam/CMakeLists.txt
-  rootsToSearch.push_back("/root/gtsam/examples/Data");
+  // rootsToSearch.push_back("/root/gtsam/examples/Data");
   rootsToSearch.push_back(GTSAM_SOURCE_TREE_DATASET_DIR);
   rootsToSearch.push_back(GTSAM_INSTALLED_DATASET_DIR);
 

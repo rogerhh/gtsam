@@ -170,7 +170,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    enum StepStatus {WITH_VALUE = 0, NO_NUMERIC = 1, NO_VALUE = 2, WITH_VALUE_GEMMINI = 3};
+    enum StepStatus {WITH_VALUE = 0, NO_NUMERIC = 1, NO_VALUE = 2, WITH_VALUE_GEMMINI = 3, NO_SETUP = 4};
 
     vector<StepStatus> skip_steps_status;
     if(skip_steps_file != "") {
@@ -229,28 +229,38 @@ int main(int argc, char *argv[]) {
                                     skip_steps_status[step] : WITH_VALUE;
         cout << "step = " << step << ", step_status = " << step_status << endl;
 
-        bool use_gemmini = false, no_numeric = false, no_values;
+        bool use_gemmini = false, no_numeric = false, no_values = false, no_setup = false;
         switch(step_status) {
             case NO_NUMERIC: 
                 use_gemmini = true;
                 no_numeric = true;
                 no_values = true;
+                no_setup = false;
                 break;
             case NO_VALUE:
                 use_gemmini = true;
                 no_numeric = false;
                 no_values = true;
+                no_setup = false;
+                break;
+            case NO_SETUP: 
+                use_gemmini = true;
+                no_numeric = true;
+                no_values = true;
+                no_setup = true;
                 break;
             case WITH_VALUE_GEMMINI:
                 use_gemmini = true;
                 no_numeric = false;
                 no_values = false;
+                no_setup = false;
                 break;
             case WITH_VALUE:
             default:
                 use_gemmini = false;
                 no_numeric = false;
                 no_values = false;
+                no_setup = false;
                 break;
         }
 
@@ -338,7 +348,7 @@ int main(int argc, char *argv[]) {
             isam2.update_resource_aware(newFactors, newVariables, params, 
                                         ra_latency_ms, num_threads,
                                         unordered_set<Key>(), unordered_set<Key>(), 
-                                        use_gemmini, no_numeric, no_values);
+                                        use_gemmini, no_numeric, no_values, no_setup);
             auto update_end = chrono::high_resolution_clock::now();
 
             // Inject delta

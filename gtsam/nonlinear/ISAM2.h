@@ -199,7 +199,8 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
                              const std::unordered_set<Key>& allMarginalizedKeys = std::unordered_set<Key>(),
                              bool use_gemmini = false,
                              bool no_numeric = false,
-                             bool no_values = false);
+                             bool no_values = false,
+                             bool no_setup = false);
 
   void injectFullTree(std::istream& is) {
     eTree_.injectFullTree(is);

@@ -102,6 +102,10 @@ public:
 
   void setParent(sharedClique newParent);
 
+  // Set parent without detaching the original parent
+  // Assuming that the original parent will be destroyed
+  void setParent2(sharedClique newParent);
+
   // Merge parent otherClique into this clique
   void mergeClique(sharedClique otherClique);
 
@@ -237,6 +241,7 @@ public:
   CostStatus nextCostStatus = COST_UNMARKED;
   int64_t markedCost = -1;
   int64_t fixedCost = -1;
+  int64_t restoreCost = -1;
   int64_t symCost = -1;
   int64_t AtACost = -1;
   int64_t syrkCost = -1;
@@ -255,6 +260,19 @@ public:
   int subdiagSize = 0;
   int factorSize = 0;
   int lastRelinStep = 0;
+
+public:
+  static uint64_t merge1_cycles;
+  static uint64_t merge2_cycles;
+  static uint64_t merge3_cycles;
+  static uint64_t merge4_cycles;
+  static uint64_t merge5_cycles;
+  static uint64_t merge6_cycles;
+  static uint64_t gather1_cycles;
+  static uint64_t gather2_cycles;
+  static uint64_t gather3_cycles;
+  static uint64_t model1_cycles;
+  static uint64_t model2_cycles;
 
 };
 

@@ -148,7 +148,7 @@ public:
 
       const Values* theta;
 
-      bool no_numeric, no_values;
+      bool no_numeric, no_values, no_setup;
 
       std::mutex* node_list_lock;
       int* cur_node_idx;
@@ -184,7 +184,7 @@ public:
 
   void workerGemminiSetUpNode(GemminiSetupArgs args);
 
-  void gemminiSolve(const Values& theta, VectorValues* delta_ptr, int num_threads, bool no_numeric = false, bool no_values = true);
+  void gemminiSolve(const Values& theta, VectorValues* delta_ptr, int num_threads, bool no_numeric = false, bool no_values = true, bool no_setup = false);
 
   void backsolve_reset();
 
