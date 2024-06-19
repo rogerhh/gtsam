@@ -19,6 +19,7 @@
 #include <iostream>
 #include <boost/optional.hpp>
 #include <mutex>
+#include <atomic>
 
 extern "C" {
 #include <gtsam/linear/gemmini_functions.h>
@@ -144,6 +145,7 @@ public:
   // Use gemmini to solve the least squares problem
   const int MAX_BLK_HEIGHT = 24;
   struct GemminiSetupArgs {
+      int num_threads;
       int thread_id;
 
       const Values* theta;
@@ -151,6 +153,7 @@ public:
       bool no_numeric, no_values, no_setup;
 
       std::mutex* node_list_lock;
+      std::atomic<int>* counter;
       int* cur_node_idx;
       int nnodes;
 

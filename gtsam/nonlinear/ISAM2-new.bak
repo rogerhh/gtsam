@@ -600,24 +600,28 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
                           &affectedKeys,
                           &observedKeys);
 
-  for(RemappedKey k : affectedKeys) {
-    Key unmappedKey = eTree_.unmapKey(k);
-    if(allMarginalizedKeys.find(unmappedKey) != allMarginalizedKeys.end()) {
-        cout << "Marginalized unmappedKey affected: " << unmappedKey << endl;
-        exit(1);
-    }
-  }
+  // auto overhead1_start = std::chrono::high_resolution_clock::now();
+  // for(RemappedKey k : affectedKeys) {
+  //   Key unmappedKey = eTree_.unmapKey(k);
+  //   if(allMarginalizedKeys.find(unmappedKey) != allMarginalizedKeys.end()) {
+  //       cout << "Marginalized unmappedKey affected: " << unmappedKey << endl;
+  //       exit(1);
+  //   }
+  // }
 
   // This step is technically not needed, we can just do this in symbolic update
   eTree_.markAncestors(affectedKeys, &markedKeys);
 
-  for(RemappedKey k : markedKeys) {
-    Key unmappedKey = eTree_.unmapKey(k);
-    if(allMarginalizedKeys.find(unmappedKey) != allMarginalizedKeys.end()) {
-        cout << "Marginalized unmappedKey marked: " << k << endl;
-        exit(1);
-    }
-  }
+  // auto overhead2_start = std::chrono::high_resolution_clock::now();
+  // for(RemappedKey k : markedKeys) {
+  //   Key unmappedKey = eTree_.unmapKey(k);
+  //   if(allMarginalizedKeys.find(unmappedKey) != allMarginalizedKeys.end()) {
+  //       cout << "Marginalized unmappedKey marked: " << k << endl;
+  //       exit(1);
+  //   }
+  // }
+  
+  cout << "num_marked_keys: " << markedKeys.size() << endl;
 
   static int last_variable_count;
   static bool reorder_flag;

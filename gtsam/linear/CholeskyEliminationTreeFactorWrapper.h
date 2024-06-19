@@ -182,14 +182,18 @@ public:
   // Linearize the factor if it needs to be linearized. 
   // Returns true if action is done, false otherwise
   // This does not change the status of the factor yet
-  bool linearizeIfNeeded(const Values& theta) {
+  bool linearizeIfNeeded(const Values& theta, int thread_id = 0) {
 
     assert(status_ != REMOVING && status_ != REMOVED);
     if(status_ == UNLINEARIZED || status_ == RELINEARIZE) {
+      auto relin_start = std::chrono::high_resolution_clock::now();
       auto cachedLinearFactor = nonlinearFactor_->linearize(theta);
+      auto relin_end = std::chrono::high_resolution_clock::now();
       setCachedLinearMatrix(cachedLinearFactor);
 
       status_ = LINEARIZED;
+
+      relin_cycles_vec[thread_id] += std::chrono::duration_cast<std::chrono::nanoseconds>(relin_end - relin_start).count();
       
       return true;
     }
@@ -411,8 +415,10 @@ public:
 
   }
 
-
   void printKeys(std::ostream& os) const;
+
+public:
+  static std::vector<uint64_t> relin_cycles_vec;
 };
 
 } // namespace gtsam

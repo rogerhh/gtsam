@@ -6,6 +6,7 @@
 * @date    Feb. 8, 2023
 */
 
+#include <atomic>
 #include <chrono>
 #include <gtsam/base/types.h>
 #include <gtsam/inference/Ordering.h>
@@ -2089,6 +2090,7 @@ int num_linearized_factors = 0;
 
 void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
   // Convenience variables
+  int num_threads = args.num_threads;
   int thread_id = args.thread_id;
 
   const Values& theta = *args.theta;
@@ -2096,6 +2098,7 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
   bool no_values = args.no_values;
   bool no_setup = args.no_setup;
   mutex& node_list_lock = *args.node_list_lock;
+  atomic<int>& counter = *args.counter;
   int* cur_node_idx = args.cur_node_idx;
   int nnodes = args.nnodes;
 
@@ -2126,6 +2129,9 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
   vector<int>& global_key_start_row = *args.global_key_start_row;
   vector<int> key_start_row(nodes_.size());
 
+  counter.fetch_add(1, memory_order_relaxed);
+  while(counter.load(memory_order_relaxed) < num_threads);
+  atomic_thread_fence(memory_order_relaxed);
 
   const int NODE_BACTH_SIZE = 1;
 
@@ -2259,7 +2265,7 @@ void CholeskyEliminationTree::workerGemminiSetUpNode(GemminiSetupArgs args) {
             // Then relinearize factor to linear factor
             bool unlinearized;
             if(!no_setup) {
-                unlinearized = factorWrapper->linearizeIfNeeded(theta);
+                unlinearized = factorWrapper->linearizeIfNeeded(theta, thread_id);
             }
             else {
                 unlinearized = factorWrapper->fakeLinearizeIfNeeded(theta);
@@ -2428,11 +2434,12 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
 
   // Start threads to set up node data
   mutex node_list_lock;
+  atomic<int> counter(0);
   int cur_node_idx = 0;
 
-  GemminiSetupArgs setup_args{0, 
+  GemminiSetupArgs setup_args{num_threads, 0, 
                               &theta, no_numeric, no_values, no_setup,
-                              &node_list_lock, &cur_node_idx, nnodes, 
+                              &node_list_lock, &counter, &cur_node_idx, nnodes, 
                               node_marked, node_fixed,
                               &reverseCliques, &cliqueToIndex,
                               &node_parent, &node_height, &node_width, &node_data,
@@ -2454,6 +2461,7 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   setup_node2_time = 0;
   setup_node3_time = 0;
   num_linearized_factors = 0;
+  FactorWrapper::relin_cycles_vec = vector<uint64_t>(num_threads, 0);
 
   for(int t = 0; t < num_threads; t++) {
     CPU_ZERO(&(cpu_sets[t]));
@@ -2467,6 +2475,12 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
     threads[t].join();
   }
 
+  uint64_t max_relin_cycles = 0;
+  for(uint64_t cycles : FactorWrapper::relin_cycles_vec) {
+    max_relin_cycles = max(max_relin_cycles, cycles);
+  }
+
+  cout << "max_relin_cycles = " << max_relin_cycles << endl;
   cout << "num_linearized_factors = " << num_linearized_factors << endl;
 
   lls_solver_args solver_args;
