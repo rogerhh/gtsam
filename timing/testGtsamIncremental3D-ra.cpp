@@ -17,6 +17,8 @@
 #include <unistd.h>
 #include <getopt.h>
 
+// #include "./baremetal_tests/sphere_delta_header/incremental_delta.h"
+
 using namespace std;
 using namespace gtsam;
 using namespace gtsam::symbol_shorthand;
@@ -353,6 +355,13 @@ int main(int argc, char *argv[]) {
 
             // Inject delta
             if(step_status != WITH_VALUE) {
+#ifdef INJECT_DELTA_HEADER
+                cout << "injecting delta from header" << endl;
+                isam2.injectDelta(INJECT_DELTA_dim, 
+                                  INJECT_DELTA_step_indices_n[step],
+                                  INJECT_DELTA_step_indices[step], 
+                                  INJECT_DELTA_step_delta_data[step]);
+#else
                 string delta_infile = inject_delta_dir + "/step-" + to_string(step) + "_delta.out";
                 ifstream delta_fin(delta_infile);
 
@@ -362,6 +371,7 @@ int main(int argc, char *argv[]) {
                 }
                 cout << "injecting delta" << endl;
                 isam2.injectDelta(delta_fin);
+#endif
             }
 
             estimate = isam2.calculateEstimate();

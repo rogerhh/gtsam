@@ -193,6 +193,7 @@ public:
 
   void injectFullTree(std::istream& is);
   void injectDelta(std::istream& is, VectorValues* delta_ptr);
+  void injectDelta(int dim, int len, const int* indices, const double* delta_data, VectorValues* delta_ptr);
 
   // Add all ancestors of unmappedKey to additionalKeys. This is used in marginalization
   void getAffectedKeys(Key unmappedKey, std::set<Key>& additionalKeys) const;

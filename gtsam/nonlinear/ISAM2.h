@@ -210,6 +210,10 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
     eTree_.injectDelta(is, &delta_);
   }
 
+  void injectDelta(int dim, int len, const int* indices, const double* delta_data) {
+    eTree_.injectDelta(dim, len, indices, delta_data, &delta_);
+  }
+
   /** Marginalize out variables listed in leafKeys.  These keys must be leaves
    * in the BayesTree.  Throws MarginalizeNonleafException if non-leaves are
    * requested to be marginalized.  Marginalization leaves a linear

@@ -581,6 +581,7 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
 
 
   const int64_t remainingCycles = latency_ms >= 0? latency_ms * 1e6 : INT64_MAX;
+  cout << "Remaining cycles = " << remainingCycles << endl;
   eTree_.pickRelinKeys(keyDeltaVec, allFixedKeys, allMarginalizedKeys, remainingCycles, num_threads,
       *boost::get<double>(&params_.relinearizeThreshold), &newRelinKeys);
   relinKeys = newRelinKeys;
@@ -650,7 +651,6 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
   eTree_.symbolicElimination(markedKeys);
 
   // If no numeric, go through the gemmini set up anyways to set correct data structures
-  cout << "no_setup = " << no_setup << endl;
   if(no_numeric || use_gemmini) {
       eTree_.gemminiSolve(theta_, &delta_, num_threads, no_numeric, no_values, no_setup);
       eTree_.backsolve_reset();

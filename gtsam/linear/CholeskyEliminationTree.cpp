@@ -537,20 +537,20 @@ void CholeskyEliminationTree::pickRelinKeys(
     }
   }
 
-  // cout << "Remaining cycles: " << remainingCycles 
-  //      << " Total relin keys: " << newKeyDeltaVec.size() 
-  //      << " num relin: " << newRelinKeys->size() 
-  //      << " relin_cost " << total_relin_cost 
-  //      <<  " highest unpicked delta: " << highestUnpickedDelta 
-  //      << " force_thresh: " << force_thresh 
-  //      << " num_min_force_thresh_keys: " << num_min_force_thresh_keys 
-  //      << " total_cost: " << totalCost << endl;
+  cout << "Remaining cycles: " << remainingCycles 
+       << " Total relin keys: " << newKeyDeltaVec.size() 
+       << " num relin: " << newRelinKeys->size() 
+       << " relin_cost " << total_relin_cost 
+       <<  " highest unpicked delta: " << highestUnpickedDelta 
+       << " force_thresh: " << force_thresh 
+       << " num_min_force_thresh_keys: " << num_min_force_thresh_keys 
+       << " total_cost: " << totalCost << endl;
 
-  // cout << "Relin keys: ";
-  // for(auto k : *newRelinKeys) {
-  //   cout << k << " ";
-  // }
-  // cout << endl;
+  cout << "Relin keys: ";
+  for(auto k : *newRelinKeys) {
+    cout << k << " ";
+  }
+  cout << endl;
 
 }
 
@@ -3186,6 +3186,18 @@ void CholeskyEliminationTree::injectDelta(istream& is, VectorValues* delta_ptr) 
     delta_ptr->at(unmappedKey) = delta;
   }
 
+}
+
+void CholeskyEliminationTree::injectDelta(int dim, int len, const int* indices, 
+                                          const double* delta_data, VectorValues* delta_ptr) {
+    for(int i = 0; i < len; i++) {
+        int index = indices[i];
+        Eigen::VectorXd delta(dim);
+        for(int j = 0; j < dim; j++) {
+        delta(j) = delta_data[i * dim + j];
+        }
+        delta_ptr->at(index) = delta;
+    }
 }
 
 
