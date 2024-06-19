@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-// #include "./baremetal_tests/sphere_delta_header/incremental_delta.h"
+#include "./baremetal_tests/incremental_CAB1_steps-464_period-1_delta_header/incremental_delta.h"
 
 using namespace std;
 using namespace gtsam;
@@ -64,7 +64,7 @@ int main(int argc, char *argv[]) {
     bool print_delta = false;
     string inject_delta_dir = "";
     string skip_steps_file = "";
-    float ra_latency_ms = 33.3;
+    float ra_latency_ms = -1;
 
     // Get experiment setup
     static struct option long_options[] = {

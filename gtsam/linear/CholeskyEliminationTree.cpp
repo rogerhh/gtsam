@@ -537,20 +537,20 @@ void CholeskyEliminationTree::pickRelinKeys(
     }
   }
 
-  cout << "Remaining cycles: " << remainingCycles 
-       << " Total relin keys: " << newKeyDeltaVec.size() 
-       << " num relin: " << newRelinKeys->size() 
-       << " relin_cost " << total_relin_cost 
-       <<  " highest unpicked delta: " << highestUnpickedDelta 
-       << " force_thresh: " << force_thresh 
-       << " num_min_force_thresh_keys: " << num_min_force_thresh_keys 
-       << " total_cost: " << totalCost << endl;
+  // cout << "Remaining cycles: " << remainingCycles 
+  //      << " Total relin keys: " << newKeyDeltaVec.size() 
+  //      << " num relin: " << newRelinKeys->size() 
+  //      << " relin_cost " << total_relin_cost 
+  //      <<  " highest unpicked delta: " << highestUnpickedDelta 
+  //      << " force_thresh: " << force_thresh 
+  //      << " num_min_force_thresh_keys: " << num_min_force_thresh_keys 
+  //      << " total_cost: " << totalCost << endl;
 
-  cout << "Relin keys: ";
-  for(auto k : *newRelinKeys) {
-    cout << k << " ";
-  }
-  cout << endl;
+  // cout << "Relin keys: ";
+  // for(auto k : *newRelinKeys) {
+  //   cout << k << " ";
+  // }
+  // cout << endl;
 
 }
 
