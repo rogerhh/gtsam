@@ -480,8 +480,6 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // This step is technically not needed, we can just do this in symbolic update
   eTree_.markAncestors(affectedKeys, &markedKeys);
 
-  cout << "relinKeys size = " << relinKeys.size() << endl;
-
   if(markedKeys.empty()) { return result; }
 
   static int last_variable_count;
@@ -509,9 +507,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   }
 
   eTree_.symbolicElimination(markedKeys);
-  cout << "after sym" << endl;
   eTree_.choleskyElimination(theta_);
-  cout << "after chol" << endl;
 
   const ISAM2GaussNewtonParams& gaussNewtonParams =
       boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);
