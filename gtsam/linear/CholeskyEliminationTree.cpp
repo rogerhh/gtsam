@@ -6,8 +6,6 @@
 * @date    Feb. 8, 2023
 */
 
-#include <atomic>
-#include <chrono>
 #include <gtsam/base/types.h>
 #include <gtsam/inference/Ordering.h>
 #include <gtsam/linear/CholeskyEliminationTree.h>
@@ -16,6 +14,7 @@
 #include <gtsam/linear/CholeskyEliminationTreeFactorWrapper.h>
 #include <gtsam/linear/CholeskyEliminationTreeTypes.h>
 #include <gtsam/linear/CliqueColumns.h>
+#include <gtsam/linear/Timepoint.h>
 #include <gtsam/3rdparty/CCOLAMD/Include/ccolamd.h>
 #include <Eigen/Dense>
 #include <Eigen/Core>
@@ -29,6 +28,7 @@
 #include <thread>
 #include <mutex>
 #include <sched.h>
+#include <atomic>
 
 extern "C" {
   #include <gtsam/linear/gemmini_solver.h>
@@ -369,9 +369,7 @@ void CholeskyEliminationTree::pickRelinKeys(
 
   vector<sharedClique> allUpdatedCliques;
 
-  Clique::model1_cycles = 0;
-  Clique::model2_cycles = 0;
-  auto tree_sel1_start = chrono::high_resolution_clock::now();
+  auto tree_sel_start = Timepoint();
 
   int64_t new_factor_cost = 0;
 
@@ -382,7 +380,6 @@ void CholeskyEliminationTree::pickRelinKeys(
 
     commitCost(updatedCliques, &allUpdatedCliques);
   }
-  auto tree_sel1_end = chrono::high_resolution_clock::now();
 
   // // Compute cost of backsolve
   int64_t backsolve_cost = 0;
@@ -416,11 +413,7 @@ void CholeskyEliminationTree::pickRelinKeys(
     return; 
   }
 
-  auto tree_sel2_end = chrono::high_resolution_clock::now();
-  cout << "model1_cycles = " << Clique::model1_cycles << endl;
-  cout << "model2_cycles = " << Clique::model2_cycles << endl;
-  cout << "tree_sel1_cycles = " << chrono::duration_cast<chrono::nanoseconds>(tree_sel1_end - tree_sel1_start).count() << endl;
-  cout << "tree_sel2_cycles = " << chrono::duration_cast<chrono::nanoseconds>(tree_sel2_end - tree_sel1_end).count() << endl;
+  auto tree_sel_end = Timepoint();
 
   vector<pair<Key, double>> newKeyDeltaVec;
   newKeyDeltaVec.reserve(KeyDeltaVec.size());
@@ -537,6 +530,8 @@ void CholeskyEliminationTree::pickRelinKeys(
       exit(1);
     }
   }
+
+  cout << "tree_sel_cycles: " << tree_sel_end - tree_sel_start << endl;
 
   // cout << "Remaining cycles: " << remainingCycles 
   //      << " Total relin keys: " << newKeyDeltaVec.size() 
@@ -757,6 +752,8 @@ uint64_t sym2_cycles = 0;
 void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKeys) {
   // cout << "[CholeskyEliminationTree] symbolicElimination()" << endl;
   
+  auto sym_start = Timepoint();
+  
   root_ = nullptr;
 
   // cout << "markedKeys: ";
@@ -771,7 +768,6 @@ void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKe
   sortedMarkedKeys.insert(sortedMarkedKeys.begin(), markedKeys.begin(), markedKeys.end());
   sort(sortedMarkedKeys.begin(), sortedMarkedKeys.end(), orderingLess_);
 
-  
   sym1_cycles = 0;
   sym2_cycles = 0;
   Clique::merge1_cycles = 0;
@@ -780,9 +776,6 @@ void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKe
   Clique::merge4_cycles = 0;
   Clique::merge5_cycles = 0;
   Clique::merge6_cycles = 0;
-  Clique::gather1_cycles = 0;
-  Clique::gather2_cycles = 0;
-  Clique::gather3_cycles = 0;
 
   for(const RemappedKey key : sortedMarkedKeys) {
     symbolicEliminateKey(key);
@@ -798,18 +791,10 @@ void CholeskyEliminationTree::symbolicElimination(const RemappedKeySet& markedKe
 
   allocateStack();
 
-  cout << "merge1_cycles = " << Clique::merge1_cycles << endl;
-  cout << "merge2_cycles = " << Clique::merge2_cycles << endl;
-  cout << "merge3_cycles = " << Clique::merge3_cycles << endl;
-  cout << "merge4_cycles = " << Clique::merge4_cycles << endl;
-  cout << "merge5_cycles = " << Clique::merge5_cycles << endl;
-  cout << "merge6_cycles = " << Clique::merge6_cycles << endl;
-  cout << "gather1_cycles = " << Clique::gather1_cycles << endl;
-  cout << "gather2_cycles = " << Clique::gather2_cycles << endl;
-  cout << "gather3_cycles = " << Clique::gather3_cycles << endl;
-  cout << "LocalCliqueColumns size = " << sizeof(LocalCliqueColumns) << endl;
-  cout << "sym1_cycles = " << sym1_cycles << endl;
-  cout << "sym2_cycles = " << sym2_cycles << endl;
+  auto sym_end = Timepoint();
+
+  uint64_t sym_cycles = sym1_cycles + Clique::merge2_cycles;
+  cout << "sym_cycles: " << sym_cycles << endl;
 
 // #ifdef DEBUG
 // checkInvariant_afterSymbolic();
@@ -826,7 +811,6 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
   assert(clique->marked() == true);
 
   // Add keys induced by raw factors but only keys that are higher than this key
-  auto sym1_start = chrono::high_resolution_clock::now();
   vector<RemappedKey> colStructure;
   for(const auto& [otherKey, count] : node->lambdaStructure) {
     if(!orderingLess_(otherKey, node->key)) {
@@ -848,12 +832,9 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
       childClique->mergeColStructure(&colStructure);
   }
 
-  auto sym1_end = chrono::high_resolution_clock::now();
+  auto sym1_start = Timepoint();
   clique->populateBlockIndices(colStructure);
-  auto sym2_end = chrono::high_resolution_clock::now();
-
-  sym1_cycles += chrono::duration_cast<chrono::nanoseconds>(sym1_end - sym1_start).count();
-  sym2_cycles += chrono::duration_cast<chrono::nanoseconds>(sym2_end - sym1_end).count();
+  auto sym1_end = Timepoint();
 
   
   if(clique->nodes.front()->key != 0) {
@@ -883,6 +864,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
       }
     }
   }
+  auto sym2_end = Timepoint();
 
   // Find parent after merging cliques
   clique->findParent();
@@ -899,6 +881,9 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
     }
     root_ = clique;
   }
+
+  sym1_cycles += sym1_end - sym1_start;
+  sym2_cycles += sym2_end - sym1_end;
 
 }
 
@@ -1453,6 +1438,8 @@ void CholeskyEliminationTree::allocateAndGatherClique(sharedClique clique, bool 
 void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
   // cout << "[CholeskyEliminationTree] choleskyElimination()" << endl;
   
+  auto chol_gtsam_start = Timepoint();
+  
   vector<pair<sharedClique, bool>> stack(1, {root_, false});
   while(!stack.empty()) {
     auto& curPair = stack.back();
@@ -1583,6 +1570,10 @@ void CholeskyEliminationTree::choleskyElimination(const Values& theta) {
   }
 
   assert(workspace_.empty());
+
+  auto chol_gtsam_end = Timepoint();
+
+  cout << "chol_gtsam_cycles: " << chol_gtsam_end - chol_gtsam_start << endl;
 
   // checkInvariant_afterCholesky();
 }
@@ -2374,6 +2365,8 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   //
   // Note: In this function, node means clique
   
+  auto setup_start = Timepoint();
+  
   vector<sharedClique> reverseCliques;
   vector<sharedClique> stack(1, root_);
   unordered_map<sharedClique, int> cliqueToIndex;
@@ -2457,9 +2450,6 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
 
   vector<cpu_set_t> cpu_sets(num_threads);
 
-  setup_node1_time = 0;
-  setup_node2_time = 0;
-  setup_node3_time = 0;
   num_linearized_factors = 0;
   FactorWrapper::relin_cycles_vec = vector<uint64_t>(num_threads, 0);
 
@@ -2479,9 +2469,6 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   for(uint64_t cycles : FactorWrapper::relin_cycles_vec) {
     max_relin_cycles = max(max_relin_cycles, cycles);
   }
-
-  cout << "max_relin_cycles = " << max_relin_cycles << endl;
-  cout << "num_linearized_factors = " << num_linearized_factors << endl;
 
   lls_solver_args solver_args;
 
@@ -2545,10 +2532,19 @@ void CholeskyEliminationTree::gemminiSolve(const Values& theta, VectorValues* de
   solver_args.node_factor_B_blk_start = node_factor_B_blk_start_vec.data();
   solver_args.node_factor_blk_width = node_factor_blk_width_vec.data();
 
+  auto setup_end = Timepoint();
+
   if(!no_numeric) {
     gemmini_lls_solver.num_threads = num_threads;
     lls_solver_solve(&gemmini_lls_solver, &solver_args);
   }
+
+  auto numeric_end = Timepoint();
+
+  cout << "num_linearized_factors: " << num_linearized_factors << endl;
+  cout << "relin_cycles: " << max_relin_cycles << endl;
+  cout << "setup_cycles: " << setup_end - setup_start << endl;
+  cout << "chol_gemmini_cycles: " << numeric_end - setup_end << endl;
 
   for(sharedClique clique : reverseCliques) {
       if(!clique->isLastRow()) {

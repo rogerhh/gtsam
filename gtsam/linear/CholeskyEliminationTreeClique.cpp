@@ -12,7 +12,6 @@
 #include <gtsam/linear/CholeskyEliminationTreeNode.h>
 #include <iostream>
 #include <cassert>
-#include <chrono>
 
 #include <gtsam/linear/model.h>
 
@@ -29,11 +28,6 @@ uint64_t CholeskyEliminationTree::Clique::merge3_cycles = 0;
 uint64_t CholeskyEliminationTree::Clique::merge4_cycles = 0;
 uint64_t CholeskyEliminationTree::Clique::merge5_cycles = 0;
 uint64_t CholeskyEliminationTree::Clique::merge6_cycles = 0;
-uint64_t CholeskyEliminationTree::Clique::gather1_cycles = 0;
-uint64_t CholeskyEliminationTree::Clique::gather2_cycles = 0;
-uint64_t CholeskyEliminationTree::Clique::gather3_cycles = 0;
-uint64_t CholeskyEliminationTree::Clique::model1_cycles = 0;
-uint64_t CholeskyEliminationTree::Clique::model2_cycles = 0;
 
 CholeskyEliminationTree::Clique::Clique(CholeskyEliminationTree* etree_in)
   : etree(etree_in), orderingVersion(etree->orderingVersion_) {}
@@ -317,7 +311,7 @@ void CholeskyEliminationTree::Clique::mergeClique2(sharedClique childClique) {
     assert(nodes.front()->key != 0);
     assert(children.find(childClique) != children.end());
 
-    auto merge1_start = chrono::high_resolution_clock::now();
+    auto merge1_start = Timepoint();
 
     // First merge blockIndices
     int i1 = 0, i2 = 0;
@@ -325,7 +319,7 @@ void CholeskyEliminationTree::Clique::mergeClique2(sharedClique childClique) {
     const BlockIndexVector& childBlockIndices = childClique->blockIndices;
     this->blockIndices.reserve(thisBlockIndices.size() + childBlockIndices.size());
     int curRow = 0;
-    auto merge1_end = chrono::high_resolution_clock::now();
+    auto merge1_end = Timepoint();
 
     while(i1 < childBlockIndices.size() && i2 < thisBlockIndices.size()) {
       auto&[k1, _1, h1] = childBlockIndices[i1];
@@ -362,7 +356,7 @@ void CholeskyEliminationTree::Clique::mergeClique2(sharedClique childClique) {
       i2++;
     }
 
-    auto merge2_end = chrono::high_resolution_clock::now();
+    auto merge2_end = Timepoint();
 
     int cliqueSize = childClique->cliqueSize() + this->cliqueSize();
 
@@ -372,13 +366,13 @@ void CholeskyEliminationTree::Clique::mergeClique2(sharedClique childClique) {
       this->nodes[i] = etree->nodes_[k];
       etree->cliques_[k] = get_ptr();
     }
-    auto merge3_end = chrono::high_resolution_clock::now();
+    auto merge3_end = Timepoint();
 
     // Detach child cliques parent
     // At this point, nothing should point to child anymore
     childClique->detachParent();
 
-    auto merge4_end = chrono::high_resolution_clock::now();
+    auto merge4_end = Timepoint();
 
     // Added clique may have children. We need to adopt the child cliques children
     for(sharedClique clique : childClique->children) {
@@ -392,19 +386,19 @@ void CholeskyEliminationTree::Clique::mergeClique2(sharedClique childClique) {
     //     childClique->setParent(get_ptr());
     // }
 
-    auto merge5_end = chrono::high_resolution_clock::now();
+    auto merge5_end = Timepoint();
 
     // Merge CliqueColumns, which are fragments of the previous Cholesky factor
     mergeGatherSources2(childClique->gatherSources);
 
-    auto merge6_end = chrono::high_resolution_clock::now();
+    auto merge6_end = Timepoint();
 
-    merge1_cycles += chrono::duration_cast<chrono::nanoseconds>(merge1_end - merge1_start).count();
-    merge2_cycles += chrono::duration_cast<chrono::nanoseconds>(merge2_end - merge1_end).count();
-    merge3_cycles += chrono::duration_cast<chrono::nanoseconds>(merge3_end - merge2_end).count();
-    merge4_cycles += chrono::duration_cast<chrono::nanoseconds>(merge4_end - merge3_end).count();
-    merge5_cycles += chrono::duration_cast<chrono::nanoseconds>(merge5_end - merge4_end).count();
-    merge6_cycles += chrono::duration_cast<chrono::nanoseconds>(merge6_end - merge5_end).count();
+    merge1_cycles += merge1_end - merge1_start;
+    merge2_cycles += merge2_end - merge1_end;
+    merge3_cycles += merge3_end - merge2_end;
+    merge4_cycles += merge4_end - merge3_end;
+    merge5_cycles += merge5_end - merge4_end;
+    merge6_cycles += merge6_end - merge5_end;
 
 }
 
@@ -420,16 +414,11 @@ void CholeskyEliminationTree::Clique::mergeGatherSources2(
   }
   else if(this->gatherSources.empty()) {
     // Case 3.2. 
-    auto gather3_start = chrono::high_resolution_clock::now();
     this->gatherSources = std::move(childGatherSources);
-    auto gather3_end = chrono::high_resolution_clock::now();
-    gather3_cycles += chrono::duration_cast<chrono::nanoseconds>(gather3_end - gather3_start).count();
   }
   else {
     // otherClique should only have a single node, but we can write it to be more flexible
-    auto gather1_start = chrono::high_resolution_clock::now();
     std::swap(childGatherSources, this->gatherSources);
-    auto gather1_end = chrono::high_resolution_clock::now();
     for(const LocalCliqueColumns& columns : childGatherSources) {
       // If our CliqueColumns can be merged into the child's last CliqueColumn, merge
       // Otherwise just add it to the list of fragments
@@ -437,9 +426,6 @@ void CholeskyEliminationTree::Clique::mergeGatherSources2(
         this->gatherSources.push_back(columns);
       }
     }
-    auto gather2_end = chrono::high_resolution_clock::now();
-    gather1_cycles += chrono::duration_cast<chrono::nanoseconds>(gather1_end - gather1_start).count();
-    gather2_cycles += chrono::duration_cast<chrono::nanoseconds>(gather2_end - gather1_end).count();
   }
 }
 
@@ -766,8 +752,6 @@ int64_t CholeskyEliminationTree::Clique::computeCostMarked(int num_threads) {
 
   if(markedCost >= 0) { return markedCost * cost_mplier; }
 
-
-  auto model1_start = chrono::high_resolution_clock::now();
   int maxFactorHeight = 0;
   int maxFactorWidth = 0;
   int num_factors = 0;
@@ -792,7 +776,6 @@ int64_t CholeskyEliminationTree::Clique::computeCostMarked(int num_threads) {
       num_factors++;
     }
   }
-  auto model1_end = chrono::high_resolution_clock::now();
 
   int cliqueWidth = this->width();
   int cliqueHeight = this->height();
@@ -821,8 +804,6 @@ int64_t CholeskyEliminationTree::Clique::computeCostMarked(int num_threads) {
   int64_t chol_overhead = 0;
   int64_t add_overhead = 1000;
 
-  auto model2_end = chrono::high_resolution_clock::now();
-
   // This is used for single node profiling
   restoreCost = pred_restore + restore_overhead;
   symCost = this->nodes.size() * SYM_COST_REORDER;
@@ -839,9 +820,6 @@ int64_t CholeskyEliminationTree::Clique::computeCostMarked(int num_threads) {
   }
 
   // cout << "Clique " << *this << " ata cost = " << markedCost << " markedCost = " << fixedCost << endl;
-  
-  model1_cycles += chrono::duration_cast<chrono::nanoseconds>(model1_end - model1_start).count();
-  model2_cycles += chrono::duration_cast<chrono::nanoseconds>(model2_end - model1_end).count();
 
   return markedCost * cost_mplier;
 

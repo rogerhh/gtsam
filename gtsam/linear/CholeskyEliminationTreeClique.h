@@ -268,11 +268,6 @@ public:
   static uint64_t merge4_cycles;
   static uint64_t merge5_cycles;
   static uint64_t merge6_cycles;
-  static uint64_t gather1_cycles;
-  static uint64_t gather2_cycles;
-  static uint64_t gather3_cycles;
-  static uint64_t model1_cycles;
-  static uint64_t model2_cycles;
 
 };
 

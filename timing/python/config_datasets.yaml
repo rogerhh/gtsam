@@ -208,19 +208,18 @@ VIO:
 # Legacy output directors
 Legacy:
     runs:
-    - seah_sphere
+    # - seah_sphere
     # - seah_incremental_CAB7000
     # - seah_incremental_CAB464
     # - seah_incremental_CAB1_num_threads-1
     # - seah_incremental_CAB1_num_threads-2
     # - seah_incremental_CAB1_num_threads-4
     # - seah_RA_CAB7000_num_threads-1
-    # - seah_RA_CAB7000_num_threads-1
     # - seah_RA_CAB7000_num_threads-2
     # - seah_RA_CAB7000_num_threads-4
     # - seah_RA_sphere_2500_num_threads-1
-    # - seah_RA_sphere_2500_num_threads-2
-    # - seah_RA_sphere_2500_num_threads-4
+    - seah_RA_sphere_2500_num_threads-2
+    - seah_RA_sphere_2500_num_threads-4
     seah_sphere:
         dataset:        sphere2500
         start_step:     2

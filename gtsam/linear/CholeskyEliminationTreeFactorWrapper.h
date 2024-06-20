@@ -8,6 +8,7 @@
 #pragma once
 
 #include <gtsam/linear/CholeskyEliminationTree.h>
+#include <gtsam/linear/Timepoint.h>
 #include <gtsam/linear/JacobianFactor.h>
 #include <gtsam/nonlinear/NonlinearFactor.h>
 #include <utility>
@@ -186,14 +187,14 @@ public:
 
     assert(status_ != REMOVING && status_ != REMOVED);
     if(status_ == UNLINEARIZED || status_ == RELINEARIZE) {
-      auto relin_start = std::chrono::high_resolution_clock::now();
+      auto relin_start = Timepoint();
       auto cachedLinearFactor = nonlinearFactor_->linearize(theta);
-      auto relin_end = std::chrono::high_resolution_clock::now();
+      auto relin_end = Timepoint();
       setCachedLinearMatrix(cachedLinearFactor);
 
       status_ = LINEARIZED;
 
-      relin_cycles_vec[thread_id] += std::chrono::duration_cast<std::chrono::nanoseconds>(relin_end - relin_start).count();
+      relin_cycles_vec[thread_id] += relin_end - relin_start;
       
       return true;
     }

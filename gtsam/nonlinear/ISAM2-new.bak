@@ -509,7 +509,9 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   }
 
   eTree_.symbolicElimination(markedKeys);
+  cout << "after sym" << endl;
   eTree_.choleskyElimination(theta_);
+  cout << "after chol" << endl;
 
   const ISAM2GaussNewtonParams& gaussNewtonParams =
       boost::get<ISAM2GaussNewtonParams>(params_.optimizationParams);

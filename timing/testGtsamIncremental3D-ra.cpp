@@ -17,7 +17,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
-#include "./baremetal_tests/incremental_CAB1_steps-464_period-1_delta_header/incremental_delta.h"
+// #include "./baremetal_tests/incremental_CAB1_steps-464_period-1_delta_header/incremental_delta.h"
 
 using namespace std;
 using namespace gtsam;

@@ -16,7 +16,7 @@ using namespace std;
 
 namespace gtsam {
 
-std::vector<uint64_t> CholeskyEliminationTree::FactorWrapper::relin_cycles_vec = std::vector<uint64_t>();
+std::vector<uint64_t> CholeskyEliminationTree::FactorWrapper::relin_cycles_vec = std::vector<uint64_t>(1, 0);
 
 void CholeskyEliminationTree::FactorWrapper::markAffectedKeys(RemappedKeySet* affectedKeys) {
   if(status_ == REMOVED) {
