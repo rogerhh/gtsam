@@ -663,7 +663,7 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
 
   // If no numeric, go through the gemmini set up anyways to set correct data structures
   if(no_numeric || use_gemmini) {
-      eTree_.gemminiSolve(theta_, &delta_, num_threads, no_numeric, no_values, no_setup);
+      eTree_.gemminiSolve(theta_, &delta_, 1 /*num_threads*/, no_numeric, no_values, no_setup);
       eTree_.backsolve_reset();
   }
   else {
