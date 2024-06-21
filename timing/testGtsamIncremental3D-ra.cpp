@@ -60,7 +60,6 @@ map<int, FastList<RemappedKey>> read_relin_keys_file(string& fname) {
   for(int i = 0; i < n; i++) {
     int step, num_keys;
     fin >> step >> num_keys;
-    cout << "step = " << step << " num_keys = " << num_keys << endl;
     res.insert({step, FastList<Key>()});
     for(int j = 0; j < num_keys; j++) {
       RemappedKey k;
