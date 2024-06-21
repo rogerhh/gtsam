@@ -377,12 +377,6 @@ int main(int argc, char *argv[]) {
             Values estimate;
 
             FastList<RemappedKey> extraRelinKeys = relin_keys_map[step];  // For some reason this is needed
-            cout << "extra relin: " << endl;
-            for(Key k : extraRelinKeys) {
-                cout << k << " ";
-            }
-            cout << endl;
-
             auto start = chrono::high_resolution_clock::now();
 
             if(step < step_num_threads.size()) {
