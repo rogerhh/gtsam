@@ -182,7 +182,7 @@ if __name__ == "__main__":
             print_pred = d["print_pred"]
             print_traj = d["print_traj"]
 
-            exe = f"{builddir}/timing/" + "testGtsamIncremental3D-datasetgen" if is3D else "testGtsamIncremental-datasetgen"
+            exe = f"{builddir}/timing/" + ("testGtsamIncremental3D-datasetgen" if is3D else "testGtsamIncremental-datasetgen")
 
             run_dset = True
             if os.path.isdir(output_dir):
@@ -439,7 +439,7 @@ if __name__ == "__main__":
             print_pred = d["print_pred"]
             print_traj = d["print_traj"]
 
-            exe = f"{builddir}/timing/" + "testGtsamIncremental3D-lru" if is3D else "testGtsamIncremental-lru"
+            exe = f"{builddir}/timing/" + ("testGtsamIncremental3D-lru" if is3D else "testGtsamIncremental-lru")
 
             run_dset = True
             if os.path.isdir(output_dir):
@@ -520,7 +520,7 @@ if __name__ == "__main__":
             if os.path.isdir(output_dir):
                 run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
-            exe = f"{builddir}/timing/" + "testGtsamIncremental3D-datasetgen" if is3D else "testGtsamIncremental-datasetgen"
+            exe = f"{builddir}/timing/" + ("testGtsamIncremental3D-datasetgen" if is3D else "testGtsamIncremental-datasetgen")
 
             if run_dset:
                 cmd = f"python3 {scriptdir}/read_relin_keys.py \
