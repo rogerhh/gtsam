@@ -70,7 +70,7 @@ if __name__ == "__main__":
             infile = infiles[step]
 
             if infile is None:
-                print(infile_pattern)
+                print(f"{step} file not found!", step)
                 assert(0)
 
             with open(infile, "r") as fin:

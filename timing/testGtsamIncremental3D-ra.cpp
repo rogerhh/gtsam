@@ -43,6 +43,34 @@ double chi2_red(const gtsam::NonlinearFactorGraph& graph, const gtsam::Values& c
     return 2. * graph.error(config) / dof; // kaess: added factor 2, graph.error returns half of actual error
 }
 
+map<int, FastList<RemappedKey>> read_relin_keys_file(string& fname) {
+  if(fname == "") {
+    return map<int, FastList<RemappedKey>>();
+  }
+  
+  ifstream fin(fname);
+  if(!fin.is_open()) {
+    cout << "Error opening file: " << fname << endl;
+    exit(1);
+  }
+
+  map<int, FastList<RemappedKey>> res;
+  int n;
+  fin >> n;
+  for(int i = 0; i < n; i++) {
+    int step, num_keys;
+    fin >> step >> num_keys;
+    cout << "step = " << step << " num_keys = " << num_keys << endl;
+    res.insert({step, FastList<Key>()});
+    for(int j = 0; j < num_keys; j++) {
+      RemappedKey k;
+      fin >> k;
+      res[step].push_back(k); 
+    }
+  }
+  return res;
+}
+
 int main(int argc, char *argv[]) {
 
     string dataset_name;
@@ -65,6 +93,7 @@ int main(int argc, char *argv[]) {
     string inject_delta_dir = "";
     string skip_steps_file = "";
     float ra_latency_ms = -1;
+    string relin_keys_file = "";
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -88,6 +117,7 @@ int main(int argc, char *argv[]) {
         {"print_delta", no_argument, 0, 156},
         {"skip_steps_file", required_argument, 0, 157},
         {"ra_latency_ms", required_argument, 0, 158},
+        {"relin_keys_file", required_argument, 0, 159},
         {0, 0, 0, 0}
     };
     int opt, option_index;
@@ -153,11 +183,16 @@ int main(int argc, char *argv[]) {
             case 158:
                 ra_latency_ms = atof(optarg);
                 break;
+            case 159:
+                relin_keys_file = string(optarg);
+                break;
             default:
                 cerr << "Unrecognized option" << endl;
                 exit(1);
         }
     }
+
+    auto relin_keys_map = read_relin_keys_file(relin_keys_file);
 
     vector<int> step_num_threads;
     ifstream num_threads_fin;
@@ -340,6 +375,14 @@ int main(int argc, char *argv[]) {
             params.force_relinearize = true;
             K_count = 0;
             Values estimate;
+
+            FastList<RemappedKey> extraRelinKeys = relin_keys_map[step];  // For some reason this is needed
+            cout << "extra relin: " << endl;
+            for(Key k : extraRelinKeys) {
+                cout << k << " ";
+            }
+            cout << endl;
+
             auto start = chrono::high_resolution_clock::now();
 
             if(step < step_num_threads.size()) {
@@ -350,7 +393,8 @@ int main(int argc, char *argv[]) {
             isam2.update_resource_aware(newFactors, newVariables, params, 
                                         ra_latency_ms, num_threads,
                                         unordered_set<Key>(), unordered_set<Key>(), 
-                                        use_gemmini, no_numeric, no_values, no_setup);
+                                        use_gemmini, no_numeric, no_values, no_setup,
+                                        extraRelinKeys);
             auto update_end = chrono::high_resolution_clock::now();
 
             // Inject delta

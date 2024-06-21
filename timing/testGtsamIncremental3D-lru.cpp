@@ -60,6 +60,10 @@ int main(int argc, char *argv[]) {
     bool print_pred = false;
     bool print_traj = false;
     bool print_values = false;
+    bool print_delta = false;
+    string inject_delta_dir = "";
+    string skip_steps_file = "";
+    float ra_latency_ms = -1;
 
     // Get experiment setup
     static struct option long_options[] = {

@@ -121,7 +121,7 @@ if __name__ == "__main__":
                 relin_cost = int(fin.readline())
 
         if infile is None:
-            print(infile_pattern)
+            print(f"file at step {step} not found!", step)
             assert(0)
     
         with open(infile, "r") as fin:

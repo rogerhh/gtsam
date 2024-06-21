@@ -200,7 +200,8 @@ class GTSAM_EXPORT ISAM2 : public BayesTree<ISAM2Clique> {
                              bool use_gemmini = false,
                              bool no_numeric = false,
                              bool no_values = false,
-                             bool no_setup = false);
+                             bool no_setup = false,
+                             const boost::optional<FastList<RemappedKey> >& extraRelinKeys = boost::none);
 
   void injectFullTree(std::istream& is) {
     eTree_.injectFullTree(is);

@@ -535,7 +535,8 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
                                          bool use_gemmini,
                                          bool no_numeric,
                                          bool no_values,
-                                         bool no_setup) {
+                                         bool no_setup,
+                                         const boost::optional<FastList<RemappedKey> >& extraRelinKeys) {
   // 1. Add new factors to list of factors and mark the variables involved
   // 2. Mark the variables that need to be relinearized (linearize when doing Cholesky for locality)
   // 3. Find all affected variables in the etree by traversing back up the tree from 
@@ -583,6 +584,14 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
   eTree_.pickRelinKeys(keyDeltaVec, allFixedKeys, allMarginalizedKeys, remainingCycles, num_threads,
       *boost::get<double>(&params_.relinearizeThreshold), &newRelinKeys);
   relinKeys = newRelinKeys;
+
+  if(extraRelinKeys) {
+    relinKeys.clear();
+    for(RemappedKey remappedKey : *extraRelinKeys) {
+      Key key = eTree_.unmapKey(remappedKey);
+      relinKeys.insert(key);
+    }
+  }
 
   if (!relinKeys.empty()) {
     // 6. Update linearization point for marked variables:
