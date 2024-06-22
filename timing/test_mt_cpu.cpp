@@ -15,7 +15,7 @@
 #define NUM_CORE 4 // number of multithreading
 #include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
 
-#include "cholesky.h"
+#include "cpu_cholesky.h"
 
 pthread_barrier_t barrier_global;
 
@@ -190,7 +190,6 @@ void* worker_cholesky(void* args_ptr) {
                    h, h, h,
                    1, 1, 
                    true, false);
-
 
             sparse_matrix_add3_3(workspace, h, h, 
                                  ABC, H_h, H_h, 
@@ -581,7 +580,7 @@ int main(int argc, char** argv) {
 
 	clock_gettime(CLOCK_MONOTONIC, &step_end);
 	double cpu_time_used = (step_end.tv_sec - step_start.tv_sec) * 1000
-            + ((long) (step_end.tv_nsec - step_start.tv_nsec)) / 1000000;
+            + ((step_end.tv_nsec - step_start.tv_nsec)) / 1000000.0;
 	printf("step %d time: %f ms\n", step, cpu_time_used);
 
     }
