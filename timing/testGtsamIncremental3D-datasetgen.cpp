@@ -232,6 +232,8 @@ int main(int argc, char *argv[]) {
                     throw runtime_error("Problem in data file, out-of-sequence measurements");
                 }
 
+                // cout << "keys: " << measurement->key1() << " " << measurement->key2() << endl;
+
                 // Add a new factor
                 newFactors.push_back(measurement);
 
@@ -295,15 +297,6 @@ int main(int argc, char *argv[]) {
             auto calc_end = chrono::high_resolution_clock::now();
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
-
-            if(step % print_frequency == 0) {
-                // estimate = isam2.calculateEstimate();
-                // cout << "Theta = " << endl;
-                // estimate.print();
-            }
-            if(step >= num_steps) {
-                break;
-            }
 
             static double last_chi2 = 0;
             double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
@@ -393,6 +386,15 @@ int main(int argc, char *argv[]) {
         K_count++;
         update_times.push_back(d1);
         calc_times.push_back(d2);
+
+        if(step % print_frequency == 0) {
+            // estimate = isam2.calculateEstimate();
+            // cout << "Theta = " << endl;
+            // estimate.print();
+        }
+        if(step >= num_steps) {
+            break;
+        }
 
     }
 

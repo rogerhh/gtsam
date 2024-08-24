@@ -45,19 +45,37 @@ python3 $SCRIPT_DIR/plot_traj_ape0.py --infiles "
 #   incremental_CAB1-smallnoise-LC_CAB1-smallnoise_ape.out" \
 #     --labels="VIO+LC RA-1thread RA-2thread RA-4thread Incremental" --outfile CAB1-smallnoise-traj_ape.png
 
-python3 $SCRIPT_DIR/plot_traj_ape0.py --infiles "
-  VIO_CAB7000-smallnoise_vio_lag-20-LC_CAB7000-smallnoise_ape.out \
-  VIOLC_CAB7000-smallnoise_vio_lag-20_lc_period-65-LC_CAB7000-smallnoise_ape.out \
-  RA_CAB7000-smallnoise_num_threads-1-LC_CAB7000-smallnoise_ape.out \
-  RA_CAB7000-smallnoise_num_threads-2-LC_CAB7000-smallnoise_ape.out \
-  RA_CAB7000-smallnoise_num_threads-4-LC_CAB7000-smallnoise_ape.out \
-  incremental_CAB7000-smallnoise-LC_CAB7000-smallnoise_ape.out" \
-    --labels="VIO VIO+LC RA1S RA2S RA4S In" --outfile CAB7000-smallnoise-traj_ape.png
+# python3 $SCRIPT_DIR/plot_traj_ape0.py --infiles "
+#   VIO_CAB7000-smallnoise_vio_lag-20-LC_CAB7000-smallnoise_ape.out \
+#   VIOLC_CAB7000-smallnoise_vio_lag-20_lc_period-65-LC_CAB7000-smallnoise_ape.out \
+#   RA_CAB7000-smallnoise_num_threads-1-LC_CAB7000-smallnoise_ape.out \
+#   RA_CAB7000-smallnoise_num_threads-2-LC_CAB7000-smallnoise_ape.out \
+#   RA_CAB7000-smallnoise_num_threads-4-LC_CAB7000-smallnoise_ape.out \
+#   incremental_CAB7000-smallnoise-LC_CAB7000-smallnoise_ape.out" \
+#     --labels="VIO VIO+LC RA1S RA2S RA4S In" --outfile CAB7000-smallnoise-traj_ape.png
+# 
+# python3 $SCRIPT_DIR/plot_traj_ape.py --infiles "
+#   LRU_CAB7000-smallnoise_num_threads-2_memsize-2M-LC_CAB7000-smallnoise_ape.out \
+#   LRU_CAB7000-smallnoise_num_threads-2_memsize-4M-LC_CAB7000-smallnoise_ape.out \
+#   VIO_CAB7000-smallnoise_vio_lag-716-LC_CAB7000-smallnoise_ape.out \
+#   VIO_CAB7000-smallnoise_vio_lag-1024-LC_CAB7000-smallnoise_ape.out" \
+#     --labels="LRU2M LRU4M VIO2M VIO4M" --outfile CAB7000-smallnoise-LRU-traj_ape.png
 
-python3 $SCRIPT_DIR/plot_traj_ape.py --infiles "
-  LRU_CAB7000-smallnoise_num_threads-2_memsize-2M-LC_CAB7000-smallnoise_ape.out \
-  LRU_CAB7000-smallnoise_num_threads-2_memsize-4M-LC_CAB7000-smallnoise_ape.out \
-  VIO_CAB7000-smallnoise_vio_lag-716-LC_CAB7000-smallnoise_ape.out \
-  VIO_CAB7000-smallnoise_vio_lag-1024-LC_CAB7000-smallnoise_ape.out" \
-    --labels="LRU2M LRU4M VIO2M VIO4M" --outfile CAB7000-smallnoise-LRU-traj_ape.png
+# python3 $SCRIPT_DIR/plot_traj_ape1.py --infiles "
+#   VIO_M3500a_vio_lag-20-LC_M3500a_ape.out \
+#   VIOLC_M3500a_vio_lag-20_lc_period-65-LC_M3500a_ape.out \
+#   RA_M3500a_num_threads-1-LC_M3500a_ape.out \
+#   RA_M3500a_num_threads-2-LC_M3500a_ape.out \
+#   RA_M3500a_num_threads-4-LC_M3500a_ape.out \
+#   incremental_M3500a-LC_M3500a_ape.out" \
+#     --labels="VIO VIO+LC RA1S RA2S RA4S In" --outfile M3500a-traj_ape.png
+
+python3 $SCRIPT_DIR/plot_traj_ape1.py --infiles "
+  VIO_M3500a_vio_lag-20-LC_M3500a_ape.out \
+  VIOLC_M3500a_vio_lag-20_lc_period-65-LC_M3500a_ape.out \
+  RA_M3500a_num_threads-1-LC_M3500a_ape.out \
+  RA_M3500a_num_threads-2-LC_M3500a_ape.out \
+  RA_M3500a_num_threads-4-LC_M3500a_ape.out \
+  incremental_M3500a-LC_M3500a_ape.out" \
+    --labels="VIO VIO+LC RA1S RA2S RA4S In" --outfile M3500a-traj_ape.png
 

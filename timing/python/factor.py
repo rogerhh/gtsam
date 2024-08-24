@@ -70,6 +70,8 @@ class Factor:
             for i in range(self.height):
                 line = fin.readline()
                 arr = line.split()
+                print(self.width)
+                print(arr)
                 assert(len(arr) == self.width)
                 for j in range(self.width):
                     self.matrix[i, j] = float(arr[j])

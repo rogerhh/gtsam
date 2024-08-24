@@ -60,10 +60,17 @@ dataset:
     M3500: 
         is3D:           false
         path:           "ra_datasets/M3500"
-        relin_thresh:   0.1
+        relin_thresh:   0.001
         start_step:     2
-        end_step:       3500    # Inclusive
-        period:         1
+        end_step:       3499    # Inclusive
+        period:         25
+    M3500a: 
+        is3D:           false
+        path:           "ra_datasets/M3500a"
+        relin_thresh:   0.001
+        start_step:     2
+        end_step:       3499    # Inclusive
+        period:         25
     M3500c: 
         is3D:           false
         path:           "ra_datasets/M3500c"
@@ -78,6 +85,13 @@ dataset:
         start_step:     2
         end_step:       4999    # Inclusive
         period:         25
+    kitti_00:
+        is3D:           true
+        path:           "ra_datasets/kitti_00_before_LC"
+        relin_thresh:   0.1
+        start_step:     800
+        end_step:       800
+        period:         1
 
 # Metadata
 metadata:
@@ -114,12 +128,13 @@ RA:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     # - torus
     params:
-        num_threads:        1
+        num_threads:        4
         num_threads_file:   ""              # Specify the path to a num threads file or leave empty
-        print_dataset:      true            # Turn this off if not generating header
+        print_dataset:      true           # Turn this off if not generating header
         print_values:       false
         print_pred:         false
         print_traj:         true
@@ -137,12 +152,14 @@ Incremental:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     # - torus
+    - kitti_00
     params:
         print_dataset:      true            # Turn this off if not generating header
-        print_values:       false
-        print_pred:         true
+        print_values:       true
+        print_pred:         false
         print_traj:         true
         
 # LRU:
@@ -157,6 +174,7 @@ LRU:
     # - CAB7000-smallnoise
     # - sphere2500
     # - w10000
+    # - M3500
     # - M3500
     # - M3500c
     params:
@@ -183,6 +201,7 @@ LC:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     params:
         max_iter:           5
@@ -206,13 +225,14 @@ VIO:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     params:
         max_iter:           1
         gen_header:         false
-        vio_lag:            716
-        run_lc:             false
-        lc_period:          8
+        vio_lag:            20
+        run_lc:             true
+        lc_period:          65
         
 # Legacy output directors
 Legacy:
@@ -230,9 +250,9 @@ Legacy:
     # - seah_RA_sphere_2500_num_threads-2
     # - seah_RA_sphere_2500_num_threads-4
     # - seah_incremental_torus
-    - seah_RA_torus_num_threads-1
-    - seah_RA_torus_num_threads-2
-    - seah_RA_torus_num_threads-4
+    # - seah_RA_torus_num_threads-1
+    # - seah_RA_torus_num_threads-2
+    # - seah_RA_torus_num_threads-4
     seah_sphere:
         dataset:        sphere2500
         start_step:     2
@@ -290,7 +310,7 @@ Legacy:
         print_values:   false
         print_pred:     false
         print_traj:     false
-        print_delta:    true
+        print_delta:    false
         output_dir: "incremental_CAB7000"
         header_dir: "incremental_CAB7000"
     seah_incremental_CAB464:

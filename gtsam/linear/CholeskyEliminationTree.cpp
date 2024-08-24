@@ -366,6 +366,10 @@ void CholeskyEliminationTree::pickRelinKeys(
 
   // Compute cost of backsolve
   int64_t backsolve_cost = 0;
+  // for(sharedClique clique : allUpdatedCliques) {
+  //   if(clique == root_) { continue; }
+  //   backsolve_cost += clique->computeCostBacksolve(num_threads);
+  // }
   for(sharedNode node : nodes_) {
     if(!node) { continue; }
 

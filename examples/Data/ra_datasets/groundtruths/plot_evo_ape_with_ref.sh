@@ -17,7 +17,7 @@ traj_files=$(ls $TRAJ_DIR/step-*_traj.txt)
 num_traj=$(ls -1 $TRAJ_DIR/step-*_traj.txt | wc -l)
 
 step=0
-endstep=3000
+endstep=3500
 
 echo "Writing result to $out_file"
 echo "" > $out_file

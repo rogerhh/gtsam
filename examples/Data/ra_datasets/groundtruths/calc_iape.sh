@@ -39,3 +39,12 @@ python3 $SCRIPT_DIR/calc_iape.py --infiles "
     RA_CAB7000-smallnoise_num_threads-4-LC_CAB7000-smallnoise_ape.out
     incremental_CAB7000-smallnoise-LC_CAB7000-smallnoise_ape.out
     "
+
+python3 $SCRIPT_DIR/calc_iape.py --infiles "
+  VIO_M3500a_vio_lag-20-LC_M3500a_ape.out \
+  VIOLC_M3500a_vio_lag-20_lc_period-65-LC_M3500a_ape.out \
+  RA_M3500a_num_threads-1-LC_M3500a_ape.out \
+  RA_M3500a_num_threads-2-LC_M3500a_ape.out \
+  RA_M3500a_num_threads-4-LC_M3500a_ape.out \
+  incremental_M3500a-LC_M3500a_ape.out
+  "

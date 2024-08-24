@@ -57,6 +57,7 @@ int main(int argc, char *argv[]) {
     string dataset_outdir = "";
     bool run_lc = false;
     int lc_period = 30;
+    int loop_size = lc_period;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -190,7 +191,8 @@ int main(int argc, char *argv[]) {
     Values vioNewVariables;
     NonlinearFactorGraph vioNewFactors;
 
-    int lc_counter = 0;
+    int loop_start_step = 0;
+    bool new_loop = false;
 
     for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
 
@@ -237,6 +239,20 @@ int main(int argc, char *argv[]) {
                 if(k1 - k2 <= vio_lag) {
                   vioNewFactors.push_back(measurement);
                 }
+                else {
+                    cout << "discarding factor " << k1 << " " << k2 << " " << vio_lag << endl;
+                }
+
+                if(k1 - k2 >= loop_size) {
+                    cout << "detected loop" << endl;
+                    if(loop_start_step == 0) {
+                        loop_start_step = step;
+                    }
+                    else {
+                        cout << "new loop" << endl;
+                        new_loop = true;
+                    }
+                }
 
                 // Add a new factor
                 newFactors.push_back(measurement);
@@ -276,7 +292,7 @@ int main(int argc, char *argv[]) {
                         vioPrevPose = vio_isam2->calculateEstimate<Pose>(step - 1);
                       }
                       newPose = prevPose * measurement->measured();
-                      vioNewPose = vioPrevPose * measurement->measured().inverse();
+                      vioNewPose = vioPrevPose * measurement->measured();
                     }
                     newVariables.insert(step, newPose);
                     prevPose = newPose;
@@ -294,13 +310,20 @@ int main(int argc, char *argv[]) {
         }
 
         bool lc_running = false;
-        if(run_lc && lc_counter >= lc_period) {
+        cout << "loop_start_step = " << loop_start_step << " " << step << endl;
+        if(run_lc && loop_start_step != 0 && loop_start_step + lc_period <= step) {
+            cout << "lc_running" << endl;
           lc_running = true;
-          lc_counter = 0;
+          if(new_loop) {
+            loop_start_step = step;
+          }
+          else {
+            loop_start_step = 0;
+          }
+          new_loop = false;
         }
         else {
           lc_running = false;
-          lc_counter++;
         }
 
         // Update iSAM2
@@ -317,9 +340,9 @@ int main(int argc, char *argv[]) {
 
             NonlinearFactorGraph dummy_nfg;
             Values dummy_vals;
+            int iter = 0;
 
             if(run_lc) {
-              int iter = 0;
               while(1) {
                 isam2.update(dummy_nfg, dummy_vals);
                 Values estimate = isam2.calculateEstimate();
@@ -349,10 +372,21 @@ int main(int argc, char *argv[]) {
 
 
             if(lc_running) {
-              vio_isam2 = std::make_shared<ISAM2>(isam2params);
               cout << "update lc" << endl;
-              Values estimate = isam2.calculateEstimate();
-              vio_isam2->update(isam2.getFactorsUnsafe(), estimate, params);
+              vio_isam2->update(vioNewFactors, vioNewVariables, params);
+              Values vio_estimate = vio_isam2->calculateEstimate();
+              Values lc_estimate = isam2.calculateEstimate();
+
+              for(int i = loop_start_step; i > 0 && i < step; i++) {
+                Pose lcPrevPose = lc_estimate.at<Pose>(i - 1);
+                Pose vioPrevPose = vio_estimate.at<Pose>(i - 1);
+                Pose vioCurPose = vio_estimate.at<Pose>(i);
+                Pose newPose = lcPrevPose * vioPrevPose.inverse() * vioCurPose;
+                lc_estimate.update(i, newPose);
+              }
+              vio_estimate = lc_estimate;
+              vio_isam2 = std::make_shared<ISAM2>(isam2params);
+              vio_isam2->update(isam2.getFactorsUnsafe(), vio_estimate, params);
             
             }
             else {
@@ -371,9 +405,11 @@ int main(int argc, char *argv[]) {
             }
 
             Values vio_estimate = vio_isam2->calculateEstimate();
+            Values lc_estimate2 = isam2.calculateEstimate();
             
             double chi2 = chi2_red(isam2.getFactorsUnsafe(), vio_estimate);
-            cout << "chi2: " << chi2 << endl;
+            double lc_chi2 = chi2_red(isam2.getFactorsUnsafe(), lc_estimate2);
+            cout << "chi2: " << chi2 << " lc_chi2: " << lc_chi2 << endl;
 
             newVariables.clear();
             newFactors = NonlinearFactorGraph();
@@ -407,6 +443,262 @@ int main(int argc, char *argv[]) {
         K_count++;
 
     }
+
+    // for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
+
+    //     // Collect measurements and new variables for the current step
+    //     if(step == 1) {
+    //         newVariables.insert(0, Pose());
+    //         // Add prior
+    //         newFactors.addPrior(0, Pose(), noiseModel::Unit::Create(3));
+
+    //         vioNewVariables.insert(0, Pose());
+    //         vioNewFactors.addPrior(0, Pose(), noiseModel::Unit::Create(3));
+    //     }
+    //     while(nextMeasurement < measurements.size()) {
+
+    //         NonlinearFactor::shared_ptr measurementf = measurements[nextMeasurement];
+
+    //         if(BetweenFactor<Pose>::shared_ptr measurement =
+    //                 boost::dynamic_pointer_cast<BetweenFactor<Pose> >(measurementf))
+    //         {
+
+    //             // Stop collecting measurements that are for future steps
+    //             if(measurement->key1() > step || measurement->key2() > step)
+    //                 break;
+
+    //             // Require that one of the nodes is the current one
+    //             if(measurement->key1() != step && measurement->key2() != step) {
+    //                 cout << measurement->key1() << " " << measurement->key2() << endl;
+
+    //                 throw runtime_error("Problem in data file, out-of-sequence measurements");
+    //             }
+
+    //             Key k1;
+    //             Key k2;
+    //             
+    //             if(measurement->key1() > measurement->key2()) {
+    //               k1 = measurement->key1();
+    //               k2 = measurement->key2();
+    //             }
+    //             else {
+    //               k1 = measurement->key2();
+    //               k2 = measurement->key1();
+    //             }
+
+    //             if(k1 - k2 <= vio_lag) {
+    //               vioNewFactors.push_back(measurement);
+    //             }
+    //             else {
+    //                 cout << "discarding factor " << k1 << " " << k2 << " " << vio_lag << endl;
+    //             }
+
+    //             if(k1 - k2 >= loop_size) {
+    //                 cout << "detected loop" << endl;
+    //                 if(loop_start_step == 0) {
+    //                     loop_start_step = step;
+    //                 }
+    //                 else {
+    //                     cout << "new loop" << endl;
+    //                     new_loop = true;
+    //                 }
+    //             }
+
+    //             // Add a new factor
+    //             newFactors.push_back(measurement);
+
+    //             // Initialize the new variable
+    //             if(!newVariables.exists(step)) {
+    //               if(measurement->key1() == step && measurement->key2() == step-1) {
+    //                 Pose newPose;
+    //                 Pose vioNewPose;
+    //                 if(step == 1) {
+    //                   newPose = measurement->measured().inverse();
+    //                   vioNewPose = newPose;
+    //                 }
+    //                 else {
+    //                   if(isam2.valueExists(step - 1)) {
+    //                     prevPose = isam2.calculateEstimate<Pose>(step - 1);
+    //                     vioPrevPose = vio_isam2->calculateEstimate<Pose>(step - 1);
+    //                   }
+    //                   newPose = prevPose * measurement->measured().inverse();
+    //                   vioNewPose = vioPrevPose * measurement->measured().inverse();
+    //                 }
+    //                 newVariables.insert(step, newPose);
+    //                 prevPose = newPose;
+
+    //                 vioNewVariables.insert(step, vioNewPose);
+    //                 vioPrevPose = vioNewPose;
+    //               } else if(measurement->key2() == step && measurement->key1() == step-1) {
+    //                 Pose newPose;
+    //                 Pose vioNewPose;
+    //                 if(step == 1) {
+    //                   newPose = measurement->measured();
+    //                   vioNewPose = newPose;
+    //                 }
+    //                 else {
+    //                   if(isam2.valueExists(step - 1)) {
+    //                     prevPose = isam2.calculateEstimate<Pose>(step - 1);
+    //                     vioPrevPose = vio_isam2->calculateEstimate<Pose>(step - 1);
+    //                   }
+    //                   newPose = prevPose * measurement->measured();
+    //                   vioNewPose = vioPrevPose * measurement->measured().inverse();
+    //                 }
+    //                 newVariables.insert(step, newPose);
+    //                 prevPose = newPose;
+
+    //                 vioNewVariables.insert(step, vioNewPose);
+    //                 vioPrevPose = vioNewPose;
+    //               }
+    //             }
+
+    //         }
+    //         else {
+    //             throw std::runtime_error("Unknown factor type read from data file");
+    //         }
+    //         ++ nextMeasurement;
+    //     }
+
+    //     bool lc_running = false;
+    //     cout << "loop_start_step = " << loop_start_step << " " << step << endl;
+    //     if(run_lc && loop_start_step != 0 && loop_start_step + lc_period <= step) {
+    //         cout << "lc_running" << endl;
+    //       lc_running = true;
+    //       if(new_loop) {
+    //         loop_start_step = step;
+    //       }
+    //       else {
+    //         loop_start_step = 0;
+    //       }
+    //       new_loop = false;
+    //     }
+    //     else {
+    //       lc_running = false;
+    //     }
+
+    //     // Update iSAM2
+    //     int d1 = 0, d2 = 0;
+    //     if(K_count == K || nextMeasurement == measurements.size()) {
+    //         if(step % print_frequency == 0) {
+    //             cout << "step = " << step << endl;
+    //         }
+
+    //         ISAM2UpdateParams params;
+    //         params.force_relinearize = true;
+    //         K_count = 0;
+    //         cout << "isam2 update" << endl;
+    //         isam2.update(newFactors, newVariables, params);
+
+    //         NonlinearFactorGraph dummy_nfg;
+    //         Values dummy_vals;
+
+    //         if(run_lc) {
+    //           int iter = 0;
+    //           while(1) {
+    //             isam2.update(dummy_nfg, dummy_vals);
+    //             Values estimate = isam2.calculateEstimate();
+
+    //             double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
+
+    //             cout << "iter = " << iter << ", chi2 = " << chi2
+    //               << ", graph_error = " << isam2.getFactorsUnsafe().error(estimate) << endl;
+
+    //             if(abs(chi2) < epsilon) {
+    //               break;
+    //             }
+
+    //             if(abs(last_chi2 - chi2) < d_error) {
+    //               break;
+    //             }
+
+    //             last_chi2 = chi2;
+
+    //             iter++;
+
+    //             if(iter >= max_iter) {
+    //               break;
+    //             } 
+    //           }
+    //         }
+
+    //         if(lc_running) {
+    //           cout << "update lc" << endl;
+    //           vio_isam2->update(vioNewFactors, vioNewVariables, params);
+    //           Values vio_estimate = vio_isam2->calculateEstimate();
+    //           Values lc_estimate = isam2.calculateEstimate();
+
+    //           for(int i = loop_start_step; i > 0 && i < step; i++) {
+    //             Pose lcPrevPose = lc_estimate.at<Pose>(i - 1);
+    //             Pose vioPrevPose = vio_estimate.at<Pose>(i - 1);
+    //             Pose vioCurPose = vio_estimate.at<Pose>(i);
+    //             Pose newPose = lcPrevPose * vioPrevPose.inverse() * vioCurPose;
+    //             lc_estimate.update(i, newPose);
+    //           }
+    //           vio_estimate = lc_estimate;
+    //           vio_isam2 = std::make_shared<ISAM2>(isam2params);
+    //           vio_isam2->update(isam2.getFactorsUnsafe(), vio_estimate, params);
+    //         
+    //         }
+    //         else {
+    //           ISAM2UpdateParams params;
+    //           params.force_relinearize = true;
+    //           params.noRelinKeys = FastList<Key>();
+    //           for(int k = 0; k < (int) (step - vio_lag); k++) {
+    //             params.noRelinKeys->push_back(k);
+    //           }
+    //           
+    //          cout << "vio isam2 update" << endl;
+    //           vio_isam2->update(vioNewFactors, vioNewVariables, params);
+    //         }
+
+    //         if(step % print_frequency == 0) {
+    //             // estimate = isam2.calculateEstimate();
+    //             // cout << "Theta = " << endl;
+    //             // estimate.print();
+    //         }
+    //         if(step >= num_steps) {
+    //             break;
+    //         }
+
+    //         Values vio_estimate = vio_isam2->calculateEstimate();
+    //         Values lc_estimate2 = isam2.calculateEstimate();
+    //         
+    //         double chi2 = chi2_red(isam2.getFactorsUnsafe(), vio_estimate);
+    //         double lc_chi2 = chi2_red(isam2.getFactorsUnsafe(), lc_estimate2);
+    //         cout << "chi2: " << chi2 << " lc_chi2: " << lc_chi2 << endl;
+
+    //         newVariables.clear();
+    //         newFactors = NonlinearFactorGraph();
+
+    //         vioNewVariables.clear();
+    //         vioNewFactors = NonlinearFactorGraph();
+
+    //         string outfile = dataset_outdir + "/step-" + to_string(step) + "_traj.txt";
+    //         ofstream fout(outfile);
+
+    //         if(!fout.is_open()) {
+    //           cerr << "Cannot open file: " << outfile << endl;
+    //           exit(1);
+    //         }
+
+    //         vio_estimate.print_kitti_pose2(fout);
+
+    //         string lc_outfile = dataset_outdir + "/step-" + to_string(step) + "_lc-traj.txt";
+    //         ofstream lc_fout(lc_outfile);
+
+    //         if(!lc_fout.is_open()) {
+    //           cerr << "Cannot open file: " << lc_outfile << endl;
+    //           exit(1);
+    //         }
+
+    //         Values lc_estimate = isam2.calculateEstimate();
+    //         lc_estimate.print_kitti_pose2(lc_fout);
+
+
+    //     }
+    //     K_count++;
+
+    // }
 
 
 
