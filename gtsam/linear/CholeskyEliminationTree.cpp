@@ -826,7 +826,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
       if(!childClique->marked()) { continue; }
 
       bool mergeFlag = false;
-      const int relaxed_supernode_min_size = 24;
+      const int relaxed_supernode_min_size = 120;
       if(clique->blockIndices.size() == childClique->blockIndices.size() - childClique->cliqueSize()) { 
         mergeFlag = true; 
       }

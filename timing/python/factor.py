@@ -1,7 +1,5 @@
 import numpy as np
 
-MAX_DENSE_BLOCK_SIZE = 48
-
 def group_block_indices(reduced_sorted_keys, A_block_indices, B_block_indices):
     in_blk = False
     A_blk_start = []

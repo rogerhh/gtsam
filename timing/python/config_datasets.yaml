@@ -92,6 +92,13 @@ dataset:
         start_step:     800
         end_step:       800
         period:         1
+    kitti_00_2LC:
+        is3D:           true
+        path:           "ra_datasets/kitti_00_before_LC5"
+        relin_thresh:   0.1
+        start_step:     856
+        end_step:       856
+        period:         1
 
 # Metadata
 metadata:
@@ -155,7 +162,8 @@ Incremental:
     # - M3500a
     # - M3500c
     # - torus
-    - kitti_00
+    # - kitti_00
+    - kitti_00_2LC
     params:
         print_dataset:      true            # Turn this off if not generating header
         print_values:       true

@@ -292,6 +292,9 @@ int main(int argc, char *argv[]) {
             cout << endl;
 
             isam2.update(newFactors, newVariables, params, extraRelinKeys);
+
+
+
             auto update_end = chrono::high_resolution_clock::now();
             estimate = isam2.calculateEstimate();
             auto calc_end = chrono::high_resolution_clock::now();
@@ -302,14 +305,21 @@ int main(int argc, char *argv[]) {
             double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             cout << "chi2 = " << chi2 << endl;
 
-            for(int iter = 0; iter < max_iter; iter++) {
-                if(abs(chi2) < epsilon) {
-                  break;
-                }
+            if(step == 854 || (step >= 746 && step <= 748)) {
+                max_iter = 20;
+            }
+            else {
+                // max_iter = 0;
+            }
 
-                if(abs(last_chi2 - chi2) < d_error) {
-                  break;
-                }
+            for(int iter = 0; iter < max_iter; iter++) {
+                // if(abs(chi2) < epsilon) {
+                //   break;
+                // }
+
+                // if(abs(last_chi2 - chi2) < d_error) {
+                //   break;
+                // }
 
                 last_chi2 = chi2;
 
@@ -325,7 +335,7 @@ int main(int argc, char *argv[]) {
             newVariables.clear();
             newFactors = NonlinearFactorGraph();
 
-            if(step % print_frequency == 0) {
+            if(step % print_frequency == 0 && step >= 853 || (step >= 746 && step <= 748)) {
               if(dataset_outdir != "") {
                 if(print_dataset) {
                   string outfile = dataset_outdir + "/step-" + to_string(step) + ".out";
