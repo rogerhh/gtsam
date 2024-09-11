@@ -13,7 +13,11 @@
 #include <sys/mman.h>
 #endif
 #define NUM_CORE 4 // number of multithreading
-#include "baremetal_tests/incremental_sphere2500_steps-2-2000_period-25/incremental_dataset.h"
+
+#include "baremetal_tests/incremental_CAB1_steps-464_period-1/incremental_dataset.h"
+// #include "baremetal_tests/incremental_sphere2500_steps-2000_period-25/incremental_dataset.h"
+// #include "baremetal_tests/incremental_CAB7000/incremental_dataset.h"
+// #include "baremetal_tests/incremental_M3500a/incremental_dataset.h"
 
 #include "cholesky.h"
 
@@ -581,8 +585,9 @@ int main(int argc, char** argv) {
 
 	clock_gettime(CLOCK_MONOTONIC, &step_end);
 	double cpu_time_used = (step_end.tv_sec - step_start.tv_sec) * 1000
-            + ((long) (step_end.tv_nsec - step_start.tv_nsec)) / 1000000;
+            + ((step_end.tv_nsec - step_start.tv_nsec)) / 1000000.0;
 	printf("step %d time: %f ms\n", step, cpu_time_used);
+
 
     }
     pthread_barrier_destroy(&barrier_global);
