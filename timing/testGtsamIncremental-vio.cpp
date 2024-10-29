@@ -2,7 +2,7 @@
 #include <gtsam/slam/dataset.h>
 #include <gtsam/slam/BetweenFactor.h>
 #include <gtsam/sam/BearingRangeFactor.h>
-#include <gtsam/geometry/Pose2.h>
+#include <gtsam/geometry/Pose3.h>
 #include <gtsam/inference/Symbol.h>
 #include <gtsam/nonlinear/ISAM2.h>
 #include <gtsam/nonlinear/Marginals.h>
@@ -57,6 +57,7 @@ int main(int argc, char *argv[]) {
     string dataset_outdir = "";
     bool run_lc = false;
     int lc_period = 30;
+    int loop_size = lc_period;
 
     // Get experiment setup
     static struct option long_options[] = {
@@ -137,9 +138,11 @@ int main(int argc, char *argv[]) {
             case 55:
                 run_lc = true;
                 break;
-            case 56:
+            case 56: {
                 lc_period = atoi(optarg);
+                loop_size = lc_period;
                 break;
+            }
             default:
                 cerr << "Unrecognized option" << endl;
                 exit(1);
@@ -152,6 +155,7 @@ int main(int argc, char *argv[]) {
          << ", max_optimization_iter = " << max_iter 
          << ", opt_stop_cond = " << d_error 
          << ", relinearize_skip = " << relinearize_skip 
+         << ", relin_thresh = " << relin_thresh
          << ", print_frequency = " << print_frequency 
          << endl;
 
@@ -190,7 +194,8 @@ int main(int argc, char *argv[]) {
     Values vioNewVariables;
     NonlinearFactorGraph vioNewFactors;
 
-    int lc_counter = 0;
+    int loop_start_step = 0;
+    bool new_loop = false;
 
     for(size_t step=1; nextMeasurement < measurements.size(); ++step) {
 
@@ -237,6 +242,20 @@ int main(int argc, char *argv[]) {
                 if(k1 - k2 <= vio_lag) {
                   vioNewFactors.push_back(measurement);
                 }
+                else {
+                    cout << "discarding factor " << k1 << " " << k2 << " " << vio_lag << endl;
+                }
+
+                if(k1 - k2 >= loop_size) {
+                    cout << "detected loop" << endl;
+                    if(loop_start_step == 0) {
+                        loop_start_step = step;
+                    }
+                    else {
+                        cout << "new loop" << endl;
+                        new_loop = true;
+                    }
+                }
 
                 // Add a new factor
                 newFactors.push_back(measurement);
@@ -276,7 +295,7 @@ int main(int argc, char *argv[]) {
                         vioPrevPose = vio_isam2->calculateEstimate<Pose>(step - 1);
                       }
                       newPose = prevPose * measurement->measured();
-                      vioNewPose = vioPrevPose * measurement->measured().inverse();
+                      vioNewPose = vioPrevPose * measurement->measured();
                     }
                     newVariables.insert(step, newPose);
                     prevPose = newPose;
@@ -294,13 +313,20 @@ int main(int argc, char *argv[]) {
         }
 
         bool lc_running = false;
-        if(run_lc && lc_counter >= lc_period) {
+        cout << "loop_start_step = " << loop_start_step << " " << step << endl;
+        if(run_lc && loop_start_step != 0 && loop_start_step + lc_period <= step) {
+            cout << "lc_running" << endl;
           lc_running = true;
-          lc_counter = 0;
+          if(new_loop) {
+            loop_start_step = step;
+          }
+          else {
+            loop_start_step = 0;
+          }
+          new_loop = false;
         }
         else {
           lc_running = false;
-          lc_counter++;
         }
 
         // Update iSAM2
@@ -317,9 +343,9 @@ int main(int argc, char *argv[]) {
 
             NonlinearFactorGraph dummy_nfg;
             Values dummy_vals;
+            int iter = 0;
 
             if(run_lc) {
-              int iter = 0;
               while(1) {
                 isam2.update(dummy_nfg, dummy_vals);
                 Values estimate = isam2.calculateEstimate();
@@ -349,10 +375,21 @@ int main(int argc, char *argv[]) {
 
 
             if(lc_running) {
-              vio_isam2 = std::make_shared<ISAM2>(isam2params);
               cout << "update lc" << endl;
-              Values estimate = isam2.calculateEstimate();
-              vio_isam2->update(isam2.getFactorsUnsafe(), estimate, params);
+              vio_isam2->update(vioNewFactors, vioNewVariables, params);
+              Values vio_estimate = vio_isam2->calculateEstimate();
+              Values lc_estimate = isam2.calculateEstimate();
+
+              for(int i = loop_start_step; i > 0 && i < step; i++) {
+                Pose lcPrevPose = lc_estimate.at<Pose>(i - 1);
+                Pose vioPrevPose = vio_estimate.at<Pose>(i - 1);
+                Pose vioCurPose = vio_estimate.at<Pose>(i);
+                Pose newPose = lcPrevPose * vioPrevPose.inverse() * vioCurPose;
+                lc_estimate.update(i, newPose);
+              }
+              vio_estimate = lc_estimate;
+              vio_isam2 = std::make_shared<ISAM2>(isam2params);
+              vio_isam2->update(isam2.getFactorsUnsafe(), vio_estimate, params);
             
             }
             else {
@@ -371,9 +408,11 @@ int main(int argc, char *argv[]) {
             }
 
             Values vio_estimate = vio_isam2->calculateEstimate();
+            Values lc_estimate2 = isam2.calculateEstimate();
             
             double chi2 = chi2_red(isam2.getFactorsUnsafe(), vio_estimate);
-            cout << "chi2: " << chi2 << endl;
+            double lc_chi2 = chi2_red(isam2.getFactorsUnsafe(), lc_estimate2);
+            cout << "chi2: " << chi2 << " lc_chi2: " << lc_chi2 << endl;
 
             newVariables.clear();
             newFactors = NonlinearFactorGraph();
@@ -407,7 +446,5 @@ int main(int argc, char *argv[]) {
         K_count++;
 
     }
-
-
 
 }
