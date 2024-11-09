@@ -64,6 +64,13 @@ dataset:
         start_step:     2
         end_step:       3500    # Inclusive
         period:         1
+    M3500a:
+        is3D:           false
+        path:           "ra_datasets/M3500a"
+        relin_thresh:   0.01
+        start_step:     2
+        end_step:       3499    # Inclusive
+        period:         25
     M3500c: 
         is3D:           false
         path:           "ra_datasets/M3500c"
@@ -88,7 +95,7 @@ metadata:
       # - testGtsamIncremental3D-vio
       #  - testGtsamIncremental-treegen
       #  - testGtsamIncremental3D-treegen
-      #  - testGtsamIncremental-datasetgen
+        - testGtsamIncremental-datasetgen
         - testGtsamIncremental3D-datasetgen
       #  - testGtsamIncremental3D-lru
 
@@ -208,23 +215,20 @@ VIO:
 # Legacy output directors
 Legacy:
     runs:
-    # - seah_sphere
-    # - seah_incremental_CAB7000
-    # - seah_incremental_CAB464
-    # - seah_incremental_CAB1_num_threads-1
-    # - seah_incremental_CAB1_num_threads-2
-    # - seah_incremental_CAB1_num_threads-4
-    # - seah_RA_CAB1_num_threads-1
-    # - seah_RA_CAB1_num_threads-2
-    # - seah_RA_CAB1_num_threads-4
-    # - seah_RA_CAB7000_num_threads-1
-    # - seah_RA_CAB7000_num_threads-2
-    - seah_RA_CAB7000_num_threads-4
-    # - seah_RA_sphere_2500_num_threads-1
-    # - seah_RA_sphere_2500_num_threads-2
-    # - seah_RA_sphere_2500_num_threads-4
-    seah_sphere:
-        dataset:        sphere2500
+    - RA_sphere2_num_threads-1
+    - RA_sphere2_num_threads-2
+    - RA_sphere2_num_threads-4
+    - RA_CAB7000-smallnoise_num_threads-1
+    - RA_CAB7000-smallnoise_num_threads-2
+    - RA_CAB7000-smallnoise_num_threads-4
+    - RA_CAB1-smallnoise_num_threads-1
+    - RA_CAB1-smallnoise_num_threads-2
+    - RA_CAB1-smallnoise_num_threads-4
+    - RA_M3500a_num_threads-1
+    - RA_M3500a_num_threads-2
+    - RA_M3500a_num_threads-4
+    RA_sphere2_num_threads-1:
+        dataset:        sphere2
         start_step:     2
         end_step:       2000    # Inclusive
         period:         25
@@ -233,142 +237,10 @@ Legacy:
         print_pred:     false
         print_traj:     false
         print_delta:    true
-        output_dir: "incremental_sphere2500_steps-2000_period-25"
-        header_dir: "incremental_sphere2500_steps-2000_period-25"
-    seah_incremental_CAB1_num_threads-1:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB1_num_threads-1"
-        header_dir: "RA_CAB1_num_threads-1"
-    seah_incremental_CAB1_num_threads-2:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB1_num_threads-2"
-        header_dir: "RA_CAB1_num_threads-2"
-    seah_incremental_CAB1_num_threads-4:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB1_num_threads-4"
-        header_dir: "RA_CAB1_num_threads-4"
-    seah_incremental_CAB7000:
-        dataset:        CAB7000
-        start_step:     2
-        end_step:       3000    # Inclusive
-        period:         25
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "incremental_CAB7000"
-        header_dir: "incremental_CAB7000"
-    seah_incremental_CAB464:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "incremental_CAB1_steps-464_period-1"
-        header_dir: "incremental_CAB1_steps-464_period-1"
-    seah_RA_CAB1_num_threads-1:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB1_num_threads-1"
-        header_dir: "RA_CAB1_num_threads-1"
-    seah_RA_CAB1_num_threads-2:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB1_num_threads-2"
-        header_dir: "RA_CAB1_num_threads-2"
-    seah_RA_CAB1_num_threads-4:
-        dataset:        CAB1
-        start_step:     2
-        end_step:       463    # Inclusive
-        period:         1
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB1_num_threads-4"
-        header_dir: "RA_CAB1_num_threads-4"
-    seah_RA_CAB7000_num_threads-1:
-        dataset:        CAB7000
-        start_step:     2
-        end_step:       3000    # Inclusive
-        period:         25
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB7000_num_threads-1_steps-2-3000"
-        header_dir: "RA_CAB7000_num_threads-1_steps-2-3000"
-    seah_RA_CAB7000_num_threads-2:
-        dataset:        CAB7000
-        start_step:     2
-        end_step:       3000    # Inclusive
-        period:         25
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB7000_num_threads-2"
-        header_dir: "RA_CAB7000_num_threads-2"
-    seah_RA_CAB7000_num_threads-4:
-        dataset:        CAB7000
-        start_step:     2
-        end_step:       3000    # Inclusive
-        period:         25
-        print_dataset:  false            # Turn this off if not generating header
-        print_values:   false
-        print_pred:     false
-        print_traj:     false
-        print_delta:    true
-        output_dir: "RA_CAB7000_num_threads-4"
-        header_dir: "RA_CAB7000_num_threads-4"
-    seah_RA_sphere_2500_num_threads-1:
-        dataset:        sphere2500
+        output_dir: "RA_sphere2_num_threads-1"
+        header_dir: "RA_sphere2_num_threads-1"
+    RA_sphere2_num_threads-2:
+        dataset:        sphere2
         start_step:     2
         end_step:       2000    # Inclusive
         period:         25
@@ -377,10 +249,10 @@ Legacy:
         print_pred:     false
         print_traj:     false
         print_delta:    true
-        output_dir: "RA_sphere2500_num_threads-1"
-        header_dir: "RA_sphere2500_num_threads-1"
-    seah_RA_sphere_2500_num_threads-2:
-        dataset:        sphere2500
+        output_dir: "RA_sphere2_num_threads-2"
+        header_dir: "RA_sphere2_num_threads-2"
+    RA_sphere2_num_threads-4:
+        dataset:        sphere2
         start_step:     2
         end_step:       2000    # Inclusive
         period:         25
@@ -389,19 +261,115 @@ Legacy:
         print_pred:     false
         print_traj:     false
         print_delta:    true
-        output_dir: "RA_sphere2500_num_threads-2"
-        header_dir: "RA_sphere2500_num_threads-2"
-    seah_RA_sphere_2500_num_threads-4:
-        dataset:        sphere2500
+        output_dir: "RA_sphere2_num_threads-4"
+        header_dir: "RA_sphere2_num_threads-4"
+    RA_CAB7000-smallnoise_num_threads-1:
+        dataset:        CAB7000-smallnoise
         start_step:     2
-        end_step:       2000    # Inclusive
+        end_step:       3000    # Inclusive
         period:         25
         print_dataset:  false            # Turn this off if not generating header
         print_values:   false
         print_pred:     false
         print_traj:     false
         print_delta:    true
-        output_dir: "RA_sphere2500_num_threads-4"
-        header_dir: "RA_sphere2500_num_threads-4"
-    
-    
+        output_dir: "RA_CAB7000-smallnoise_num_threads-1"
+        header_dir: "RA_CAB7000-smallnoise_num_threads-1"
+    RA_CAB7000-smallnoise_num_threads-2:
+        dataset:        CAB7000-smallnoise
+        start_step:     2
+        end_step:       3000    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_CAB7000-smallnoise_num_threads-2"
+        header_dir: "RA_CAB7000-smallnoise_num_threads-2"
+    RA_CAB7000-smallnoise_num_threads-4:
+        dataset:        CAB7000-smallnoise
+        start_step:     2
+        end_step:       3000    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_CAB7000-smallnoise_num_threads-4"
+        header_dir: "RA_CAB7000-smallnoise_num_threads-4"
+    RA_CAB1-smallnoise_num_threads-1:
+        dataset:        CAB1-smallnoise
+        start_step:     2
+        end_step:       463     # Inclusive
+        period:         1
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_CAB1-smallnoise_num_threads-1"
+        header_dir: "RA_CAB1-smallnoise_num_threads-1"
+    RA_CAB1-smallnoise_num_threads-2:
+        dataset:        CAB1-smallnoise
+        start_step:     2
+        end_step:       463     # Inclusive
+        period:         1
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_CAB1-smallnoise_num_threads-2"
+        header_dir: "RA_CAB1-smallnoise_num_threads-2"
+    RA_CAB1-smallnoise_num_threads-4:
+        dataset:        CAB1-smallnoise
+        start_step:     2
+        end_step:       463     # Inclusive
+        period:         1
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_CAB1-smallnoise_num_threads-4"
+        header_dir: "RA_CAB1-smallnoise_num_threads-4"
+    RA_M3500a_num_threads-1:
+        dataset:        M3500a
+        start_step:     2
+        end_step:       3500    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_M3500a_num_threads-1"
+        header_dir: "RA_M3500a_num_threads-1"
+    RA_M3500a_num_threads-2:
+        dataset:        M3500a
+        start_step:     2
+        end_step:       3500    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_M3500a_num_threads-2"
+        header_dir: "RA_M3500a_num_threads-2"
+    RA_M3500a_num_threads-4:
+        dataset:        M3500a
+        start_step:     2
+        end_step:       3500    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "RA_M3500a_num_threads-4"
+        header_dir: "RA_M3500a_num_threads-4"
+
+

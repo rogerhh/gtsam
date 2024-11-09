@@ -10,6 +10,7 @@ from utils import *
 import glob
 import os
 from subprocess import Popen, PIPE, CalledProcessError
+from generate_skip_steps_file import generate_skips_steps_file
 
 def get_yes_no_input(prompt):
     while True:
@@ -44,6 +45,10 @@ if __name__ == "__main__":
     parser = OptionParser()
     parser.add_option("--config", dest="config", 
                       default="config_datasets.yaml", help="The path to the config file")
+    parser.add_option("-y", "--yes", dest="yes", action="store_true", default=False,
+                      help="Answer yes to all prompts")
+    parser.add_option("-n", "--no", dest="no", action="store_true", default=False,
+                      help="Answer no to all prompts")
     (options, args) = parser.parse_args()
 
     with open(options.config, "r") as config_fin:
@@ -107,7 +112,12 @@ if __name__ == "__main__":
 
             run_dset = True
             if os.path.isdir(output_dir):
-                run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
+                if options.no:
+                    run_dset = False
+                elif options.yes:
+                    run_dset = True
+                else:
+                    run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
             if run_dset:
                 print(f"Running dataset {dataset} and write output to {output_dir}")
@@ -186,7 +196,12 @@ if __name__ == "__main__":
 
             run_dset = True
             if os.path.isdir(output_dir):
-                run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
+                if options.no:
+                    run_dset = False
+                elif options.yes:
+                    run_dset = True
+                else:
+                    run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
             if run_dset:
                 print(f"Running dataset {dataset} and write output to {output_dir}")
@@ -269,7 +284,12 @@ if __name__ == "__main__":
 
             run_dset = True
             if os.path.isdir(output_dir):
-                run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
+                if options.no:
+                    run_dset = False
+                elif options.yes:
+                    run_dset = True
+                else:
+                    run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
             if run_dset:
                 print(f"Running dataset {dataset} and write output to {output_dir}")
@@ -355,7 +375,12 @@ if __name__ == "__main__":
 
             run_dset = True
             if os.path.isdir(output_dir):
-                run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
+                if options.no:
+                    run_dset = False
+                elif options.yes:
+                    run_dset = True
+                else:
+                    run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
             if run_dset:
                 print(f"Running dataset {dataset} and write output to {output_dir}")
@@ -443,7 +468,12 @@ if __name__ == "__main__":
 
             run_dset = True
             if os.path.isdir(output_dir):
-                run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
+                if options.no:
+                    run_dset = False
+                elif options.yes:
+                    run_dset = True
+                else:
+                    run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
             if run_dset:
                 print(f"Running dataset {dataset} and write output to {output_dir}")
@@ -518,7 +548,12 @@ if __name__ == "__main__":
             # First rerun dataset if needed
             run_dset = False
             if os.path.isdir(output_dir):
-                run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
+                if options.no:
+                    run_dset = False
+                elif options.yes:
+                    run_dset = True
+                else:
+                    run_dset = get_yes_no_input(f"Dataset is already run and has output at {output_dir}. Do you want to rerun dataset? [Y/n] ")
 
             exe = f"{builddir}/timing/" + ("testGtsamIncremental3D-datasetgen" if is3D else "testGtsamIncremental-datasetgen")
 
@@ -547,9 +582,16 @@ if __name__ == "__main__":
                               "
                 run_system_cmd(cmd)
 
+                generate_skips_steps_file(f"{output_dir}/skip_steps.txt", end_step + 1, period)
+
             run_header = True
             if os.path.isdir(header_dir):
-                run_header = get_yes_no_input(f"Header is already generated at {header_dir}. Do you want to regenerate header? [Y/n] ")
+                if options.no:
+                    run_header = False
+                elif options.yes:
+                    run_header = True
+                else:
+                    run_header = get_yes_no_input(f"Header is already generated at {header_dir}. Do you want to regenerate header? [Y/n] ")
 
             # Generate header
             if run_header:
@@ -565,7 +607,12 @@ if __name__ == "__main__":
                 run_system_cmd(cmd)
 
             run_backsolve_diff = False
-            run_backsolve_diff = get_yes_no_input(f"Compute backsolve diff? [Y/n] ")
+            if options.no:
+                run_backsolve_diff = False
+            elif options.yes:
+                run_backsolve_diff = True
+            else:
+                run_backsolve_diff = get_yes_no_input(f"Compute backsolve diff? [Y/n] ")
 
             if run_backsolve_diff:
                 cmd = f"python3 generate_backsolve_diff.py \
