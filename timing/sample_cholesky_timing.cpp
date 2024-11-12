@@ -17,14 +17,15 @@ float randomFloat() {
 }
 
 MatrixXf generateSPDMatrix(int n) {
-    MatrixXf A = MatrixXf::Random(n, n);
-    MatrixXf spdMatrix = A.transpose() * A;
-    spdMatrix += MatrixXf::Identity(n, n);
+    // MatrixXf A = MatrixXf::Random(n, n);
+    // MatrixXf spdMatrix = A.transpose() * A;
+    MatrixXf spdMatrix = MatrixXf::Identity(n, n);
     return spdMatrix;
 }
 
 MatrixXf generateMNMatrix(int m, int n) {
-    MatrixXf A = MatrixXf::Random(m, n);
+    // MatrixXf A = MatrixXf::Random(m, n);
+    MatrixXf A = MatrixXf::Zero(m, n);
     return A;
 }
 
@@ -34,8 +35,8 @@ int main() {
 
     for(int i = 0; i < 1000; i++) {
 
-        int n = rand() % 1000 + 24;
-        int m = rand() % 400 + n + 1;
+        int n = rand() % 80 + 24;
+        int m = rand() % 200 + n + 1;
 
         MatrixXf matrix(m, m);
 
@@ -46,9 +47,9 @@ int main() {
         partial_factorization4(matrix.data(), n, m);
         auto end = chrono::high_resolution_clock::now();
 
-        chrono::duration<double, std::micro> us_double = end - start;
+        chrono::duration<double, std::nano> ns_double = end - start;
 
-        cout << m << " " << n << " " << us_double.count() << endl;
+        cout << m << " " << n << " " << ns_double.count() << endl;
 
     }
 

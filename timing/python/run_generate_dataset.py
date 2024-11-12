@@ -247,7 +247,9 @@ if __name__ == "__main__":
 
             is3D = d["is3D"]
             dataset_path = d["path"]
-            relin_thresh = d["relin_thresh"]
+            relin_thresh = 0.01
+            epsilon = 0.001;
+            d_error = 0.0001;
             start_step = d["start_step"]
             end_step = d["end_step"] + 1
             period = d["period"]
@@ -278,8 +280,8 @@ if __name__ == "__main__":
                               --num_steps {end_step} \
                               --relin_thresh {relin_thresh} \
                               -m {max_iter} \
-                              -e 0.001 \
-                              -d 0.0001 \
+                              -e {epsilon} \
+                              -d {d_error} \
                               --dataset_outdir {output_dir} \
                               {'--print_dataset' if print_dataset else ''} \
                               {'--print_values' if print_values else ''} \

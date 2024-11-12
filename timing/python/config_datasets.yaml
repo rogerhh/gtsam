@@ -64,6 +64,13 @@ dataset:
         start_step:     2
         end_step:       3500    # Inclusive
         period:         1
+    M3500a:
+        is3D:           false
+        path:           "ra_datasets/M3500a"
+        relin_thresh:   0.01
+        start_step:     2
+        end_step:       3500    # Inclusive
+        period:         1
     M3500c: 
         is3D:           false
         path:           "ra_datasets/M3500c"
@@ -91,11 +98,11 @@ metadata:
         # - testGtsamIncremental3D
         # - testGtsamIncremental-ra
         # - testGtsamIncremental3D-ra
-        # - testGtsamIncremental-vio
-        # - testGtsamIncremental3D-vio
+        - testGtsamIncremental-vio
+        - testGtsamIncremental3D-vio
         # - testGtsamIncremental-treegen
         # - testGtsamIncremental3D-treegen
-        # - testGtsamIncremental-datasetgen
+        - testGtsamIncremental-datasetgen
         - testGtsamIncremental3D-datasetgen
         # - testGtsamIncremental3D-lru
 
@@ -114,6 +121,7 @@ RA:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     # - torus
     params:
@@ -183,9 +191,10 @@ LC:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     params:
-        max_iter:           5
+        max_iter:           2
         print_dataset:      false            # Turn this off if not generating header
         print_values:       false
         print_pred:         false
@@ -203,16 +212,17 @@ VIO:
     # - CAB7000-smallnoise
     # - CSAIL
     # - sphere2500
-    # - sphere2
+    - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     params:
-        max_iter:           1
+        max_iter:           2
         gen_header:         false
-        vio_lag:            716
-        run_lc:             false
-        lc_period:          8
+        vio_lag:            20
+        run_lc:             true
+        lc_period:          65
         
 # Legacy output directors
 Legacy:
@@ -230,9 +240,9 @@ Legacy:
     # - seah_RA_sphere_2500_num_threads-2
     # - seah_RA_sphere_2500_num_threads-4
     # - seah_incremental_torus
-    - seah_RA_torus_num_threads-1
-    - seah_RA_torus_num_threads-2
-    - seah_RA_torus_num_threads-4
+    # - seah_RA_torus_num_threads-1
+    # - seah_RA_torus_num_threads-2
+    # - seah_RA_torus_num_threads-4
     seah_sphere:
         dataset:        sphere2500
         start_step:     2

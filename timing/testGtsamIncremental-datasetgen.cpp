@@ -195,6 +195,7 @@ int main(int argc, char *argv[]) {
          << ", max_optimization_iter = " << max_iter 
          << ", opt_stop_cond = " << d_error 
          << ", relinearize_skip = " << relinearize_skip 
+         << ", relin_thresh = " << relin_thresh 
          << ", print_frequency = " << print_frequency 
          << endl;
 

@@ -22,8 +22,8 @@ if __name__ == "__main__":
     labels = options.labels.split()
     start_step = options.start_step
 
-    plt.rcParams.update({'font.size': 42, 'axes.titlesize': "large", 'axes.labelsize': 'large'})
-    fontsize = 42
+    fontsize = 48
+    plt.rcParams.update({'font.size': fontsize, 'axes.titlesize': "large", 'axes.labelsize': 'large'})
 
     t = []
     rmse = []
@@ -91,12 +91,12 @@ if __name__ == "__main__":
     ax1.set_ylabel("Error (m)", fontsize=fontsize)
     ax1.set_title("RMSE", fontsize=fontsize)
 
-    tick_size = 42
+    tick_size = fontsize
     ax1.tick_params(axis='both', which='major', labelsize=tick_size)
     # ax1.set_yscale("log")
 
     ax2.set_title("MAX", fontsize=fontsize)
-    ax2.set_xlabel("Step")
+    ax2.set_xlabel("Step", fontsize=fontsize)
     ax2.set_ylabel("Error (m)", fontsize=fontsize)
     # ax2.set_yscale("log")
     ax2.tick_params(axis='both', which='major', labelsize=tick_size)
@@ -105,10 +105,9 @@ if __name__ == "__main__":
 
 
     if "sphere" in options.outfile:
-        ax1.legend(loc="upper left", fontsize=fontsize)
+        ax2.legend(loc="upper left", fontsize=42)
     else:
-        # ax1.legend()
-        ax2.legend(loc="upper left", fontsize=fontsize)
+        ax2.legend(loc="upper left", fontsize=42)
 
     plt.savefig(options.outfile, bbox_inches='tight')
 
