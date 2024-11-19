@@ -599,6 +599,12 @@ ISAM2Result ISAM2::update_resource_aware(const NonlinearFactorGraph& newFactors,
     UpdateImpl::ExpmapMasked(delta_, relinKeys, &theta_);
   }
 
+  cout << "relinKeys: ";
+  for(Key k : relinKeys) {
+    cout << k << " ";
+  }
+  cout << endl;
+
   eTree_.markAffectedKeys(nonlinearFactors_,
                           result.newFactorsIndices,
                           relinKeys,

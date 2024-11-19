@@ -582,6 +582,7 @@ if __name__ == "__main__":
                               "
                 run_system_cmd(cmd)
 
+                print(f"Writing skip steps file to {output_dir}/skip_steps.txt")
                 generate_skips_steps_file(f"{output_dir}/skip_steps.txt", end_step + 1, period)
 
             run_header = True

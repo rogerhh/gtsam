@@ -215,18 +215,22 @@ VIO:
 # Legacy output directors
 Legacy:
     runs:
-    - RA_sphere2_num_threads-1
-    - RA_sphere2_num_threads-2
-    - RA_sphere2_num_threads-4
-    - RA_CAB7000-smallnoise_num_threads-1
-    - RA_CAB7000-smallnoise_num_threads-2
-    - RA_CAB7000-smallnoise_num_threads-4
-    - RA_CAB1-smallnoise_num_threads-1
-    - RA_CAB1-smallnoise_num_threads-2
-    - RA_CAB1-smallnoise_num_threads-4
-    - RA_M3500a_num_threads-1
-    - RA_M3500a_num_threads-2
-    - RA_M3500a_num_threads-4
+    # - RA_sphere2_num_threads-1
+    # - RA_sphere2_num_threads-2
+    # - RA_sphere2_num_threads-4
+    # - RA_CAB7000-smallnoise_num_threads-1
+    # - RA_CAB7000-smallnoise_num_threads-2
+    # - RA_CAB7000-smallnoise_num_threads-4
+    # - RA_CAB1-smallnoise_num_threads-1
+    # - RA_CAB1-smallnoise_num_threads-2
+    # - RA_CAB1-smallnoise_num_threads-4
+    # - RA_M3500a_num_threads-1
+    # - RA_M3500a_num_threads-2
+    # - RA_M3500a_num_threads-4
+    - incremental_sphere2
+    - incremental_CAB7000-smallnoise
+    - incremental_CAB1-smallnoise
+    - incremental_M3500a
     RA_sphere2_num_threads-1:
         dataset:        sphere2
         start_step:     2
@@ -371,5 +375,53 @@ Legacy:
         print_delta:    true
         output_dir: "RA_M3500a_num_threads-4"
         header_dir: "RA_M3500a_num_threads-4"
+    incremental_sphere2:
+        dataset:        sphere2
+        start_step:     2
+        end_step:       2000    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "incremental_sphere2"
+        header_dir: "incremental_sphere2"
+    incremental_CAB7000-smallnoise:
+        dataset:        CAB7000-smallnoise
+        start_step:     2
+        end_step:       3000    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "incremental_CAB7000-smallnoise"
+        header_dir: "incremental_CAB7000-smallnoise"
+    incremental_CAB1-smallnoise:
+        dataset:        CAB1-smallnoise
+        start_step:     2
+        end_step:       463     # Inclusive
+        period:         1
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "incremental_CAB1-smallnoise"
+        header_dir: "incremental_CAB1-smallnoise"
+    incremental_M3500a:
+        dataset:        M3500a
+        start_step:     2
+        end_step:       3499    # Inclusive
+        period:         25
+        print_dataset:  false            # Turn this off if not generating header
+        print_values:   false
+        print_pred:     false
+        print_traj:     false
+        print_delta:    true
+        output_dir: "incremental_M3500a"
+        header_dir: "incremental_M3500a"
 
 
