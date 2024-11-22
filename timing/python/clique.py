@@ -196,11 +196,29 @@ class Clique:
         fout.write(f"const int step{step}_node{self.index}_width = {self.width};\n")
 
 
-        fout.write(f"float step{step}_node{self.index}_data[{self.height * self.width}] = {{")
+        # fout.write(f"float step{step}_node{self.index}_data[{self.height * self.width}] = {{")
+        # if not Clique.no_values:
+        #     fout.write("\n")
+        #     if self.marked:
+        #         for j in range(self.width):
+        #             for i in range(self.height):
+        #                 fout.write("0, ")
+        #             fout.write("\n")
+        #     elif self.fixed:
+        #         for j in range(self.width):
+        #             for i in range(self.height):
+        #                 fout.write(f"{self.matrix[i, j]}, ")
+        #             fout.write("\n")
+        # else:
+        #     fout.write("0")
+
+        # fout.write("};\n")
+
+        fout.write(f"float step{step}_node{self.index}_data[{self.height * self.height}] = {{")
         if not Clique.no_values:
             fout.write("\n")
             if self.marked:
-                for j in range(self.width):
+                for j in range(self.height):
                     for i in range(self.height):
                         fout.write("0, ")
                     fout.write("\n")
@@ -208,6 +226,10 @@ class Clique:
                 for j in range(self.width):
                     for i in range(self.height):
                         fout.write(f"{self.matrix[i, j]}, ")
+                    fout.write("\n")
+                for j in range(self.width, self.height):
+                    for i in range(self.height):
+                        fout.write(f"0, ")
                     fout.write("\n")
         else:
             fout.write("0")

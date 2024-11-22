@@ -1,7 +1,5 @@
 import numpy as np
 
-MAX_DENSE_BLOCK_SIZE = 48
-
 def group_block_indices(reduced_sorted_keys, A_block_indices, B_block_indices):
     in_blk = False
     A_blk_start = []
@@ -70,6 +68,8 @@ class Factor:
             for i in range(self.height):
                 line = fin.readline()
                 arr = line.split()
+                print(self.width)
+                print(arr)
                 assert(len(arr) == self.width)
                 for j in range(self.width):
                     self.matrix[i, j] = float(arr[j])

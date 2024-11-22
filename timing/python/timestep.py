@@ -20,7 +20,7 @@ class Timestep:
     step_num_threads = None
     max_num_threads = 0
     min_num_threads = 0
-    MAX_DENSE_BLOCK_SIZE = 48
+    MAX_DENSE_BLOCK_SIZE = 24
 
     def map_keys_to_cliques(self):
         self.key_to_clique = [None for _ in range(self.num_keys)]

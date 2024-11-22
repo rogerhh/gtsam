@@ -423,7 +423,7 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   // 4. Determine a new ordering
   // 5. Do symbolic factorization and construct new etree
   // 6. Re-eliminate
-  //
+
   gttic(ISAM2_update);
   this->update_count_ += 1;
   UpdateImpl::LogStartingUpdate(newFactors, *this);
@@ -462,6 +462,12 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
     }
   }
 
+  if(updateParams.noRelinKeys) {
+    for (Key key : *updateParams.noRelinKeys) {
+      relinKeys.erase(key);
+    }
+  }
+
   if (!relinKeys.empty()) {
     // 6. Update linearization point for marked variables:
     // \Theta_{J}:=\Theta_{J}+\Delta_{J}.
@@ -480,6 +486,10 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
   eTree_.markAncestors(affectedKeys, &markedKeys);
 
   cout << "relinKeys size = " << relinKeys.size() << endl;
+  for(Key k : relinKeys) {
+    cout << k << " ";
+  }
+  cout << endl;
 
   if(markedKeys.empty()) { return result; }
 
@@ -498,6 +508,8 @@ ISAM2Result ISAM2::update(const NonlinearFactorGraph& newFactors,
       last_variable_count = theta_.size();
       reorder_flag = true;
   }
+  // Set this for rtml bringup
+  reorder_flag = false;
 
   eTree_.setCostReorder(reorder_flag);
 

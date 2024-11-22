@@ -366,6 +366,10 @@ void CholeskyEliminationTree::pickRelinKeys(
 
   // Compute cost of backsolve
   int64_t backsolve_cost = 0;
+  // for(sharedClique clique : allUpdatedCliques) {
+  //   if(clique == root_) { continue; }
+  //   backsolve_cost += clique->computeCostBacksolve(num_threads);
+  // }
   for(sharedNode node : nodes_) {
     if(!node) { continue; }
 
@@ -822,7 +826,7 @@ void CholeskyEliminationTree::symbolicEliminateKey(const RemappedKey key) {
       if(!childClique->marked()) { continue; }
 
       bool mergeFlag = false;
-      const int relaxed_supernode_min_size = 24;
+      const int relaxed_supernode_min_size = 120;
       if(clique->blockIndices.size() == childClique->blockIndices.size() - childClique->cliqueSize()) { 
         mergeFlag = true; 
       }

@@ -60,7 +60,7 @@ dataset:
     M3500: 
         is3D:           false
         path:           "ra_datasets/M3500"
-        relin_thresh:   0.1
+        relin_thresh:   0.001
         start_step:     2
         end_step:       3500    # Inclusive
         period:         1
@@ -69,7 +69,7 @@ dataset:
         path:           "ra_datasets/M3500a"
         relin_thresh:   0.01
         start_step:     2
-        end_step:       3500    # Inclusive
+        end_step:       3499    # Inclusive
         period:         1
     M3500c: 
         is3D:           false
@@ -85,6 +85,20 @@ dataset:
         start_step:     2
         end_step:       4999    # Inclusive
         period:         25
+    kitti_00:
+        is3D:           true
+        path:           "ra_datasets/kitti_00_before_LC"
+        relin_thresh:   0.1
+        start_step:     800
+        end_step:       800
+        period:         1
+    kitti_00_2LC:
+        is3D:           true
+        path:           "ra_datasets/kitti_00_before_LC5"
+        relin_thresh:   0.1
+        start_step:     856
+        end_step:       856
+        period:         1
 
 # Metadata
 metadata:
@@ -125,9 +139,9 @@ RA:
     # - M3500c
     # - torus
     params:
-        num_threads:        1
+        num_threads:        4
         num_threads_file:   ""              # Specify the path to a num threads file or leave empty
-        print_dataset:      true            # Turn this off if not generating header
+        print_dataset:      true           # Turn this off if not generating header
         print_values:       false
         print_pred:         false
         print_traj:         true
@@ -145,12 +159,15 @@ Incremental:
     # - sphere2
     # - w10000
     # - M3500
+    # - M3500a
     # - M3500c
     # - torus
+    # - kitti_00
+    - kitti_00_2LC
     params:
         print_dataset:      true            # Turn this off if not generating header
-        print_values:       false
-        print_pred:         true
+        print_values:       true
+        print_pred:         false
         print_traj:         true
         
 # LRU:
@@ -165,6 +182,7 @@ LRU:
     # - CAB7000-smallnoise
     # - sphere2500
     # - w10000
+    # - M3500
     # - M3500
     # - M3500c
     params:
@@ -300,7 +318,7 @@ Legacy:
         print_values:   false
         print_pred:     false
         print_traj:     false
-        print_delta:    true
+        print_delta:    false
         output_dir: "incremental_CAB7000"
         header_dir: "incremental_CAB7000"
     seah_incremental_CAB464:

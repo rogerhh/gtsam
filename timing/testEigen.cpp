@@ -52,5 +52,6 @@ int main() {
   cout << "n = \n" << n << endl << endl;
   cout << "C = \n" << C << endl;
 
+  cout << "Z_3x3: \n" << Z_3x3 << endl;
 
 }

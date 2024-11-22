@@ -380,9 +380,9 @@ int main(int argc, char *argv[]) {
               Values lc_estimate = isam2.calculateEstimate();
 
               for(int i = loop_start_step; i > 0 && i < step; i++) {
-                Pose lcPrevPose = lc_estimate.at<Pose3>(i - 1);
-                Pose vioPrevPose = vio_estimate.at<Pose3>(i - 1);
-                Pose vioCurPose = vio_estimate.at<Pose3>(i);
+                Pose lcPrevPose = lc_estimate.at<Pose>(i - 1);
+                Pose vioPrevPose = vio_estimate.at<Pose>(i - 1);
+                Pose vioCurPose = vio_estimate.at<Pose>(i);
                 Pose newPose = lcPrevPose * vioPrevPose.inverse() * vioCurPose;
                 lc_estimate.update(i, newPose);
               }

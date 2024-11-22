@@ -232,6 +232,8 @@ int main(int argc, char *argv[]) {
                     throw runtime_error("Problem in data file, out-of-sequence measurements");
                 }
 
+                // cout << "keys: " << measurement->key1() << " " << measurement->key2() << endl;
+
                 // Add a new factor
                 newFactors.push_back(measurement);
 
@@ -290,33 +292,34 @@ int main(int argc, char *argv[]) {
             cout << endl;
 
             isam2.update(newFactors, newVariables, params, extraRelinKeys);
+
+
+
             auto update_end = chrono::high_resolution_clock::now();
             estimate = isam2.calculateEstimate();
             auto calc_end = chrono::high_resolution_clock::now();
             d1 += chrono::duration_cast<chrono::microseconds>(update_end - start).count();
             d2 += chrono::duration_cast<chrono::microseconds>(calc_end - update_end).count();
 
-            if(step % print_frequency == 0) {
-                // estimate = isam2.calculateEstimate();
-                // cout << "Theta = " << endl;
-                // estimate.print();
-            }
-            if(step >= num_steps) {
-                break;
-            }
-
             static double last_chi2 = 0;
             double chi2 = chi2_red(isam2.getFactorsUnsafe(), estimate);
             cout << "chi2 = " << chi2 << endl;
 
-            for(int iter = 0; iter < max_iter; iter++) {
-                if(abs(chi2) < epsilon) {
-                  break;
-                }
+            if(step == 854 || (step >= 746 && step <= 748)) {
+                max_iter = 20;
+            }
+            else {
+                // max_iter = 0;
+            }
 
-                if(abs(last_chi2 - chi2) < d_error) {
-                  break;
-                }
+            for(int iter = 0; iter < max_iter; iter++) {
+                // if(abs(chi2) < epsilon) {
+                //   break;
+                // }
+
+                // if(abs(last_chi2 - chi2) < d_error) {
+                //   break;
+                // }
 
                 last_chi2 = chi2;
 
@@ -332,7 +335,7 @@ int main(int argc, char *argv[]) {
             newVariables.clear();
             newFactors = NonlinearFactorGraph();
 
-            if(step % print_frequency == 0) {
+            if(step % print_frequency == 0 && step >= 853 || (step >= 746 && step <= 748)) {
               if(dataset_outdir != "") {
                 if(print_dataset) {
                   string outfile = dataset_outdir + "/step-" + to_string(step) + ".out";
@@ -393,6 +396,15 @@ int main(int argc, char *argv[]) {
         K_count++;
         update_times.push_back(d1);
         calc_times.push_back(d2);
+
+        if(step % print_frequency == 0) {
+            // estimate = isam2.calculateEstimate();
+            // cout << "Theta = " << endl;
+            // estimate.print();
+        }
+        if(step >= num_steps) {
+            break;
+        }
 
     }
 
